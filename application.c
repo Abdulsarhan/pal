@@ -9,6 +9,13 @@
 
 int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
+    SalInit();
+    SetWindowHint(GL_VERSION_MAJOR, 3);
+    SetWindowHint(GL_VERSION_MINOR, 3);
+    SetWindowHint(FLOATING, false);
+    SetWindowHint(DOUBLE_BUFFER, true);
+    SetWindowHint(RESIZABLE, false);
+
     VideoMode mode = GetVideoMode(GetPrimaryMonitor());
 
     Window window = InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Fucking Windows.");
@@ -20,12 +27,12 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ L
         return 1;
     }
 
-    SetWindowTextA(window, (LPCSTR)glGetString(GL_VERSION));
-
+    SetWindowTextA(window, (LPCSTR)glGetString(GL_RENDERER));
+    OpenglInfo openglInfo = GetOpenglInfo();
     while (WindowShouldNotClose())
     {
         BeginDrawing();
-        PollEvents(window);
+        PollEvents();
 
         if(IsKeyPressedRepeat(0x41))
             OutputDebugStringW(L"A");
