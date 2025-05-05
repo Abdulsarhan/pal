@@ -3,15 +3,18 @@
 
 #include <Windows.h>
 #include <windowsx.h>
-
+#include <WinUser.h>
 #include <gl/gl.h>
 #include <GL/glext.h> 
 #include <GL/wglext.h>
 #include <assert.h>
+#include <winDNS.h>
+#include <stdio.h>
 
 #define KEY_DOWN_BIT 0x80
 #define KEY_REPEAT_BIT 0b1
 
+#define Megabytes(x)(x * 1024 * 1024)
 static MSG s_msg = { 0 };
 static HDC s_fakeDC = { 0 };
 static HDC s_hdc = { 0 };
@@ -46,20 +49,26 @@ typedef struct Input {
 }Input;
 Input input = { 0 };
 
+typedef struct {
+	RAWINPUT* buffer;
+	UINT bufferSize;
+}RawInputStruct;
+RawInputStruct rawInputStruct = {0};
+
 static void Win32SetWindowHint(int type, int value);
-static Window Win32InitWindow(int width, int height, const char* windowTitle);
+static Window* Win32InitWindow(int width, int height, const char* windowTitle);
 static VideoMode* Win32GetVideoMode(Monitor* monitor);
 static Monitor* Win32GetPrimaryMonitor(void);
 static uint8_t Win32WindowShouldClose(void);
 static void Win32PollEvents(void);
 static int Win32MakeContextCurrent(HWND window);
 
+void Win32BeginDrawing();
 
 void Win32EndDrawing();
 LRESULT CALLBACK Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height);
 
-void Win32BeginDrawing();
 static uint8_t Win32IsWhiteSpace(char* ch);
 static uint8_t Win32AreStringsEqual(int count, char* str1, char* str2);
 static uint8_t Win32IsEndOfLine(char* ch);
@@ -71,11 +80,6 @@ void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height)
 
 LRESULT CALLBACK Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// Screen Painting Shit. Might get rid of it.
-	PAINTSTRUCT ps = { 0 };
-
-
-
 	// Mouse Shit
 	UINT button = GET_XBUTTON_WPARAM(wParam);
 	int xPos = GET_X_LPARAM(lParam);
@@ -93,9 +97,11 @@ LRESULT CALLBACK Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		Win32WindowResizeCallback(hwnd, (UINT)wParam, width, height);
 
 		break;
+
 	case WM_CLOSE:
 		DestroyWindow(hwnd);
 		s_WindowShouldNotClose = 0;
+		PostQuitMessage(0);
 		break;
 
 	case WM_DESTROY:
@@ -103,43 +109,15 @@ LRESULT CALLBACK Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		s_WindowShouldNotClose = 0;
 		break;
 
-	case WM_LBUTTONDOWN:
-		MessageBoxA(hwnd, "BUTTON CLICKED!", "You Clicked the Left Mouse Button!", MB_OK);
-		break;
-
-	case WM_RBUTTONDOWN:
-		MessageBoxA(hwnd, "BUTTON CLICKED!", "You Clicked the Right Mouse Button!", MB_OK);
-		break;
-
-	case WM_MBUTTONDOWN:
-		MessageBoxA(hwnd, "BUTTON CLICKED!", "You Clicked the Middle Mouse Button!", MB_OK);
-		break;
-
-	case WM_XBUTTONDOWN:
-
-		if (button == XBUTTON1)
-		{
-			MessageBoxA(hwnd, "BUTTON CLICKED!", "You Clicked a side mouse button!", MB_OK);
-
-		}
-		else if (button == XBUTTON2)
-		{
-			MessageBoxA(hwnd, "BUTTON CLICKED!", "You Clicked a side mouse button!", MB_OK);
-
-		}
-		break;
-
-	case WM_KEYDOWN:
-	case WM_SYSKEYDOWN:
-		break;
-
-	case WM_KEYUP:
-	case WM_SYSKEYUP:
-		break;
-
 	case WM_PAINT:
 		break;
+	case WM_SYSKEYUP:
+	case WM_SYSKEYDOWN:
+	case WM_KEYDOWN:
+	case WM_KEYUP:
+		break;
 	}
+
 
 	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
@@ -191,11 +169,11 @@ static void Win32SetWindowHint(int type, int value) {
 	}
 }
 
-static Window Win32InitWindow(int width, int height, const char* windowTitle) {
-	Window fakewindow;
+static Window* Win32InitWindow(int width, int height, const char* windowTitle) {
+	Window* fakewindow = (Window*)malloc(sizeof(Window));
 	WNDCLASSEXA fakewc = RegisterWindowClass();
 
-	fakewindow.handle = CreateWindowExA(
+	fakewindow->handle = CreateWindowExA(
 		0,                              // Optional window styles.
 		fakewc.lpszClassName,                     // Window class
 		"Fake Ass Window.",          // Window text
@@ -210,12 +188,12 @@ static Window Win32InitWindow(int width, int height, const char* windowTitle) {
 		NULL        // Additional application data
 	);
 
-	if (fakewindow.handle == NULL)
+	if (fakewindow->handle == NULL)
 	{
 		return fakewindow;
 	}
 
-	s_fakeDC = GetDC(fakewindow.handle);
+	s_fakeDC = GetDC(fakewindow->handle);
 
 	PIXELFORMATDESCRIPTOR fakePFD;
 	ZeroMemory(&fakePFD, sizeof(fakePFD));
@@ -230,39 +208,39 @@ static Window Win32InitWindow(int width, int height, const char* windowTitle) {
 	int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
 
 	if (fakePFDID == 0) {
-		MessageBoxA(fakewindow.handle, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->handle, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
-		MessageBoxA(fakewindow.handle, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->handle, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 
 	HGLRC fakeRC = wglCreateContext(s_fakeDC);
 	if (fakeRC == 0) {
-		MessageBoxA(fakewindow.handle, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->handle, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
-		MessageBoxA(fakewindow.handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
 	wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
 	if (wglChoosePixelFormatARB == NULL) {
-		MessageBoxA(fakewindow.handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
 	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
 	if (wglCreateContextAttribsARB == NULL) {
-		MessageBoxA(fakewindow.handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 
 	WNDCLASSEXA wc = RegisterWindowClass();
-	Window window;
-	window.handle = CreateWindowExA(
+	Window* window = (Window*)malloc(sizeof(Window));
+	window->handle = CreateWindowExA(
 		s_floating,           // Optional window styles.
 		wc.lpszClassName,     // Window class
 		windowTitle,          // Window text
@@ -277,11 +255,11 @@ static Window Win32InitWindow(int width, int height, const char* windowTitle) {
 		NULL        // Additional application data
 	);
 
-	if (window.handle == NULL) {
+	if (window->handle == NULL) {
 		return window;
 	}
 
-	s_hdc = GetDC(window.handle);
+	s_hdc = GetDC(window->handle);
 
 	const int pixelAttribs[] = {
 	WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
@@ -301,7 +279,7 @@ static Window Win32InitWindow(int width, int height, const char* windowTitle) {
 	int pixelFormatID; UINT numFormats;
 	uint8_t status = wglChoosePixelFormatARB(s_hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
 	if (status == 0 || numFormats == 0) {
-		MessageBoxA(window.handle, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(window->handle, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
 		return window;
 	}
 
@@ -323,22 +301,21 @@ static Window Win32InitWindow(int width, int height, const char* windowTitle) {
 
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(fakeRC);
-		ReleaseDC(fakewindow.handle, s_fakeDC);
-		DestroyWindow(fakewindow.handle);
+		ReleaseDC(fakewindow->handle, s_fakeDC);
+		DestroyWindow(fakewindow->handle);
 
-		ShowWindow(window.handle, SW_SHOW);
-		SetForegroundWindow(window.handle);
-		SetFocus(window.handle);
-
-		return window;
+		ShowWindow(window->handle, SW_SHOWNORMAL);
+		SetForegroundWindow(window->handle);
+		SetFocus(window->handle);
 		OutputDebugStringA("INFO: Using modern OpenGL Context.");
+		return window;
 	}
 	else {
-		OutputDebugStringA("INFO: Using old OpenGL Context.");
 
-		ShowWindow(fakewindow.handle, SW_SHOW);
-		SetForegroundWindow(fakewindow.handle);
-		SetFocus(fakewindow.handle);
+		ShowWindow(fakewindow->handle, SW_SHOW);
+		SetForegroundWindow(fakewindow->handle);
+		SetFocus(fakewindow->handle);
+		OutputDebugStringA("INFO: Using old OpenGL Context.");
 		return fakewindow;
 	}
 
@@ -353,9 +330,16 @@ static int Win32MakeContextCurrent(HWND hwnd) {
 }
 
 static void Win32PollEvents(void) {
-	PeekMessageA(&s_msg, NULL, 0, 0, PM_REMOVE);
-	TranslateMessage(&s_msg);
-	DispatchMessageA(&s_msg);
+	Win32GetRawInputBuffer();
+
+	while (PeekMessageA(&s_msg, NULL , 0, 0, PM_REMOVE)) {
+		if (s_msg.message == WM_QUIT) {
+			s_WindowShouldNotClose = 0;
+			exit(0);
+		}
+		TranslateMessage(&s_msg);
+		DispatchMessageA(&s_msg);
+	}
 
 }
 
@@ -368,27 +352,25 @@ static VideoMode* Win32GetVideoMode(Monitor* monitor) {
 	MONITORINFO mi = { 0 };
 	VideoMode* videoMode = calloc(1, sizeof(VideoMode));
 
-	if (monitor->handle) {
+	if (monitor) {
 		mi.cbSize = sizeof(MONITORINFO);
 		if (GetMonitorInfoA(monitor->handle, &mi)) {
-			videoMode->height = mi.rcWork.left;
-		    videoMode->width = mi.rcWork.right;
-			return videoMode;
+			videoMode->width = mi.rcWork.left;
+			videoMode->height = mi.rcWork.right;
 		}
-		videoMode->height = 0;
-		videoMode->width = 0;
-		return videoMode;
+		else {
+			printf("ERROR: Couldn't get monitor info!\n");
+		}
 	}
 	else {
-		videoMode->height = 0;
-		videoMode->width = 0;
-		return videoMode;
+		printf("ERROR: invalid pointer to monitor!\n");
+
 	}
+	return videoMode;
 }
 
 static Monitor* Win32GetPrimaryMonitor() {
-	Monitor* monitor = calloc(1, sizeof(Monitor));
-	assert(monitor != NULL);
+	Monitor* monitor = malloc(sizeof(Monitor));
 	// Define a point at the origin (0, 0)
 	POINT ptZero = { 0, 0 };
 
@@ -433,18 +415,6 @@ static uint8_t Win32IsEndOfLine(char* ch) {
 	return ((ch == '\n') || (ch == '\r'));
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 #define MAX_RAW_INPUTS 16
 
 // Handler function signatures
@@ -455,14 +425,14 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
 	USHORT buttons = raw->data.mouse.usButtonFlags;
-	//printf("Mouse: dx=%ld dy=%ld buttons=0x%04x\n", dx, dy, buttons);
+	printf("Mouse: dx=%ld dy=%ld buttons=0x%04x\n", dx, dy, buttons);
 }
 
 // Keyboard input handler
 void Win32HandleKeyboard(const RAWINPUT* raw) {
 	USHORT key = raw->data.keyboard.VKey;
 	BOOL keyUp = (raw->data.keyboard.Flags & RI_KEY_BREAK) != 0;
-	//printf("Keyboard: key=0x%02x %s\n", key, keyUp ? "up" : "down");
+	printf("Keyboard: key=0x%02x %s\n", key, keyUp ? "up" : "down");
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
@@ -477,89 +447,110 @@ RawInputHandler Win32InputHandlers[3] = {
 	Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
 
-void Win32RegisterRawInputDevices(HWND window) {
-
-	/* GET RAW INPUT DEVICE LIST */
-
+int Win32RegisterRawInputDevices(HWND window) {
 	UINT numDevices = 0;
 
 	if (GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST)) != 0) {
-		//printf("Failed to get number of devices\n");
-		return NULL;
+		MessageBoxA(window, "ERROR:", "Failed to get the number of devices!", MB_ICONERROR);
+		exit(-1);
 	}
 
 	RAWINPUTDEVICELIST* deviceList = (RAWINPUTDEVICELIST*)malloc(sizeof(RAWINPUTDEVICELIST) * numDevices);
 	if (!deviceList) {
-		//printf("Memory allocation failed\n");
-		return NULL;
+		MessageBoxA(window, "ERROR:", "Couldn't allocate memory for deviceList!", MB_ICONERROR);
+		exit(-1);
 	}
 
 	if (GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST)) == (UINT)-1) {
-		//printf("Failed to get device list\n");
 		free(deviceList);
-		return NULL;
-	}
-	assert(deviceList != NULL);
-
-	/* REGISTER RAW INPUT DEVICES */
-
-	RAWINPUTDEVICE inputDevices[MAX_RAW_INPUTS];  // Assume max 16
-	UINT inputCount = 0;
-
-	for (UINT i = 0; i < numDevices; ++i) {
-		RID_DEVICE_INFO info = { 0 };
-		info.cbSize = sizeof(info);
-		UINT infoSize = sizeof(info);
-		if (GetRawInputDeviceInfo(deviceList[i].hDevice, RIDI_DEVICEINFO, &info, &infoSize) == (UINT)-1) {
-			continue;
-		}
-		// Register Keyboards, Mice, and other HID devices.
-		inputDevices[inputCount].usUsagePage = 0x01;  // Generic desktop controls
-		inputDevices[inputCount].dwFlags = 0;  // No Flags.
-		inputDevices[inputCount].hwndTarget = window; // Ideally, this should be the current window.
-		if (deviceList[i].dwType == RIM_TYPEKEYBOARD) {
-			inputDevices[inputCount].usUsage = 0x06; // Generic Keyboard
-			inputCount++;
-		}
-		if (deviceList[i].dwType == RIM_TYPEMOUSE) {
-			inputDevices[inputCount].usUsage = 0x02; // Generic Mouse
-			inputCount++;
-		}
-		if (deviceList[i].dwType == RIM_TYPEHID) {
-			inputDevices[inputCount].usUsage = 0x05; // Gamepad
-			inputCount++;
-		}
+		MessageBoxA(window, "ERROR:", "Couldn't acquire device list!", MB_ICONERROR);
+		exit(-1);
 	}
 
-	if (inputCount > 0) {
-		if (!RegisterRawInputDevices(inputDevices, inputCount, sizeof(RAWINPUTDEVICE))) {
-			//printf("RegisterRawInputDevices failed\n");
+	RAWINPUTDEVICE inputDevices[3];
+	UINT count = 0;
+	BOOL registeredMouse = FALSE, registeredKeyboard = FALSE, registeredHID = FALSE;
+
+	for (UINT i = 0; i < numDevices && count < 3; ++i) {
+		RAWINPUTDEVICE* rid = &inputDevices[count];
+		rid->usUsagePage = 0x01;
+		rid->dwFlags = RIDEV_INPUTSINK;
+		rid->hwndTarget = window;
+
+		switch (deviceList[i].dwType) {
+		case RIM_TYPEMOUSE:
+			if (!registeredMouse) {
+				rid->usUsage = 0x02;
+				registeredMouse = TRUE;
+				++count;
+			}
+			break;
+		case RIM_TYPEKEYBOARD:
+			if (!registeredKeyboard) {
+				rid->usUsage = 0x06;
+				registeredKeyboard = TRUE;
+				++count;
+			}
+			break;
+		case RIM_TYPEHID:
+			if (!registeredHID) {
+				rid->usUsage = 0x05;
+				registeredHID = TRUE;
+				++count;
+			}
+			break;
+		}
+	}
+
+	if (count > 0) {
+		if (RegisterRawInputDevices(inputDevices, count, sizeof(RAWINPUTDEVICE))) {
+			printf("INFO: Successfully Registered raw input devices!\n");
 		}
 		else {
-			//printf("Registered %u keyboards/mice for raw input\n", inputCount);
+			MessageBoxA(window, "ERROR:", "Couldn't register raw input devices!", MB_ICONERROR);
 		}
 	}
+	else {
+		MessageBoxA(window, "ERROR:", "No input devices to register!", MB_ICONERROR);
+	}
+
 	free(deviceList);
+	return 0;
 }
 
-// Call this in your update loop
-void Win32GetRawInputBuffer() {
-	RAWINPUT rawBuffer[MAX_RAW_INPUTS];
-	UINT inputCount = MAX_RAW_INPUTS;
 
-	UINT readCount = GetRawInputBuffer(rawBuffer, &inputCount, sizeof(RAWINPUTHEADER));
 
-	if (readCount == (UINT)-1) {
-		// Error reading input
-		return;
+// TODO: Buffered Raw input reading is an unsolved compsci problem according to bill gates.
+// This shit is fucking stupid. The mouse works so long as you don't move the window, the keyboard works(kind of)?.
+int Win32GetRawInputBuffer() {
+	UINT cbSize = 0;
+	UINT result = GetRawInputBuffer(NULL, &cbSize, sizeof(RAWINPUTHEADER));
+
+	if (result != (UINT)-1 && cbSize > 0) {
+		cbSize *= 16;  // Adjust multiplier based on expected input volume
 	}
 
+	PRAWINPUT buffer = (PRAWINPUT)malloc(cbSize);
+	if (!buffer) return -1;
+
+	UINT inputCount = GetRawInputBuffer(buffer, &cbSize, sizeof(RAWINPUTHEADER));
+	if (inputCount == (UINT)-1 || inputCount == 0) {
+		free(buffer);
+		return -1;
+	}
+
+	PRAWINPUT raw = buffer;
 	for (UINT i = 0; i < inputCount; ++i) {
-		const RAWINPUT* raw = &rawBuffer[i];
 		UINT type = raw->header.dwType;
-
-		Win32InputHandlers[type](raw);  // Branchless input, the way god intended.
+		if (type <= RIM_TYPEHID && Win32InputHandlers[type]) {
+			Win32InputHandlers[type](raw);
+		}
+		raw = NEXTRAWINPUTBLOCK(raw);
 	}
+
+	free(buffer);
+	return 0;
 }
+
 
 #endif // WIN32_PLATFORM_H

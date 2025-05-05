@@ -44,6 +44,27 @@ typedef struct ProcAddress ProcAddress;
 #define RAD2DEG (180.0f/PI)
 #endif
 
+// Vector2, 2 components
+typedef struct Vector2 {
+    float x;                // Vector x component
+    float y;                // Vector y component
+} Vector2;
+
+// Vector3, 3 components
+typedef struct Vector3 {
+    float x;                // Vector x component
+    float y;                // Vector y component
+    float z;                // Vector z component
+} Vector3;
+
+// Vector4, 4 components
+typedef struct Vector4 {
+    float x;                // Vector x component
+    float y;                // Vector y component
+    float z;                // Vector z component
+    float w;                // Vector w component
+} Vector4;
+
 //----------------------------------------------------------------------------------
 // Window Hint Types
 //----------------------------------------------------------------------------------
@@ -78,7 +99,8 @@ SALAPI void SetWindowTitle(Window* window, const char* string);
 SALAPI void SetWindowHint(int type, int value);
 SALAPI VideoMode* GetVideoMode(Monitor* monitor);
 SALAPI Monitor* GetPrimaryMonitor(void);
-SALAPI ProcAddress GlGetProcAddress(const char* proc);
+SALAPI ProcAddress* GlGetProcAddress(const char* proc);
+SALAPI int RegisterInputDevices(Window* window);
 SALAPI uint8_t WindowShouldClose(void);
 SALAPI void PollEvents(void);
 SALAPI int MakeContextCurrent(Window* window);

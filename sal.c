@@ -8,12 +8,11 @@
 
 
 void InitSal() {
-
 }
 
 #ifdef _WIN32
 SALAPI Window* InitWindow(int width, int height, const char* windowTitle) {
-	Win32InitWindow(width, height, windowTitle);
+	 return Win32InitWindow(width, height, windowTitle);
 }
 
 SALAPI void SetWindowTitle(Window* window, const char* string) {
@@ -24,25 +23,34 @@ SALAPI void SetWindowHint(int type, int value) {
 	Win32SetWindowHint(type, value);
 }
 SALAPI VideoMode* GetVideoMode(Monitor* monitor) {
-	Win32GetVideoMode(monitor);
+	return Win32GetVideoMode(monitor);
 }
 SALAPI Monitor* GetPrimaryMonitor(void) {
-	Win32GetPrimaryMonitor();
+	return Win32GetPrimaryMonitor();
 }
-SALAPI ProcAddress GlGetProcAddress(const char* proc) {
-	wglGetProcAddress(proc);
+SALAPI ProcAddress* GlGetProcAddress(const char* proc) {
+	return wglGetProcAddress(proc);
 }
+
+SALAPI int RegisterInputDevices(Window* window) {
+	return Win32RegisterRawInputDevices(window->handle);
+}
+
 SALAPI uint8_t WindowShouldClose(void) {
-	Win32WindowShouldClose();
+	return Win32WindowShouldClose();
 }
+
 SALAPI void PollEvents(void) {
 	Win32PollEvents();
 }
 SALAPI int MakeContextCurrent(Window* window) {
-	Win32MakeContextCurrent(window);
+	Win32MakeContextCurrent(window->handle);
 }
 SALAPI void BeginDrawing(void) {
 	Win32BeginDrawing();
+}
+SALAPI void DrawTriangle() {
+
 }
 SALAPI void EndDrawing(void) {
 	Win32EndDrawing();

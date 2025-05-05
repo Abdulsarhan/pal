@@ -2,6 +2,8 @@
 #include <glad/glad.h>
 #include "application.h"
 #include "sal.h"
+#include <assert.h>
+#include <stdio.h>
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -39,33 +41,33 @@ static OpenglInfo GetOpenGlInfo(void) {
 
 #ifdef _WIN32
 
-int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
+int main() {
+//int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
     InitSal();
     SetWindowHint(GL_VERSION_MAJOR, 3);
     SetWindowHint(GL_VERSION_MINOR, 3);
     SetWindowHint(FLOATING, 0);
     SetWindowHint(DOUBLE_BUFFER, 1);
-    SetWindowHint(RESIZABLE, 0);
+    SetWindowHint(RESIZABLE, 1);
 
     Monitor* monitor = GetPrimaryMonitor();
-
     VideoMode* mode = GetVideoMode(monitor);
-
-    Window* window = InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Fucking Windows!");
+    Window* window = InitWindow(1280, 720, "Fucking Windows!");
 
     MakeContextCurrent(window);
-
     if (!gladLoadGLLoader((GLADloadproc)GlGetProcAddress)) {
         OutputDebugString("ERROR: FAILED TO INITIALIZE GLAD!");
     }
     OpenglInfo openglInfo = GetOpenGlInfo();
 
+    if (RegisterInputDevices(window) !=0)
+        return;
     while (!WindowShouldClose())
     {
-        BeginDrawing();
         PollEvents();
 
+        BeginDrawing();
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         EndDrawing();
