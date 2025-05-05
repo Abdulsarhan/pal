@@ -518,39 +518,26 @@ int Win32RegisterRawInputDevices(HWND window) {
 	return 0;
 }
 
+#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
+static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 
-// TODO: Buffered Raw input reading is an unsolved compsci problem according to bill gates.
-// This shit is fucking stupid. The mouse works so long as you don't move the window, the keyboard works(kind of)?.
 int Win32GetRawInputBuffer() {
-	UINT cbSize = 0;
-	UINT result = GetRawInputBuffer(NULL, &cbSize, sizeof(RAWINPUTHEADER));
+	UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
+	UINT inputCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
-	if (result != (UINT)-1 && cbSize > 0) {
-		cbSize *= 16;  // Adjust multiplier based on expected input volume
-	}
-
-	PRAWINPUT buffer = (PRAWINPUT)malloc(cbSize);
-	if (!buffer) return -1;
-
-	UINT inputCount = GetRawInputBuffer(buffer, &cbSize, sizeof(RAWINPUTHEADER));
 	if (inputCount == (UINT)-1 || inputCount == 0) {
-		free(buffer);
 		return -1;
 	}
 
-	PRAWINPUT raw = buffer;
+	PRAWINPUT raw = (PRAWINPUT)g_rawInputBuffer;
 	for (UINT i = 0; i < inputCount; ++i) {
 		UINT type = raw->header.dwType;
-		if (type <= RIM_TYPEHID && Win32InputHandlers[type]) {
-			Win32InputHandlers[type](raw);
-		}
+		Win32InputHandlers[type](raw);
 		raw = NEXTRAWINPUTBLOCK(raw);
 	}
 
-	free(buffer);
 	return 0;
 }
-
 
 #endif // WIN32_PLATFORM_H
