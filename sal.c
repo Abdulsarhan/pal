@@ -6,63 +6,67 @@
 #include "linux_platform.h"
 #endif
 
-
-SALAPI void InitSal() {
+SALAPI void init_sal() {
 }
 
 #ifdef _WIN32
 
 /*
-------------------------------------
-|       Window & Monitor Stuff     |
-------------------------------------
+
+###########################################
+	       WINDOW & MONITOR STUFF
+###########################################
+
 */
 
-SALAPI Window* InitWindow(int width, int height, const char* windowTitle) {
+SALAPI Window* init_window(int width, int height, const char* windowTitle) {
 	 return Win32InitWindow(width, height, windowTitle);
 }
 
-SALAPI uint8_t WindowShouldClose(void) {
+SALAPI uint8_t window_should_close(void) {
 	return Win32WindowShouldClose();
 }
 
-SALAPI void SetWindowTitle(Window* window, const char* string) {
+SALAPI void set_window_title(Window* window, const char* string) {
 	(void)SetWindowTextA(window, string);
 }
 
-SALAPI void SetWindowHint(int type, int value) {
+SALAPI void set_window_hint(int type, int value) {
 	(void)Win32SetWindowHint(type, value);
 }
 
-SALAPI VideoMode* GetVideoMode(Monitor* monitor) {
+SALAPI VideoMode* set_video_mode(Monitor* monitor) {
 	return Win32GetVideoMode(monitor);
 }
-SALAPI Monitor* GetPrimaryMonitor(void) {
+SALAPI Monitor* get_primary_monitor(void) {
 	return Win32GetPrimaryMonitor();
 }
 
-SALAPI ProcAddress* GlGetProcAddress(const char* proc) {
+SALAPI ProcAddress* gl_get_proc_address(const char* proc) {
 	return wglGetProcAddress(proc);
 }
 
-SALAPI int RegisterInputDevices(Window* window) {
+SALAPI int register_input_devices(Window* window) {
 	return Win32RegisterRawInputDevices(window->handle);
 }
 
-SALAPI void PollEvents(void) {
+SALAPI void poll_events(void) {
 	(void)Win32PollEvents();
 }
 
-SALAPI int MakeContextCurrent(Window* window) {
+SALAPI int make_context_current(Window* window) {
 	return Win32MakeContextCurrent(window->handle);
 }
 
 /*
------------------------------
-|    Rendering functions.   |
------------------------------
+
+###########################################
+		   RENDERING FUNCTIONS.
+###########################################
+
 */
-SALAPI void BeginDrawing(void) {
+
+SALAPI void begin_drawing(void) {
 	(void)Win32BeginDrawing();
 }
 
@@ -70,13 +74,17 @@ SALAPI void DrawTriangle() {
 
 }
 
-SALAPI void EndDrawing(void) {
+SALAPI void end_drawing(void) {
 	(void)Win32EndDrawing();
 }
 
 
 /*
-	Library Loading Functions.
+
+###########################################
+	     LIBRARY LOADING FUNCTIONS
+###########################################
+
 */
 
 void* LoadDynamicLibrary(char* dll) {
@@ -95,53 +103,164 @@ uint8_t FreeDynamicLibrary(void* dll) {
 }
 #endif
 
+
 /*
------------------------------
-|   String Parsing Helpers  |
------------------------------
+
+###########################################
+				 File I/O
+###########################################
+
 */
 
-SALAPI uint8_t IsCapitalLetter(char ch) {
+uint8_t does_file_exist(const char* file_path) {
+
+	assert(file_path != NULL);
+	FILE* file = fopen(file_path, "rb");
+	if (!file)
+	{
+		return 0;
+	}
+	fclose(file);
+
+	return 1;
+}
+
+time_t get_file_timestamp(const char* file) {
+	struct stat file_stat = { 0 };
+	stat(file, &file_stat);
+	return file_stat.st_mtime;
+}
+
+long get_file_size(const char* file_path) {
+	assert(file_path != NULL);
+	long fileSize = 0;
+	FILE* file = fopen(file_path, "rb");
+	if (!file)
+	{
+		fprintf(stderr, "ERROR: Failed to open file!\n");
+		return 0;
+	}
+
+	fseek(file, 0, SEEK_END);
+	fileSize = ftell(file);
+	fseek(file, 0, SEEK_SET);
+	fclose(file);
+
+	return fileSize;
+}
+
+char* read_file(const char* filePath, int* fileSize, char* buffer) {
+	assert(filePath != NULL);
+	assert(fileSize != NULL);
+	assert(buffer != NULL);
+
+	*fileSize = 0;
+	FILE* file = fopen(filePath, "rb");
+	if (!file)
+	{
+		fprintf(stderr, "ERROR: Failed to open file!\n");
+		return NULL;
+	}
+
+	fseek(file, 0, SEEK_END);
+	*fileSize = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	memset(buffer, 0, *fileSize + 1);
+	fread(buffer, sizeof(char), *fileSize, file);
+
+	fclose(file);
+
+	return buffer;
+}
+
+void write_file(const char* filePath, char* buffer, int size) {
+	assert(filePath != NULL);
+	assert(buffer != NULL);
+
+	FILE* file = fopen(filePath, "wb");
+	if (!file)
+	{
+		fprintf(stderr, "ERROR: Failed to open file!\n");
+		return;
+	}
+
+	fwrite(buffer, sizeof(char), size, file);
+	fclose(file);
+}
+
+uint8_t copy_file(const char* fileName, const char* outputName, char* buffer) {
+	int fileSize = 0;
+	char* data = read_file(fileName, &fileSize, buffer);
+
+	FILE* outputFile = fopen(outputName, "wb");
+	if (!outputFile)
+	{
+		fprintf(stderr, "ERROR: Failed to open file!\n");
+		return 0;
+	}
+
+	int result = fwrite(data, sizeof(char), fileSize, outputFile);
+	if (!result)
+	{
+		fprintf(stderr, "ERROR: Failed to open file!\n");
+		return 0;
+	}
+
+	fclose(outputFile);
+
+	return 1;
+}
+
+/*
+
+###########################################
+		   STRING PARSING HELPERS
+###########################################
+
+*/
+
+SALAPI uint8_t is_upper_case(char ch) {
 	return ((ch >= 'A') && (ch <= 'Z'));
 }
 
-SALAPI uint8_t IsLowerCaseLetter(char ch) {
+SALAPI uint8_t is_lower_case(char ch) {
 	return ((ch >= 'a') && (ch <= 'z'));
 }
 
-SALAPI uint8_t IsLetter(char ch) {
-	return (IsCapitalLetter(ch) || IsLowerCaseLetter(ch));
+SALAPI uint8_t is_letter(char ch) {
+	return (is_upper_case(ch) || is_lower_case(ch));
 }
 
-SALAPI uint8_t IsEndOfLine(char ch) {
+SALAPI uint8_t is_end_of_line(char ch) {
 	return ((ch == '\r') || (ch == '\n'));
 }
 
-SALAPI uint8_t IsWhiteSpace(char ch) {
+SALAPI uint8_t is_whitespace(char ch) {
 	return ((ch == ' ') || (ch == '\t') || (ch == '\v') || (ch == '\f'));
 }
 
-SALAPI uint8_t IsNumber(char ch) {
+SALAPI uint8_t is_number(char ch) {
 	return ((ch >= '0') && (ch <= '9'));
 }
 
-SALAPI uint8_t IsUnderscore(char ch) {
+SALAPI uint8_t is_underscore(char ch) {
 	return (ch == '_');
 }
 
-SALAPI uint8_t IsHyphen(char ch) {
+SALAPI uint8_t is_hyphen(char ch) {
 	return (ch == '-');
 }
 
-SALAPI uint8_t IsDot(char ch) {
+SALAPI uint8_t is_dot(char ch) {
 	return (ch == '.');
 }
 
-SALAPI uint8_t AreCharsEqual(char ch1, char ch2) {
+SALAPI uint8_t are_chars_equal(char ch1, char ch2) {
 	return (ch1 == ch2);
 }
 
-SALAPI uint8_t AreStringsEqual(int count, char* str1, char* str2) {
+SALAPI uint8_t are_strings_equal(int count, char* str1, char* str2) {
 	for (int i = 0; i < count; i++) {
 		if (str1 == NULL || str2 == NULL)
 			return 0;

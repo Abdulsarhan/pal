@@ -1,7 +1,8 @@
 #ifndef SAL_H
 #define SAL_H
 
-#include <stdint.h>
+#include <stdint.h> // For Clearly Defined Types.
+#include <sys/stat.h> // For time_t and stat.
 
 typedef struct VideoMode {
 	int width;
@@ -97,36 +98,45 @@ typedef struct Vector4 {
 extern "C" {
 #endif
 
-SALAPI void InitSal();
-SALAPI Window* InitWindow(int width, int height, const char* windowTitle);
-SALAPI void SetWindowTitle(Window* window, const char* string);
-SALAPI void SetWindowHint(int type, int value);
-SALAPI VideoMode* GetVideoMode(Monitor* monitor);
-SALAPI Monitor* GetPrimaryMonitor(void);
-SALAPI ProcAddress* GlGetProcAddress(const char* proc);
-SALAPI int RegisterInputDevices(Window* window);
-SALAPI uint8_t WindowShouldClose(void);
-SALAPI void PollEvents(void);
-SALAPI int MakeContextCurrent(Window* window);
+SALAPI void init_sal();
+SALAPI Window* init_window(int width, int height, const char* windowTitle);
+SALAPI void set_window_title(Window* window, const char* string);
+SALAPI void set_window_hint(int type, int value);
+SALAPI VideoMode* set_video_mode(Monitor* monitor);
+SALAPI Monitor* get_primary_monitor(void);
+SALAPI ProcAddress* gl_get_proc_address(const char* proc);
+SALAPI int register_input_devices(Window* window);
+SALAPI uint8_t window_should_close(void);
+SALAPI void poll_events(void);
+SALAPI int make_context_current(Window* window);
 
-SALAPI void BeginDrawing(void);
+SALAPI void begin_drawing(void);
 SALAPI void DrawTriangle(void);
-SALAPI void EndDrawing(void);
+SALAPI void end_drawing(void);
 
-SALAPI uint8_t IsCapitalLetter(char ch);
-SALAPI uint8_t IsLowerCaseLetter(char ch);
-SALAPI uint8_t IsLetter(char ch);
-SALAPI uint8_t IsEndOfLine(char ch);
-SALAPI uint8_t IsWhiteSpace(char ch);
-SALAPI uint8_t IsNumber(char ch);
-SALAPI uint8_t IsUnderscore(char ch);
-SALAPI uint8_t IsHyphen(char ch);
-SALAPI uint8_t IsDot(char ch);
-SALAPI uint8_t AreCharsEqual(char ch1, char ch2);
-SALAPI uint8_t AreStringsEqual(int count, char* str1, char* str2);
+SALAPI uint8_t does_file_exist(const char* file_path);
+SALAPI time_t get_file_timestamp(const char* file);
+SALAPI long get_file_size(const char* file_path);
+SALAPI char* read_file(const char* filePath, int* fileSize, char* buffer);
+SALAPI void write_file(const char* filePath, char* buffer, int size);
+SALAPI uint8_t copy_file(const char* fileName, const char* outputName, char* buffer);
+
+SALAPI uint8_t is_upper_case(char ch);
+SALAPI uint8_t is_lower_case(char ch);
+SALAPI uint8_t is_letter(char ch);
+SALAPI uint8_t is_end_of_line(char ch);
+SALAPI uint8_t is_whitespace(char ch);
+SALAPI uint8_t is_number(char ch);
+SALAPI uint8_t is_underscore(char ch);
+SALAPI uint8_t is_hyphen(char ch);
+SALAPI uint8_t is_dot(char ch);
+SALAPI uint8_t are_chars_equal(char ch1, char ch2);
+SALAPI uint8_t are_strings_equal(int count, char* str1, char* str2);
+
 void* LoadDynamicLibrary(char* dll);
 void* LoadDynamicFunction(void* dll, char* func_name);
 uint8_t FreeDynamicLibrary(void* dll);
+
 
 #ifdef __cplusplus
 }

@@ -396,7 +396,7 @@ static uint8_t Win32IsWhiteSpace(char* ch) {
 		(ch == '\t') ||
 		(ch == '\v') ||
 		(ch = '\f') ||
-		IsEndOfLine(ch));
+		is_end_of_line(ch));
 }
 
 static uint8_t Win32AreStringsEqual(int count, char* str1, char* str2) {

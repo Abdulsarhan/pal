@@ -16,7 +16,7 @@ typedef struct OpenglInfo {
     char extensions[8124];
 }OpenglInfo;
 
-static OpenglInfo GetOpenGlInfo(void) {
+static OpenglInfo get_opengl_info(void) {
     OpenglInfo info = { 0 };
     info.vendor = (char*)glGetString(GL_VENDOR);
     info.renderer = (char*)glGetString(GL_RENDERER);
@@ -44,33 +44,35 @@ static OpenglInfo GetOpenGlInfo(void) {
 int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
-    InitSal();
-    SetWindowHint(GL_VERSION_MAJOR, 3);
-    SetWindowHint(GL_VERSION_MINOR, 3);
-    SetWindowHint(FLOATING, 0);
-    SetWindowHint(DOUBLE_BUFFER, 1);
-    SetWindowHint(RESIZABLE, 1);
+    init_sal();
+    set_window_hint(GL_VERSION_MAJOR, 3);
+    set_window_hint(GL_VERSION_MINOR, 3);
+    set_window_hint(FLOATING, 0);
+    set_window_hint(DOUBLE_BUFFER, 1);
+    set_window_hint(RESIZABLE, 1);
 
-    Monitor* monitor = GetPrimaryMonitor();
-    VideoMode* mode = GetVideoMode(monitor);
-    Window* window = InitWindow(1280, 720, "Fucking Windows!");
+    Monitor* monitor = get_primary_monitor();
+    VideoMode* mode = set_video_mode(monitor);
+    Window* window = init_window(1280, 720, "Fucking Windows!");
 
-    MakeContextCurrent(window);
-    if (!gladLoadGLLoader((GLADloadproc)GlGetProcAddress)) {
-        OutputDebugString("ERROR: FAILED TO INITIALIZE GLAD!");
+    make_context_current(window);
+
+    if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
+        fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
-    OpenglInfo openglInfo = GetOpenGlInfo();
 
-    if (RegisterInputDevices(window) != 0)
+    OpenglInfo openglInfo = get_opengl_info();
+
+    if (register_input_devices(window) != 0)
         return;
-    while (!WindowShouldClose())
+    while (!window_should_close())
     {
-        PollEvents();
+        poll_events();
 
-        BeginDrawing();
+        begin_drawing();
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        EndDrawing();
+        end_drawing();
     }
 
     return 0;
@@ -80,7 +82,7 @@ int main() {
 #ifdef __linux__
 
 int main() {
-	InitWindow();
+	init_window();
 }
 
 #endif
