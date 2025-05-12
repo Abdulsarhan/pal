@@ -93,6 +93,10 @@ typedef struct Vector4 {
 #define CLITERAL(type)      (type)
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 SALAPI void InitSal();
 SALAPI Window* InitWindow(int width, int height, const char* windowTitle);
 SALAPI void SetWindowTitle(Window* window, const char* string);
@@ -106,15 +110,26 @@ SALAPI void PollEvents(void);
 SALAPI int MakeContextCurrent(Window* window);
 
 SALAPI void BeginDrawing(void);
+SALAPI void DrawTriangle(void);
 SALAPI void EndDrawing(void);
-SALAPI uint8_t IsWhiteSpace(char* ch);
+
+SALAPI uint8_t IsCapitalLetter(char ch);
+SALAPI uint8_t IsLowerCaseLetter(char ch);
+SALAPI uint8_t IsLetter(char ch);
+SALAPI uint8_t IsEndOfLine(char ch);
+SALAPI uint8_t IsWhiteSpace(char ch);
+SALAPI uint8_t IsNumber(char ch);
+SALAPI uint8_t IsUnderscore(char ch);
+SALAPI uint8_t IsHyphen(char ch);
+SALAPI uint8_t IsDot(char ch);
+SALAPI uint8_t AreCharsEqual(char ch1, char ch2);
 SALAPI uint8_t AreStringsEqual(int count, char* str1, char* str2);
-SALAPI uint8_t IsEndOfLine(char* ch);
+void* LoadDynamicLibrary(char* dll);
+void* LoadDynamicFunction(void* dll, char* func_name);
+uint8_t FreeDynamicLibrary(void* dll);
 
-#ifdef __linux__
-void InitWindow() {
-
+#ifdef __cplusplus
 }
-#endif // __linux__
+#endif
 
 #endif //SAL_H

@@ -64,14 +64,15 @@ static void Win32PollEvents(void);
 static int Win32MakeContextCurrent(HWND window);
 
 void Win32BeginDrawing();
-
 void Win32EndDrawing();
 LRESULT CALLBACK Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height);
-
 static uint8_t Win32IsWhiteSpace(char* ch);
 static uint8_t Win32AreStringsEqual(int count, char* str1, char* str2);
 static uint8_t Win32IsEndOfLine(char* ch);
+void* Win32LoadDynamicLibrary(char* dll);
+void* Win32LoadDynamicFunction(HMODULE dll, char* func_name);
+uint8_t Win32FreeDynamicLibrary(HMODULE dll);
 
 void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height)
 {
@@ -351,7 +352,7 @@ static VideoMode* Win32GetVideoMode(Monitor* monitor) {
 
 	MONITORINFO mi = { 0 };
 	VideoMode* videoMode = calloc(1, sizeof(VideoMode));
-
+	
 	if (monitor) {
 		mi.cbSize = sizeof(MONITORINFO);
 		if (GetMonitorInfoA(monitor->handle, &mi)) {
@@ -376,7 +377,7 @@ static Monitor* Win32GetPrimaryMonitor() {
 
 	// Get the handle to the primary monitor
 	monitor->handle = MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
-
+	
 	return monitor;
 
 }
@@ -538,6 +539,24 @@ int Win32GetRawInputBuffer() {
 	}
 
 	return 0;
+}
+
+void* Win32LoadDynamicLibrary(char* dll) {
+	HMODULE result = LoadLibraryA(dll);
+	assert(result);
+	return result;
+}
+
+void* Win32LoadDynamicFunction(HMODULE dll, char* func_name) {
+	FARPROC proc = GetProcAddress(dll, func_name);
+	assert(proc);
+	return (void*)proc;
+}
+
+uint8_t Win32FreeDynamicLibrary(HMODULE dll) {
+	uint8_t free_result = FreeLibrary(dll);
+	assert(free_result);
+	return (uint8_t)free_result;
 }
 
 #endif // WIN32_PLATFORM_H

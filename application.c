@@ -61,7 +61,7 @@ int main() {
     }
     OpenglInfo openglInfo = GetOpenGlInfo();
 
-    if (RegisterInputDevices(window) !=0)
+    if (RegisterInputDevices(window) != 0)
         return;
     while (!WindowShouldClose())
     {
