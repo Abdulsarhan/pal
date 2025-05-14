@@ -244,6 +244,12 @@ static Window* Win32InitWindow(int width, int height, const char* windowTitle) {
 		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
+	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
+	wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+	if (wglSwapIntervalEXT == NULL) {
+		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+		return fakewindow;
+	}
 
 	WNDCLASSEXA wc = RegisterWindowClass();
 	Window* window = (Window*)malloc(sizeof(Window));
