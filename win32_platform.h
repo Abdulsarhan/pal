@@ -39,13 +39,14 @@ struct ProcAddress {
 };
 
 // Keyboard & Mouse Input
+#define MAX_KEYS 256
+#define MAX_MOUSEBUTTONS 32
 typedef struct Input {
-	BYTE KeyBuffer[256];
-	BYTE KeysPressed[32]; // We pack bits here.
-	BYTE KeysReleased[32]; // We Also pack bits here.
-	unsigned int MouseButtons; // 4
-	unsigned int MouseButtonsPressed; // 4
-	unsigned int MouseButtonsReleased; // 4
+	uint8_t keys[MAX_KEYS]; // We pack bits here.
+	uint8_t keys_processed[MAX_KEYS]; // We pack bits here.
+	uint8_t mouse_buttons[MAX_MOUSEBUTTONS]; // 4
+	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS]; // 4
+	Vector2 mouse;
 }Input;
 Input input = { 0 };
 
@@ -55,9 +56,13 @@ typedef struct {
 }RawInputStruct;
 RawInputStruct rawInputStruct = {0};
 
+#ifdef __cplusplus
+#define extern "C" {
+#endif
+
 static void Win32SetWindowHint(int type, int value);
 static Window* Win32InitWindow(int width, int height, const char* windowTitle);
-static VideoMode* Win32GetVideoMode(Monitor* monitor);
+static VideoMode* Win32GetVideoMode(HMONITOR monitor);
 static Monitor* Win32GetPrimaryMonitor(void);
 static uint8_t Win32WindowShouldClose(void);
 static void Win32PollEvents(void);
@@ -67,12 +72,13 @@ void Win32BeginDrawing();
 void Win32EndDrawing();
 LRESULT CALLBACK Win32WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height);
-static uint8_t Win32IsWhiteSpace(char* ch);
-static uint8_t Win32AreStringsEqual(int count, char* str1, char* str2);
-static uint8_t Win32IsEndOfLine(char* ch);
 void* Win32LoadDynamicLibrary(char* dll);
 void* Win32LoadDynamicFunction(HMODULE dll, char* func_name);
 uint8_t Win32FreeDynamicLibrary(HMODULE dll);
+
+#ifdef __cplusplus
+}
+#endif
 
 void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height)
 {
@@ -348,14 +354,14 @@ static uint8_t Win32WindowShouldClose() {
 	return s_WindowShouldNotClose;
 }
 
-static VideoMode* Win32GetVideoMode(Monitor* monitor) {
+static VideoMode* Win32GetVideoMode(HMONITOR monitor) {
 
 	MONITORINFO mi = { 0 };
 	VideoMode* videoMode = calloc(1, sizeof(VideoMode));
 	
 	if (monitor) {
 		mi.cbSize = sizeof(MONITORINFO);
-		if (GetMonitorInfoA(monitor->handle, &mi)) {
+		if (GetMonitorInfoA(monitor, &mi)) {
 			videoMode->width = mi.rcWork.left;
 			videoMode->height = mi.rcWork.right;
 		}
@@ -391,31 +397,6 @@ void Win32EndDrawing() {
 }
 
 
-static uint8_t Win32IsWhiteSpace(char* ch) {
-	return ((ch == ' ') ||
-		(ch == '\t') ||
-		(ch == '\v') ||
-		(ch = '\f') ||
-		is_end_of_line(ch));
-}
-
-static uint8_t Win32AreStringsEqual(int count, char* str1, char* str2) {
-	for (int i = 0; i < count; i++) {
-		if (str1 == NULL || str2 == NULL)
-			return 0;
-		if (*str1 != *str2) {
-			return 0;
-		}
-		str1++;
-		str2++;
-	}
-	return 1;
-}
-
-static uint8_t Win32IsEndOfLine(char* ch) {
-	return ((ch == '\n') || (ch == '\r'));
-}
-
 #define MAX_RAW_INPUTS 16
 
 // Handler function signatures
@@ -426,14 +407,26 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
 	USHORT buttons = raw->data.mouse.usButtonFlags;
+
+	input.mouse.x = dx;
+	input.mouse.y = dy;
+
+	for (int i = 0; i < 16; ++i) {
+		uint16_t down = (buttons >> (i * 2)) & 1;
+		uint16_t up = (buttons >> (i * 2 + 1)) & 1;
+
+		// If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
+		input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
+	}
+
 	printf("Mouse: dx=%ld dy=%ld buttons=0x%04x\n", dx, dy, buttons);
 }
 
-// Keyboard input handler
 void Win32HandleKeyboard(const RAWINPUT* raw) {
 	USHORT key = raw->data.keyboard.VKey;
-	BOOL keyUp = (raw->data.keyboard.Flags & RI_KEY_BREAK) != 0;
-	printf("Keyboard: key=0x%02x %s\n", key, keyUp ? "up" : "down");
+	input.keys[key] = ~(raw->data.keyboard.Flags) & RI_KEY_BREAK; 
+	//printf("Key %u %s\n", key, input.keys[key] ? "up" : "down"); // FOR DEBUGGING NOCHECKIN!
+
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
@@ -448,96 +441,51 @@ RawInputHandler Win32InputHandlers[3] = {
 	Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
 
-int Win32RegisterRawInputDevices(HWND window) {
-	UINT numDevices = 0;
+uint8_t Win32RegisterRawInputDevices(HWND window) {
+	RAWINPUTDEVICE rid[3];
 
-	if (GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST)) != 0) {
-		MessageBoxA(window, "ERROR:", "Failed to get the number of devices!", MB_ICONERROR);
-		exit(-1);
+	// 1. Keyboard
+	rid[0].usUsagePage = 0x01; // Generic desktop controls
+	rid[0].usUsage = 0x06;     // Keyboard
+	rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
+	rid[0].hwndTarget = window;
+
+	// 2. Mouse
+	rid[1].usUsagePage = 0x01; // Generic desktop controls
+	rid[1].usUsage = 0x02;     // Mouse
+	rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+	rid[1].hwndTarget = window;
+
+	// 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
+	rid[2].usUsagePage = 0x01; // Generic desktop controls
+	rid[2].usUsage = 0x04;     // Joystick
+	rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+	rid[2].hwndTarget = window;
+
+	if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
+		DWORD error = GetLastError();
+		printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
+		return -1;
 	}
 
-	RAWINPUTDEVICELIST* deviceList = (RAWINPUTDEVICELIST*)malloc(sizeof(RAWINPUTDEVICELIST) * numDevices);
-	if (!deviceList) {
-		MessageBoxA(window, "ERROR:", "Couldn't allocate memory for deviceList!", MB_ICONERROR);
-		exit(-1);
-	}
-
-	if (GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST)) == (UINT)-1) {
-		free(deviceList);
-		MessageBoxA(window, "ERROR:", "Couldn't acquire device list!", MB_ICONERROR);
-		exit(-1);
-	}
-
-	RAWINPUTDEVICE inputDevices[3];
-	UINT count = 0;
-	BOOL registeredMouse = FALSE, registeredKeyboard = FALSE, registeredHID = FALSE;
-
-	for (UINT i = 0; i < numDevices && count < 3; ++i) {
-		RAWINPUTDEVICE* rid = &inputDevices[count];
-		rid->usUsagePage = 0x01;
-		rid->dwFlags = RIDEV_INPUTSINK;
-		rid->hwndTarget = window;
-
-		switch (deviceList[i].dwType) {
-		case RIM_TYPEMOUSE:
-			if (!registeredMouse) {
-				rid->usUsage = 0x02;
-				registeredMouse = TRUE;
-				++count;
-			}
-			break;
-		case RIM_TYPEKEYBOARD:
-			if (!registeredKeyboard) {
-				rid->usUsage = 0x06;
-				registeredKeyboard = TRUE;
-				++count;
-			}
-			break;
-		case RIM_TYPEHID:
-			if (!registeredHID) {
-				rid->usUsage = 0x05;
-				registeredHID = TRUE;
-				++count;
-			}
-			break;
-		}
-	}
-
-	if (count > 0) {
-		if (RegisterRawInputDevices(inputDevices, count, sizeof(RAWINPUTDEVICE))) {
-			printf("INFO: Successfully Registered raw input devices!\n");
-		}
-		else {
-			MessageBoxA(window, "ERROR:", "Couldn't register raw input devices!", MB_ICONERROR);
-		}
-	}
-	else {
-		MessageBoxA(window, "ERROR:", "No input devices to register!", MB_ICONERROR);
-	}
-
-	free(deviceList);
+	printf("Raw input devices registered successfully.\n");
 	return 0;
 }
 
-#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
+#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 8 KB
 
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 
 int Win32GetRawInputBuffer() {
 	UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
-	UINT inputCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
-
-	if (inputCount == (UINT)-1 || inputCount == 0) {
-		return -1;
-	}
+	UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
 	PRAWINPUT raw = (PRAWINPUT)g_rawInputBuffer;
-	for (UINT i = 0; i < inputCount; ++i) {
+	for (UINT i = 0; i < inputEventCount; ++i) {
 		UINT type = raw->header.dwType;
 		Win32InputHandlers[type](raw);
 		raw = NEXTRAWINPUTBLOCK(raw);
 	}
-
 	return 0;
 }
 

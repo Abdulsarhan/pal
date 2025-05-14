@@ -1,9 +1,11 @@
+#include <stdio.h>
+#include <assert.h>
+
 #include <Windows.h>
+
 #include <glad/glad.h>
 #include "application.h"
 #include "sal.h"
-#include <assert.h>
-#include <stdio.h>
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -22,7 +24,6 @@ static OpenglInfo get_opengl_info(void) {
     info.renderer = (char*)glGetString(GL_RENDERER);
     info.version = (char*)glGetString(GL_VERSION);
     info.shadingLanguageVersion = (char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
-
     if (glGetStringi) {
         int numExtensions;
         glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
@@ -54,7 +55,6 @@ int main() {
     Monitor* monitor = get_primary_monitor();
     VideoMode* mode = set_video_mode(monitor);
     Window* window = init_window(1280, 720, "Fucking Windows!");
-
     make_context_current(window);
 
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
@@ -65,10 +65,17 @@ int main() {
 
     if (register_input_devices(window) != 0)
         return;
+
     while (!window_should_close())
     {
         poll_events();
+        if (is_key_down(KEY_SPACE)) {
+            printf("Pressed the A key!");
+        }
 
+        if (is_mouse_down(SIDE_MOUSE_BUTTON1)) {
+            printf("MOUSE PRESSED!\n");
+        }
         begin_drawing();
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

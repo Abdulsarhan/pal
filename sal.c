@@ -28,7 +28,7 @@ SALAPI uint8_t window_should_close(void) {
 }
 
 SALAPI void set_window_title(Window* window, const char* string) {
-	(void)SetWindowTextA(window, string);
+	(void)SetWindowTextA(window->handle, string);
 }
 
 SALAPI void set_window_hint(int type, int value) {
@@ -36,7 +36,7 @@ SALAPI void set_window_hint(int type, int value) {
 }
 
 SALAPI VideoMode* set_video_mode(Monitor* monitor) {
-	return Win32GetVideoMode(monitor);
+	return Win32GetVideoMode(monitor->handle);
 }
 SALAPI Monitor* get_primary_monitor(void) {
 	return Win32GetPrimaryMonitor();
@@ -48,6 +48,56 @@ SALAPI ProcAddress* gl_get_proc_address(const char* proc) {
 
 SALAPI int register_input_devices(Window* window) {
 	return Win32RegisterRawInputDevices(window->handle);
+}
+
+// Keyboard input
+SALAPI uint8_t is_key_pressed(int key) {
+
+	if (is_key_down(key) && !is_key_processed(key)) {
+		set_key_processed(key);
+		return 1;
+	}
+	else {
+		return 0;
+	}
+
+}
+
+SALAPI uint8_t is_key_down(int key) {
+	return input.keys[key];
+
+}
+
+SALAPI uint8_t is_key_processed(int key) {
+	return input.keys_processed[key];
+}
+
+SALAPI uint8_t set_key_processed(int key) {
+	input.keys_processed[key] = 1;  // Mark as processed
+}
+
+// Mouse input
+SALAPI uint8_t is_mouse_pressed(int button) {
+
+	if (is_mouse_down(button) && !is_mouse_pressed(button)) {
+		set_mouse_processed(button);
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+SALAPI uint8_t is_mouse_down(int button) {
+	return input.mouse_buttons[button];
+}
+
+SALAPI uint8_t is_mouse_processed(int button) {
+	return input.mouse_buttons_processed[button];
+}
+
+SALAPI void set_mouse_processed(int button) {
+	input.mouse_buttons_processed[button] = 1; // Mark as processed
 }
 
 SALAPI void poll_events(void) {
