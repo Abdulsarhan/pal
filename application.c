@@ -5,7 +5,7 @@
 
 #include <glad/glad.h>
 #include "application.h"
-#include "sal.h"
+#include "pal.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -29,6 +29,7 @@ static OpenglInfo get_opengl_info(void) {
         glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
         for (int i = 0; i < numExtensions; i++) {
             const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
+            // TODO: Fix security issue here:
             strcat(info.extensions, ext);
             strcat(info.extensions, " ");
         }
@@ -45,7 +46,7 @@ static OpenglInfo get_opengl_info(void) {
 int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
-    init_sal();
+    init_pal();
     set_window_hint(GL_VERSION_MAJOR, 3);
     set_window_hint(GL_VERSION_MINOR, 3);
     set_window_hint(FLOATING, 0);
@@ -53,7 +54,7 @@ int main() {
     set_window_hint(RESIZABLE, 1);
 
     Monitor* monitor = get_primary_monitor();
-    VideoMode* mode = set_video_mode(monitor);
+    VideoMode* mode = get_video_mode(monitor);
     Window* window = init_window(1280, 720, "Fucking Windows!");
     make_context_current(window);
 
@@ -65,6 +66,10 @@ int main() {
 
     if (register_input_devices(window) != 0)
         return;
+
+	Sound sound = { 0 };
+	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\piano.wav", &sound);
+	play_sound(&sound);
 
     while (!window_should_close())
     {

@@ -1,5 +1,5 @@
-#ifndef SAL_H
-#define SAL_H
+#ifndef PAL_H
+#define PAL_H
 
 #include <stdint.h> // For Clearly Defined Types.
 #include <sys/stat.h> // For time_t and stat.
@@ -9,27 +9,36 @@ typedef struct VideoMode {
 	int height;
 }VideoMode;
 
+typedef struct {
+	unsigned char* data;   // Raw PCM audio data
+	size_t dataSize;       // Size in bytes
+
+	int sampleRate;        // Samples per second (e.g., 44100)
+	int channels;          // Number of audio channels (e.g., 2 for stereo)
+	int bitsPerSample;     // Usually 16 or 32
+} Sound;
+
 typedef struct Window Window;
 typedef struct Monitor Monitor;
-typedef struct ProcAddress ProcAddress;
+typedef struct SoundInitInfo SoundInitInfo;
 
 #if defined(_WIN32)
 #if defined(__TINYC__)
 #define __declspec(x) __attribute__((x))
 #endif
 #if defined(BUILD_LIBTYPE_SHARED)
-#define SALAPI __declspec(dllexport)     // We are building the library as a Win32 shared library (.dll)
+#define PALAPI __declspec(dllexport)     // We are building the library as a Win32 shared library (.dll)
 #elif defined(USE_LIBTYPE_SHARED)
-#define SALAPI __declspec(dllimport)     // We are using the library as a Win32 shared library (.dll)
+#define PALAPI __declspec(dllimport)     // We are using the library as a Win32 shared library (.dll)
 #endif
 #else
 #if defined(BUILD_LIBTYPE_SHARED)
-#define SALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
+#define PALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
 #endif
 #endif
 
-#ifndef SALAPI
-#define SALAPI       // Functions defined as 'extern' by default (implicit specifiers)
+#ifndef PALAPI
+#define PALAPI       // Functions defined as 'extern' by default (implicit specifiers)
 #endif
 
 //----------------------------------------------------------------------------------
@@ -235,59 +244,63 @@ typedef struct Vector4 {
 extern "C" {
 #endif
 
-SALAPI void init_sal();
-SALAPI Window* init_window(int width, int height, const char* windowTitle);
-SALAPI void set_window_title(Window* window, const char* string);
-SALAPI void set_window_hint(int type, int value);
-SALAPI VideoMode* set_video_mode(Monitor* monitor);
-SALAPI Monitor* get_primary_monitor(void);
-SALAPI ProcAddress* gl_get_proc_address(const char* proc);
-SALAPI uint8_t window_should_close(void);
-SALAPI void poll_events(void);
-SALAPI int make_context_current(Window* window);
+PALAPI void init_pal();
+PALAPI Window* init_window(int width, int height, const char* windowTitle);
+PALAPI void set_window_title(Window* window, const char* string);
+PALAPI void set_window_hint(int type, int value);
+PALAPI VideoMode* get_video_mode(Monitor* monitor);
+PALAPI Monitor* get_primary_monitor(void);
+PALAPI void* gl_get_proc_address(const char* proc);
+PALAPI uint8_t window_should_close(void);
+PALAPI void poll_events(void);
+PALAPI int make_context_current(Window* window);
 
-SALAPI int register_input_devices(Window* window);
-SALAPI uint8_t is_key_pressed(int key);
-SALAPI uint8_t is_key_down(int key);
-SALAPI uint8_t is_key_processed(int key);
-SALAPI uint8_t set_key_processed(int key);
+PALAPI int register_input_devices(Window* window);
+PALAPI uint8_t is_key_pressed(int key);
+PALAPI uint8_t is_key_down(int key);
+PALAPI uint8_t is_key_processed(int key);
+PALAPI uint8_t set_key_processed(int key);
 
 // Mouse input
-SALAPI uint8_t is_mouse_pressed(int button);
-SALAPI uint8_t is_mouse_down(int button);
-SALAPI uint8_t is_mouse_processed(int button);
-SALAPI void set_mouse_processed(int button);
+PALAPI uint8_t is_mouse_pressed(int button);
+PALAPI uint8_t is_mouse_down(int button);
+PALAPI uint8_t is_mouse_processed(int button);
+PALAPI void set_mouse_processed(int button);
 
-SALAPI void begin_drawing(void);
-SALAPI void DrawTriangle(void);
-SALAPI void end_drawing(void);
+PALAPI void begin_drawing(void);
+PALAPI void DrawTriangle(void);
+PALAPI void end_drawing(void);
 
-SALAPI uint8_t does_file_exist(const char* file_path);
-SALAPI time_t get_file_timestamp(const char* file);
-SALAPI long get_file_size(const char* file_path);
-SALAPI char* read_file(const char* filePath, int* fileSize, char* buffer);
-SALAPI void write_file(const char* filePath, char* buffer, int size);
-SALAPI uint8_t copy_file(const char* fileName, const char* outputName, char* buffer);
+// Sound
+PALAPI int load_sound(const char* filename, Sound* out);
+PALAPI int play_sound(const Sound* sound);
 
-SALAPI uint8_t is_upper_case(char ch);
-SALAPI uint8_t is_lower_case(char ch);
-SALAPI uint8_t is_letter(char ch);
-SALAPI uint8_t is_end_of_line(char ch);
-SALAPI uint8_t is_whitespace(char ch);
-SALAPI uint8_t is_number(char ch);
-SALAPI uint8_t is_underscore(char ch);
-SALAPI uint8_t is_hyphen(char ch);
-SALAPI uint8_t is_dot(char ch);
-SALAPI uint8_t are_chars_equal(char ch1, char ch2);
-SALAPI uint8_t are_strings_equal(int count, char* str1, char* str2);
+PALAPI uint8_t does_file_exist(const char* file_path);
+PALAPI time_t get_file_timestamp(const char* file);
+PALAPI long get_file_size(const char* file_path);
+PALAPI char* read_file(const char* filePath, int* fileSize, char* buffer);
+PALAPI void write_file(const char* filePath, char* buffer, int size);
+PALAPI uint8_t copy_file(const char* fileName, const char* outputName, char* buffer);
 
-void* LoadDynamicLibrary(char* dll);
-void* LoadDynamicFunction(void* dll, char* func_name);
-uint8_t FreeDynamicLibrary(void* dll);
+PALAPI uint8_t is_upper_case(char ch);
+PALAPI uint8_t is_lower_case(char ch);
+PALAPI uint8_t is_letter(char ch);
+PALAPI uint8_t is_end_of_line(char ch);
+PALAPI uint8_t is_whitespace(char ch);
+PALAPI uint8_t is_number(char ch);
+PALAPI uint8_t is_underscore(char ch);
+PALAPI uint8_t is_hyphen(char ch);
+PALAPI uint8_t is_dot(char ch);
+PALAPI uint8_t are_chars_equal(char ch1, char ch2);
+PALAPI uint8_t are_strings_equal(int count, char* str1, char* str2);
+
+void* load_dynamic_library(char* dll);
+void* load_dynamic_function(void* dll, char* func_name);
+uint8_t free_dynamic_library(void* dll);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif //SAL_H
+#endif //PAL_H
