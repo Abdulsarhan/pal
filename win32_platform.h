@@ -598,6 +598,7 @@ static int platform_init_sound(SoundInitInfo* info) {
 
 	// Get the mix format
 	hr = info->pAudioClient->lpVtbl->GetMixFormat(info->pAudioClient, &info->pwfx);
+
 	if (FAILED(hr)) {
 		printf("Failed to get mix format: %s\n", hr_to_string(hr));
 		info->pAudioClient->lpVtbl->Release(info->pAudioClient);
