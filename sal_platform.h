@@ -12,9 +12,9 @@ static Monitor* platform_get_primary_monitor(void);
 static uint8_t platform_window_should_close(void);
 static void platform_poll_events(void);
 static void* platform_gl_get_proc_address(const char* proc);
-static int platform_init_sound(SoundInitInfo* info);
+static long platform_init_sound(SoundInitInfo* info);
 static int platform_make_context_current(Window* window);
-static int platform_play_sound(const Sound* sound);
+long platform_play_sound( const Sound* sound);
 static uint8_t platform_register_raw_input_devices(Window* window);
 
 static void platform_begin_drawing();

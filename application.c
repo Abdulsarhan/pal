@@ -69,6 +69,7 @@ int main() {
 
 	Sound sound = { 0 };
 	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\piano.wav", &sound);
+
 	play_sound(&sound);
 
     while (!window_should_close())

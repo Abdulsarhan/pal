@@ -1,25 +1,32 @@
 #ifndef WIN32_PLATFORM_H
 #define WIN32_PLATFORM_H
 
+// Windows system headers
 #include <Windows.h>
-#include <windowsx.h>
-#include <mmdeviceapi.h>
-#include <audioclient.h>
-#include <initguid.h>
-#include <WinUser.h>
-#include <winDNS.h>
-#include <combaseapi.h>
-#include <gl/gl.h>
-#include <GL/glext.h> 
-#include <GL/wglext.h>
-#include <assert.h>
+#include <windowsx.h>         // Useful macros (e.g., GET_X_LPARAM)
+#include <xaudio2.h>          // XAudio2
+#include <mmreg.h>            // WAVEFORMATEX
+
+// C Standard Library
+#include <stdint.h>
 #include <stdio.h>
+#include <assert.h>
+
+// OpenGL
+#include <gl/gl.h>
+#include <GL/glext.h>
+#include <GL/wglext.h>
+
+// Project headers (always last)
 #include "sal_platform.h"
 
 #define KEY_DOWN_BIT 0x80
 #define KEY_REPEAT_BIT 0b1
 
 #define MB(x)((size_t)(x) * 1024 * 1024)
+
+typedef unsigned __int64 QWORD;
+
 // TODO: it might be a good idea to move all of this shit into the window structure
 // because the lifetime of all this shit is related to the lifetime of the window.
 static MSG s_msg = { 0 };
@@ -35,6 +42,9 @@ static int s_floating = 0;
 static int s_doubleBuffer = PFD_DOUBLEBUFFER;
 static int s_WindowShouldNotClose = 1;
 
+IXAudio2* g_xaudio2 = NULL;
+IXAudio2MasteringVoice* g_mastering_voice = NULL;
+
 struct Window {
 	HWND handle;
 };
@@ -43,12 +53,12 @@ struct Monitor {
 };
 
 typedef struct SoundInitInfo {
-	IMMDeviceEnumerator* pEnumerator;
-	IMMDevice* pDevice;
-	IAudioClient* pAudioClient;
-	IAudioRenderClient* pRenderClient;
 	WAVEFORMATEX* pwfx;
 	UINT32 bufferFrameCount;
+
+	// XAudio2-specific
+	IXAudio2* pXAudio2;
+	IXAudio2MasteringVoice* pMasteringVoice;
 } SoundInitInfo;
 SoundInitInfo g_sound_init_info;
 
@@ -490,272 +500,110 @@ int Win32GetRawInputBuffer() {
 	return 0;
 }
 
-// Use CLSIDs and IIDs manually for pure C
-
-
-// Helper function to convert HRESULT errors to readable strings
-const char* hr_to_string(HRESULT hr) {
-	static char buffer[256];
-
-	switch (hr) {
-	case S_OK: return "S_OK";
-	case E_POINTER: return "E_POINTER";
-	case E_INVALIDARG: return "E_INVALIDARG";
-	case E_OUTOFMEMORY: return "E_OUTOFMEMORY";
-	case E_NOINTERFACE: return "E_NOINTERFACE";  // Added E_NOINTERFACE
-	case AUDCLNT_E_DEVICE_INVALIDATED: return "AUDCLNT_E_DEVICE_INVALIDATED";
-	case AUDCLNT_E_SERVICE_NOT_RUNNING: return "AUDCLNT_E_SERVICE_NOT_RUNNING";
-	case AUDCLNT_E_UNSUPPORTED_FORMAT: return "AUDCLNT_E_UNSUPPORTED_FORMAT";
-	case AUDCLNT_E_ALREADY_INITIALIZED: return "AUDCLNT_E_ALREADY_INITIALIZED";
-	case AUDCLNT_E_BUFFER_TOO_LARGE: return "AUDCLNT_E_BUFFER_TOO_LARGE";
-	case AUDCLNT_E_NOT_INITIALIZED: return "AUDCLNT_E_NOT_INITIALIZED";
-	case AUDCLNT_E_BUFFER_SIZE_ERROR: return "AUDCLNT_E_BUFFER_SIZE_ERROR";
-	default:
-		sprintf(buffer, "Unknown HRESULT: 0x%lx", hr);
-		return buffer;
-	}
-}
-
-// Debug print to stdout
-void debug_print_sound_info(const Sound* sound) {
-	printf("Sound info:\n");
-	printf("  Data pointer: %p\n", sound->data);
-	printf("  Data size: %zu bytes\n", sound->dataSize);
-	printf("  Sample rate: %d Hz\n", sound->sampleRate);
-	printf("  Channels: %d\n", sound->channels);
-	printf("  Bits per sample: %d\n", sound->bitsPerSample);
-
-	// Check if data is valid
-	if (!sound->data) {
-		printf("  ERROR: Data pointer is NULL!\n");
-		return;
-	}
-
-	if (sound->dataSize == 0) {
-		printf("  ERROR: Data size is 0!\n");
-		return;
-	}
-
-	// Print first few bytes
-	printf("  First 16 bytes of audio data: ");
-	for (int i = 0; i < 16 && i < sound->dataSize; i++) {
-		printf("%02X ", sound->data[i]);
-	}
-	printf("\n");
-}
-
-DEFINE_GUID(CLSID_MMDeviceEnumerator, 0xbcde0395, 0xe52f, 0x467c, 0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e);
-DEFINE_GUID(IID_IMMDeviceEnumerator, 0xa95664d2, 0x9614, 0x4f35, 0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6);
-DEFINE_GUID(IID_IAudioClient, 0x1CB9AD4C, 0xDBFA, 0x4c32, 0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2); 
-DEFINE_GUID(IID_IAudioRenderClient, 0xf294acfc, 0x3146, 0x4483, 0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2);
-
-static int platform_init_sound(SoundInitInfo* info) {
+HRESULT platform_init_sound(SoundInitInfo* info) {
 	HRESULT hr;
 
-	// Initialize COM
-	hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-
+	// Initialize XAudio2 engine
+	hr = XAudio2Create(&g_xaudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
 	if (FAILED(hr)) {
-		printf("CoInitializeEx failed: %s\n", hr_to_string(hr));
-		return -1;
+		return hr;
 	}
+	CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
-	// Create device enumerator
-	hr = CoCreateInstance(
-		&CLSID_MMDeviceEnumerator, NULL,
-		CLSCTX_ALL, &IID_IMMDeviceEnumerator,
-		(void**)&info->pEnumerator);
-	if (FAILED(hr)) {
-		printf("Failed to create device enumerator: %s\n", hr_to_string(hr));
-		CoUninitialize();
-		return -1;
-	}
+	// Create mastering voice
+	hr = g_xaudio2->lpVtbl->CreateMasteringVoice(g_xaudio2, &g_mastering_voice,
+		XAUDIO2_DEFAULT_CHANNELS,
+		XAUDIO2_DEFAULT_SAMPLERATE,
+		0, NULL, NULL, AudioCategory_GameEffects);
 
-	// Get default audio endpoint
-	hr = info->pEnumerator->lpVtbl->GetDefaultAudioEndpoint(
-		info->pEnumerator, eRender, eConsole, &info->pDevice);
-	if (FAILED(hr)) {
-		printf("Failed to get default audio endpoint: %s\n", hr_to_string(hr));
-		info->pEnumerator->lpVtbl->Release(info->pEnumerator);
-		CoUninitialize();
-		return -1;
-	}
-
-	// Activate the audio client
-	hr = info->pDevice->lpVtbl->Activate(
-		info->pDevice,
-		&IID_IAudioClient,  // Pass the pointer to the GUID, NOT the address of pointer
-		CLSCTX_ALL,
-		NULL,
-		(void**)&info->pAudioClient);
-	if (FAILED(hr)) {
-		printf("Failed to activate audio client: %s\n", hr_to_string(hr));
-		info->pDevice->lpVtbl->Release(info->pDevice);
-		info->pEnumerator->lpVtbl->Release(info->pEnumerator);
-		CoUninitialize();
-		return -1;
-	}
-
-	// Get the mix format
-	hr = info->pAudioClient->lpVtbl->GetMixFormat(info->pAudioClient, &info->pwfx);
-
-	if (FAILED(hr)) {
-		printf("Failed to get mix format: %s\n", hr_to_string(hr));
-		info->pAudioClient->lpVtbl->Release(info->pAudioClient);
-		info->pDevice->lpVtbl->Release(info->pDevice);
-		info->pEnumerator->lpVtbl->Release(info->pEnumerator);
-		CoUninitialize();
-		return -1;
-	}
-
-	// Initialize audio client
-	hr = info->pAudioClient->lpVtbl->Initialize(
-		info->pAudioClient,
-		AUDCLNT_SHAREMODE_SHARED,
-		0,
-		10000000, // buffer duration: 1 sec
-		0,
-		info->pwfx,
-		NULL);
-	if (FAILED(hr)) {
-		printf("Failed to initialize audio client: %s\n", hr_to_string(hr));
-		CoTaskMemFree(info->pwfx);
-		info->pAudioClient->lpVtbl->Release(info->pAudioClient);
-		info->pDevice->lpVtbl->Release(info->pDevice);
-		info->pEnumerator->lpVtbl->Release(info->pEnumerator);
-		CoUninitialize();
-		return -1;
-	}
-
-	// Get buffer size
-	hr = info->pAudioClient->lpVtbl->GetBufferSize(info->pAudioClient, &info->bufferFrameCount);
-	if (FAILED(hr)) {
-		printf("Failed to get buffer size: %s\n", hr_to_string(hr));
-		info->pAudioClient->lpVtbl->Release(info->pAudioClient);
-		info->pDevice->lpVtbl->Release(info->pDevice);
-		info->pEnumerator->lpVtbl->Release(info->pEnumerator);
-		CoTaskMemFree(info->pwfx);
-		CoUninitialize();
-		return -1;
-	}
-
-	// Get render client
-	hr = info->pAudioClient->lpVtbl->GetService(
-		info->pAudioClient, &IID_IAudioRenderClient,
-		(void**)&info->pRenderClient);
-	if (FAILED(hr)) {
-		printf("Failed to get render client: %s\n", hr_to_string(hr));
-		info->pAudioClient->lpVtbl->Release(info->pAudioClient);
-		info->pDevice->lpVtbl->Release(info->pDevice);
-		info->pEnumerator->lpVtbl->Release(info->pEnumerator);
-		CoTaskMemFree(info->pwfx);
-		CoUninitialize();
-		return -1;
-	}
-
-	return 0; // success
+	return hr;
 }
 
-static int platform_play_sound(const Sound* sound) {
-	HRESULT hr;
-	IAudioClient* pAudioClient = g_sound_init_info.pAudioClient;
-	IAudioRenderClient* pRenderClient = g_sound_init_info.pRenderClient;
-	UINT32 bufferFrameCount = g_sound_init_info.bufferFrameCount;
-	WAVEFORMATEX* pwfx = g_sound_init_info.pwfx;
-	UINT32 numFramesAvailable, numFramesPadding;
-	BYTE* pData;
+// PCM: 00000001-0000-0010-8000-00aa00389b71
+static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
+	0x00000001, 0x0000, 0x0010,
+	{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
+};
 
-	// Validate sound data
-	if (!sound || !sound->data || sound->dataSize == 0) {
-		printf("Invalid sound data provided.\n");
-		return -1;
+// IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
+static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
+	0x00000003, 0x0000, 0x0010,
+	{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
+};
+
+// Helper function to compare GUIDs
+static int is_equal_guid(const GUID* a, const GUID* b) {
+	return memcmp(a, b, sizeof(GUID)) == 0;
+}
+
+long platform_play_sound(const Sound* sound) {
+	if (!g_xaudio2 || !g_mastering_voice) {
+		return E_FAIL;
 	}
 
-	// Verify format matches WASAPI initialized format
-	if (sound->sampleRate != pwfx->nSamplesPerSec ||
-		sound->channels != pwfx->nChannels ||
-		sound->bitsPerSample != pwfx->wBitsPerSample)
-	{
-		printf("Audio format mismatch!\n");
-		printf("  Expected: %lu Hz, %u ch, %u-bit\n",
-			pwfx->nSamplesPerSec, pwfx->nChannels, pwfx->wBitsPerSample);
-		printf("  Got: %u Hz, %u ch, %u-bit\n",
-			sound->sampleRate, sound->channels, sound->bitsPerSample);
-		return -1;
-	}
+	IXAudio2SourceVoice* source_voice = NULL;
 
-	// Calculate audio parameters
-	UINT32 bytesPerFrame = (sound->bitsPerSample / 8) * sound->channels;
-	UINT32 totalFrames = sound->dataSize / bytesPerFrame;
-	UINT32 framesWritten = 0;
+	// Describe the audio format
+#if 0
+	WAVEFORMATEX format = {
+		.wFormatTag = WAVE_FORMAT_PCM,
+		.nChannels = (WORD)sound->channels,
+		.nSamplesPerSec = sound->sampleRate,
+		.wBitsPerSample = (WORD)sound->bitsPerSample,
+	};
+	format.nBlockAlign = format.nChannels * (format.wBitsPerSample / 8);
+	format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
+	format.cbSize = 0;
+#endif
 
-	printf("Starting playback: %u frames (%u bytes)\n", totalFrames, sound->dataSize);
+	WAVEFORMATEXTENSIBLE wfex = { 0 };
 
-	// Start playback
-	hr = pAudioClient->lpVtbl->Start(pAudioClient);
+	wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+	wfex.Format.nChannels = sound->channels;
+	wfex.Format.nSamplesPerSec = sound->sampleRate;
+	wfex.Format.wBitsPerSample = sound->bitsPerSample;
+	wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
+	wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
+	wfex.Format.cbSize = 22;
+
+	wfex.Samples.wValidBitsPerSample = sound->bitsPerSample;
+	wfex.dwChannelMask = (sound->channels == 2) ? SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT : 0;
+	wfex.SubFormat = (sound->bitsPerSample == 32)
+		? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+		: KSDATAFORMAT_SUBTYPE_PCM;
+
+	// Create the source voice
+	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(g_xaudio2, &source_voice, &wfex,
+		0, XAUDIO2_DEFAULT_FREQ_RATIO,
+		NULL, NULL, NULL);
 	if (FAILED(hr)) {
-		printf("Failed to start audio client: %s\n", hr_to_string(hr));
-		return -1;
+		return hr;
 	}
 
-	// Playback loop
-	while (framesWritten < totalFrames) {
-		// Check how much buffer space is available
-		hr = pAudioClient->lpVtbl->GetCurrentPadding(pAudioClient, &numFramesPadding);
-		if (FAILED(hr)) {
-			printf("GetCurrentPadding failed: %s\n", hr_to_string(hr));
-			break;
-		}
+	// Prepare the buffer
+	XAUDIO2_BUFFER buffer = {
+		.AudioBytes = (UINT32)sound->dataSize,
+		.pAudioData = sound->data,
+		.Flags = XAUDIO2_END_OF_STREAM
 
-		numFramesAvailable = bufferFrameCount - numFramesPadding;
+	};
 
-		// If buffer is full, sleep briefly
-		if (numFramesAvailable == 0) {
-			Sleep(5);
-			continue;
-		}
-
-		// Calculate frames to write (don't overflow sound data)
-		UINT32 framesToWrite = min(numFramesAvailable, totalFrames - framesWritten);
-
-		// Get buffer pointer
-		hr = pRenderClient->lpVtbl->GetBuffer(pRenderClient, framesToWrite, &pData);
-		if (FAILED(hr)) {
-			printf("GetBuffer failed: %s\n", hr_to_string(hr));
-			break;
-		}
-
-		// Copy audio data to buffer
-		memcpy(pData,
-			sound->data + (framesWritten * bytesPerFrame),
-			framesToWrite * bytesPerFrame);
-
-		// Release buffer
-		hr = pRenderClient->lpVtbl->ReleaseBuffer(pRenderClient, framesToWrite, 0);
-		if (FAILED(hr)) {
-			printf("ReleaseBuffer failed: %s\n", hr_to_string(hr));
-			break;
-		}
-
-		framesWritten += framesToWrite;
-		printf("Progress: %u/%u frames (%.1f%%)\r",
-			framesWritten, totalFrames,
-			(float)framesWritten / totalFrames * 100.0f);
+	// Submit the buffer
+	hr = source_voice->lpVtbl->SubmitSourceBuffer(source_voice, &buffer, NULL);
+	if (FAILED(hr)) {
+		source_voice->lpVtbl->DestroyVoice(source_voice);
+		return hr;
 	}
 
-	// Wait for last samples to play
-	UINT32 remainingFrames = 0;
-	pAudioClient->lpVtbl->GetCurrentPadding(pAudioClient, &remainingFrames);
-	if (remainingFrames > 0) {
-		DWORD sleepMs = (remainingFrames * 1000) / pwfx->nSamplesPerSec + 50; // +50ms safety
-		printf("\nWaiting %ums for buffer to drain...\n", sleepMs);
-		Sleep(sleepMs);
+	// Start playing
+	hr = source_voice->lpVtbl->Start(source_voice, 0, 0);
+	if (FAILED(hr)) {
+		source_voice->lpVtbl->DestroyVoice(source_voice);
+		return hr;
 	}
 
-	// Stop playback (but keep resources alive for next playback)
-	pAudioClient->lpVtbl->Stop(pAudioClient);
-	printf("\nPlayback finished\n");
-	return 0;
+	// Voice will destroy itself after playback if managed elsewhere
+	return S_OK;
 }
 
 void* platform_load_dynamic_library(char* dll) {

@@ -141,62 +141,113 @@ PALAPI void end_drawing(void) {
 
 
 
-PALAPI int play_sound(const Sound* sound) {
+PALAPI int play_sound(Sound* sound) {
 	platform_play_sound(sound);
 }
 
-// --- WAV Loader ---
 static int load_wav(FILE* file, Sound* out) {
-	char chunkID[4];
-	uint32_t chunkSize;
-	char format[4];
+	static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
 
-	fread(chunkID, 1, 4, file);
-	fread(&chunkSize, 4, 1, file);
-	fread(format, 1, 4, file);
+	static const uint8_t SUBFORMAT_PCM[16] = {
+	0x01, 0x00, 0x00, 0x00, 0x10, 0x00,
+	0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
+	0x9B, 0x71, 0x00, 0x00
+	};
 
-	if (memcmp(chunkID, "RIFF", 4) != 0 || memcmp(format, "WAVE", 4) != 0) {
+	static const uint8_t SUBFORMAT_IEEE_FLOAT[16] = {
+		0x03, 0x00, 0x00, 0x00, 0x10, 0x00,
+		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
+		0x9B, 0x71, 0x00, 0x00
+	};
+
+	char riffHeader[4];
+	uint32_t riffSize;
+	char waveID[4];
+
+	if (fread(riffHeader, 1, 4, file) != 4 || fread(&riffSize, 4, 1, file) != 1 || fread(waveID, 1, 4, file) != 4) {
 		return 0;
 	}
 
-	uint16_t audioFormat = 0;
-	uint16_t numChannels = 0;
-	uint32_t sampleRate = 0;
-	uint16_t bitsPerSample = 0;
+	if (memcmp(riffHeader, "RIFF", 4) != 0 || memcmp(waveID, "WAVE", 4) != 0) {
+		return 0;
+	}
+
+	int audioFormat = 0;
+	int numChannels = 0;
+	int sampleRate = 0;
+	int bitsPerSample = 0;
+	int isFloat = 0;
+
 	unsigned char* audioData = NULL;
 	uint32_t dataSize = 0;
 
 	while (!feof(file)) {
-		char id[4];
-		uint32_t size;
+		char chunkID[4];
+		uint32_t chunkSize;
+		if (fread(chunkID, 1, 4, file) != 4) break;
+		if (fread(&chunkSize, 4, 1, file) != 1) break;
 
-		if (fread(id, 1, 4, file) != 4) break;
-		if (fread(&size, 4, 1, file) != 1) break;
-
-		if (memcmp(id, "fmt ", 4) == 0) {
-			uint16_t blockAlign, extraSize;
-			fread(&audioFormat, sizeof(uint16_t), 1, file);
+		if (memcmp(chunkID, "fmt ", 4) == 0) {
+			uint16_t formatTag;
+			fread(&formatTag, sizeof(uint16_t), 1, file);
 			fread(&numChannels, sizeof(uint16_t), 1, file);
 			fread(&sampleRate, sizeof(uint32_t), 1, file);
-			fseek(file, 6, SEEK_CUR); // Skip byte rate and block align
+			fseek(file, 6, SEEK_CUR); // skip byte rate + block align
 			fread(&bitsPerSample, sizeof(uint16_t), 1, file);
-			if (size > 16) fseek(file, size - 16, SEEK_CUR); // skip any extra fmt data
+
+			if (formatTag == WAV_FMT_EXTENSIBLE && chunkSize >= 40) {
+				uint16_t cbSize;
+				fread(&cbSize, sizeof(uint16_t), 1, file);
+				if (cbSize < 22) return 0;
+
+				fseek(file, 6, SEEK_CUR); // skip validBitsPerSample, channelMask
+				uint8_t subFormat[16];
+				if (fread(subFormat, 1, 16, file) != 16) return 0;
+
+				if (memcmp(subFormat, SUBFORMAT_PCM, 16) == 0) {
+					audioFormat = WAV_FMT_PCM;
+					isFloat = 0;
+				}
+				else if (memcmp(subFormat, SUBFORMAT_IEEE_FLOAT, 16) == 0) {
+					audioFormat = WAV_FMT_IEEE_FLOAT;
+					isFloat = 1;
+				}
+				else {
+					return 0;
+				}
+			}
+			else {
+				audioFormat = formatTag;
+				if (audioFormat == WAV_FMT_PCM) {
+					isFloat = 0;
+				}
+				else if (audioFormat == WAV_FMT_IEEE_FLOAT) {
+					isFloat = 1;
+				}
+				else {
+					return 0;
+				}
+
+				if (chunkSize > 16) {
+					fseek(file, chunkSize - 16, SEEK_CUR);
+				}
+			}
 		}
-		else if (memcmp(id, "data", 4) == 0) {
-			audioData = (unsigned char*)malloc(size);
-			if (!audioData || fread(audioData, 1, size, file) != size) {
+		else if (memcmp(chunkID, "data", 4) == 0) {
+			audioData = (unsigned char*)malloc(chunkSize);
+			if (!audioData || fread(audioData, 1, chunkSize, file) != chunkSize) {
 				free(audioData);
 				return 0;
 			}
-			dataSize = size;
+			dataSize = chunkSize;
 		}
 		else {
-			fseek(file, size, SEEK_CUR);
+			fseek(file, chunkSize, SEEK_CUR); // skip unknown chunk
 		}
 	}
 
-	if (!audioData || audioFormat != 1) { // PCM
-		if (audioData) free(audioData);
+	if (!audioData || (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
+		free(audioData);
 		return 0;
 	}
 
@@ -205,6 +256,7 @@ static int load_wav(FILE* file, Sound* out) {
 	out->sampleRate = sampleRate;
 	out->channels = numChannels;
 	out->bitsPerSample = bitsPerSample;
+	out->isFloat = isFloat;
 
 	return 1;
 }

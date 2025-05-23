@@ -11,11 +11,13 @@ typedef struct VideoMode {
 
 typedef struct {
 	unsigned char* data;   // Raw PCM audio data
-	size_t dataSize;       // Size in bytes
+	uint32_t dataSize;       // Size in bytes
 
 	int sampleRate;        // Samples per second (e.g., 44100)
 	int channels;          // Number of audio channels (e.g., 2 for stereo)
 	int bitsPerSample;     // Usually 16 or 32
+    int isFloat; // 0 = PCM, 1 = IEEE float
+
 } Sound;
 
 typedef struct Window Window;
@@ -273,7 +275,7 @@ PALAPI void end_drawing(void);
 
 // Sound
 PALAPI int load_sound(const char* filename, Sound* out);
-PALAPI int play_sound(const Sound* sound);
+PALAPI int play_sound(Sound* sound);
 
 PALAPI uint8_t does_file_exist(const char* file_path);
 PALAPI time_t get_file_timestamp(const char* file);
