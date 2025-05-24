@@ -9,7 +9,7 @@
 #endif
 
 PALAPI void init_pal() {
-	platform_init_sound(&g_sound_init_info);
+	platform_init_sound();
 
 }
 
@@ -29,8 +29,8 @@ PALAPI uint8_t window_should_close(void) {
 	return platform_window_should_close();
 }
 
-PALAPI void set_window_title(Window* window, const char* string) {
-	platform_set_window_title(window, string);
+PALAPI uint8_t set_window_title(Window* window, const char* string) {
+	return platform_set_window_title(window, string);
 }
 
 PALAPI void set_window_hint(int type, int value) {
@@ -74,7 +74,7 @@ PALAPI uint8_t is_key_processed(int key) {
 	return input.keys_processed[key];
 }
 
-PALAPI uint8_t set_key_processed(int key) {
+PALAPI void set_key_processed(int key) {
 	input.keys_processed[key] = 1;  // Mark as processed
 }
 
@@ -436,7 +436,7 @@ uint8_t copy_file(const char* fileName, const char* outputName, char* buffer) {
 		return 0;
 	}
 
-	int result = fwrite(data, sizeof(char), fileSize, outputFile);
+	size_t result = fwrite(data, sizeof(char), fileSize, outputFile);
 	if (!result)
 	{
 		fprintf(stderr, "ERROR: Failed to open file!\n");

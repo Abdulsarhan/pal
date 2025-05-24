@@ -52,16 +52,6 @@ struct Monitor {
 	HMONITOR handle;
 };
 
-typedef struct SoundInitInfo {
-	WAVEFORMATEX* pwfx;
-	UINT32 bufferFrameCount;
-
-	// XAudio2-specific
-	IXAudio2* pXAudio2;
-	IXAudio2MasteringVoice* pMasteringVoice;
-} SoundInitInfo;
-SoundInitInfo g_sound_init_info;
-
 // Keyboard & Mouse Input
 #define MAX_KEYS 256
 #define MAX_MOUSEBUTTONS 32
@@ -330,13 +320,15 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 
 static int platform_make_context_current(Window* window) {
 	s_hdc = GetDC(window->handle);
-	if (!wglMakeCurrent(s_hdc, s_rc)) {
+	s_currenthdc = s_hdc;
+	if (!wglMakeCurrent(s_currenthdc, s_rc)) {
 		MessageBoxA(window->handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
 		return 1;
 	}
 	return 0;
 }
-int Win32GetRawInputBuffer();
+
+static int Win32GetRawInputBuffer();
 static void platform_poll_events(void) {
 	Win32GetRawInputBuffer();
 
@@ -356,7 +348,7 @@ static uint8_t platform_window_should_close() {
 }
 
 static uint8_t platform_set_window_title(Window* window, const char* string) {
-	(void)SetWindowTextA(window->handle, string);
+	return SetWindowTextA(window->handle, string);
 }
 
 static VideoMode* platform_get_video_mode(Monitor* monitor) {
@@ -404,7 +396,7 @@ void platform_begin_drawing() {
 }
 
 void platform_end_drawing() {
-	SwapBuffers(s_hdc);
+	SwapBuffers(s_currenthdc);
 }
 
 
@@ -488,7 +480,7 @@ int platform_register_raw_input_devices(Window* window) {
 
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 
-int Win32GetRawInputBuffer() {
+static int Win32GetRawInputBuffer() {
 	UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
 	UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
@@ -501,7 +493,7 @@ int Win32GetRawInputBuffer() {
 	return 0;
 }
 
-int platform_init_sound(SoundInitInfo* info) {
+int platform_init_sound() {
 	int hr;
 
 	// Initialize COM (needed for XAudio2)
@@ -566,7 +558,7 @@ static int platform_play_sound(const Sound* sound) {
 		: KSDATAFORMAT_SUBTYPE_PCM;
 
 	// Create the source voice
-	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(g_xaudio2, &source_voice, &wfex,
+	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(g_xaudio2, &source_voice, (const WAVEFORMATEX*)&wfex,
 		0, XAUDIO2_DEFAULT_FREQ_RATIO,
 		NULL, NULL, NULL);
 	if (FAILED(hr)) {

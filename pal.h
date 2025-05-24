@@ -248,7 +248,7 @@ extern "C" {
 
 PALAPI void init_pal();
 PALAPI Window* init_window(int width, int height, const char* windowTitle);
-PALAPI void set_window_title(Window* window, const char* string);
+PALAPI uint8_t set_window_title(Window* window, const char* string);
 PALAPI void set_window_hint(int type, int value);
 PALAPI VideoMode* get_video_mode(Monitor* monitor);
 PALAPI Monitor* get_primary_monitor(void);
@@ -261,7 +261,7 @@ PALAPI int register_input_devices(Window* window);
 PALAPI uint8_t is_key_pressed(int key);
 PALAPI uint8_t is_key_down(int key);
 PALAPI uint8_t is_key_processed(int key);
-PALAPI uint8_t set_key_processed(int key);
+PALAPI void set_key_processed(int key);
 
 // Mouse input
 PALAPI uint8_t is_mouse_pressed(int button);
