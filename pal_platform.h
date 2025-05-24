@@ -1,5 +1,5 @@
-#ifndef SAL_PLATFORM_H
-#define SAL_PLATFORM_H
+#ifndef PAL_PLATFORM_H
+#define PAL_PLATFORM_H
 
 #ifdef __cplusplus
 #define extern "C" {
@@ -12,10 +12,10 @@ static Monitor* platform_get_primary_monitor(void);
 static uint8_t platform_window_should_close(void);
 static void platform_poll_events(void);
 static void* platform_gl_get_proc_address(const char* proc);
-static long platform_init_sound(SoundInitInfo* info);
+static int platform_init_sound(SoundInitInfo* info);
 static int platform_make_context_current(Window* window);
-long platform_play_sound( const Sound* sound);
-static uint8_t platform_register_raw_input_devices(Window* window);
+static int platform_play_sound( const Sound* sound);
+static int platform_register_raw_input_devices(Window* window);
 
 static void platform_begin_drawing();
 static void platform_end_drawing();
@@ -29,4 +29,4 @@ static uint8_t platform_free_dynamic_library(void* dll);
 #endif
 
 
-#endif // SAL_PLATFORM_H
+#endif // PAL_PLATFORM_H

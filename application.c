@@ -47,12 +47,14 @@ int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
     init_pal();
+    //TODO: @fix Make the API of this better (if possible).
     set_window_hint(GL_VERSION_MAJOR, 3);
     set_window_hint(GL_VERSION_MINOR, 3);
     set_window_hint(FLOATING, 0);
     set_window_hint(DOUBLE_BUFFER, 1);
     set_window_hint(RESIZABLE, 1);
 
+    //TODO: @fix monitor and video mode functions have problems.
     Monitor* monitor = get_primary_monitor();
     VideoMode* mode = get_video_mode(monitor);
     Window* window = init_window(1280, 720, "Fucking Windows!");

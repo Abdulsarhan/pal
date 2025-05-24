@@ -139,7 +139,7 @@ PALAPI void end_drawing(void) {
 */
 
 PALAPI int play_sound(Sound* sound) {
-	platform_play_sound(sound);
+	return platform_play_sound(sound);
 }
 
 // TODO: @fix This loads uncompressed .wav files only!
@@ -211,7 +211,7 @@ static int load_wav(FILE* file, Sound* out) {
 					isFloat = 1;
 				}
 				else {
-					return 0;
+					return -1;
 				}
 			}
 			else {
@@ -223,7 +223,7 @@ static int load_wav(FILE* file, Sound* out) {
 					isFloat = 1;
 				}
 				else {
-					return 0;
+					return -1;
 				}
 
 				if (chunkSize > 16) {
@@ -235,7 +235,7 @@ static int load_wav(FILE* file, Sound* out) {
 			audioData = (unsigned char*)malloc(chunkSize);
 			if (!audioData || fread(audioData, 1, chunkSize, file) != chunkSize) {
 				free(audioData);
-				return 0;
+				return -1;
 			}
 			dataSize = chunkSize;
 		}
@@ -246,7 +246,7 @@ static int load_wav(FILE* file, Sound* out) {
 
 	if (!audioData || (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
 		free(audioData);
-		return 0;
+		return -1;
 	}
 
 	out->data = audioData;
@@ -256,7 +256,7 @@ static int load_wav(FILE* file, Sound* out) {
 	out->bitsPerSample = bitsPerSample;
 	out->isFloat = isFloat;
 
-	return 1;
+	return 0;
 }
 
 // --- Ogg Loader ---
@@ -279,7 +279,8 @@ static int load_ogg(const char* filename, Sound* out) {
 	out->channels = channels;
 	out->sampleRate = sample_rate;
 	out->bitsPerSample = 16; // Ogg decodes to 16-bit PCM by default
-
+	out->isFloat = 0;
+	return 0;
 }
 
 // --- Unified Sound Loader ---

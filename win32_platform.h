@@ -18,7 +18,7 @@
 #include <GL/wglext.h>
 
 // Project headers (always last)
-#include "sal_platform.h"
+#include "pal_platform.h"
 
 #define KEY_DOWN_BIT 0x80
 #define KEY_REPEAT_BIT 0b1
@@ -334,6 +334,7 @@ static int platform_make_context_current(Window* window) {
 		MessageBoxA(window->handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
 		return 1;
 	}
+	return 0;
 }
 int Win32GetRawInputBuffer();
 static void platform_poll_events(void) {
@@ -452,7 +453,7 @@ RawInputHandler Win32InputHandlers[3] = {
 	Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
 
-uint8_t platform_register_raw_input_devices(Window* window) {
+int platform_register_raw_input_devices(Window* window) {
 	RAWINPUTDEVICE rid[3];
 
 	// 1. Keyboard
@@ -500,15 +501,20 @@ int Win32GetRawInputBuffer() {
 	return 0;
 }
 
-HRESULT platform_init_sound(SoundInitInfo* info) {
-	HRESULT hr;
+int platform_init_sound(SoundInitInfo* info) {
+	int hr;
+
+	// Initialize COM (needed for XAudio2)
+	hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (FAILED(hr)) {
+		return hr;
+	}
 
 	// Initialize XAudio2 engine
 	hr = XAudio2Create(&g_xaudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
 	if (FAILED(hr)) {
 		return hr;
 	}
-	CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
 	// Create mastering voice
 	hr = g_xaudio2->lpVtbl->CreateMasteringVoice(g_xaudio2, &g_mastering_voice,
@@ -519,31 +525,30 @@ HRESULT platform_init_sound(SoundInitInfo* info) {
 	return hr;
 }
 
-// PCM: 00000001-0000-0010-8000-00aa00389b71
-static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
-	0x00000001, 0x0000, 0x0010,
-	{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
-};
-
-// IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
-static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
-	0x00000003, 0x0000, 0x0010,
-	{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
-};
-
 // Helper function to compare GUIDs
 static int is_equal_guid(const GUID* a, const GUID* b) {
 	return memcmp(a, b, sizeof(GUID)) == 0;
 }
 
-long platform_play_sound(const Sound* sound) {
+static int platform_play_sound(const Sound* sound) {
 	if (!g_xaudio2 || !g_mastering_voice) {
 		return E_FAIL;
 	}
 
+	// PCM: 00000001-0000-0010-8000-00aa00389b71
+	static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
+		0x00000001, 0x0000, 0x0010,
+		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
+	};
+
+	// IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
+	static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
+		0x00000003, 0x0000, 0x0010,
+		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
+	};
+
 	IXAudio2SourceVoice* source_voice = NULL;
 
-	// Describe the audio format
 	WAVEFORMATEXTENSIBLE wfex = { 0 };
 
 	wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
