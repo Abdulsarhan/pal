@@ -66,10 +66,10 @@ SoundInitInfo g_sound_init_info;
 #define MAX_KEYS 256
 #define MAX_MOUSEBUTTONS 32
 typedef struct Input {
-	uint8_t keys[MAX_KEYS]; // We pack bits here.
-	uint8_t keys_processed[MAX_KEYS]; // We pack bits here.
-	uint8_t mouse_buttons[MAX_MOUSEBUTTONS]; // 4
-	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS]; // 4
+	uint8_t keys[MAX_KEYS];
+	uint8_t keys_processed[MAX_KEYS];
+	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
+	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
 	Vector2 mouse;
 }Input;
 Input input = { 0 };
