@@ -544,18 +544,6 @@ long platform_play_sound(const Sound* sound) {
 	IXAudio2SourceVoice* source_voice = NULL;
 
 	// Describe the audio format
-#if 0
-	WAVEFORMATEX format = {
-		.wFormatTag = WAVE_FORMAT_PCM,
-		.nChannels = (WORD)sound->channels,
-		.nSamplesPerSec = sound->sampleRate,
-		.wBitsPerSample = (WORD)sound->bitsPerSample,
-	};
-	format.nBlockAlign = format.nChannels * (format.wBitsPerSample / 8);
-	format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
-	format.cbSize = 0;
-#endif
-
 	WAVEFORMATEXTENSIBLE wfex = { 0 };
 
 	wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;

@@ -138,13 +138,11 @@ PALAPI void end_drawing(void) {
 
 */
 
-
-
-
 PALAPI int play_sound(Sound* sound) {
 	platform_play_sound(sound);
 }
 
+// TODO: @fix This loads uncompressed .wav files only!
 static int load_wav(FILE* file, Sound* out) {
 	static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
 
