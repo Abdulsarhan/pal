@@ -21,12 +21,11 @@
 // dlopen/dlsym/dlclose
 #include <dlfcn.h>
 
-
 pal_window platform_create_window() {
 	pal_window window = { 0 };
 	// 1. Connect to X11 and get the XCB connection
 	window.display = XOpenDisplay(NULL);
-	if (!window.display) fatal("Failed to open X display");
+	if (!window.display) printf("ERROR: Failed to open X display");
 
 	window.xcb_conn = XGetXCBConnection(window.display);
 	int default_screen = DefaultScreen(window.display);
@@ -69,7 +68,7 @@ pal_window platform_create_window() {
 		NULL,
 		GL_TRUE
 	);
-	if (!window.ctx) fatal("Failed to create GLX context");
+	if (!window.ctx) printf("ERROR: Failed to create GLX context");
 
 	// 5. Create X11 window from XCB window
 	return window;
