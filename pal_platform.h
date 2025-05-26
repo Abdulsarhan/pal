@@ -1,6 +1,7 @@
 #ifndef PAL_PLATFORM_H
 #define PAL_PLATFORM_H
 
+//TODO: THIS WHOLE FILE MIGHT BE A BAD IDEA.
 #ifdef __cplusplus
 #define extern "C" {
 #endif

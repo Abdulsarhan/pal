@@ -482,15 +482,6 @@ int platform_register_raw_input_devices(Window* window) {
 	return 0;
 }
 
-
-void platform_init_gamepads(void) {
-    for (int i = 0; i < MAX_CONTROLLERS; ++i) {
-        ZeroMemory(&input.controller_state[i], sizeof(XINPUT_STATE));
-        ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));
-        input.controller_connected[i] = 0;
-    }
-}
-
 void platform_poll_gamepads(void) {
     for (int i = 0; i < MAX_CONTROLLERS; ++i) {
         input.controller_prev_state[i] = input.controller_state[i];
@@ -510,32 +501,32 @@ void platform_poll_gamepads(void) {
     }
 }
 
-int platform_gamepad_button_down(int controller_id, WORD button) {
+int platform_is_button_down(int controller_id, unsigned short button) {
     if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
     if (!input.controller_connected[controller_id]) return 0;
     return (input.controller_state[controller_id].Gamepad.wButtons & button) != 0;
 }
 
-int platform_gamepad_button_just_pressed(int controller_id, WORD button) {
+int platform_is_button_pressed(int controller_id, unsigned short button) {
     if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
     if (!input.controller_connected[controller_id]) return 0;
 
-    WORD curr = input.controller_state[controller_id].Gamepad.wButtons;
-    WORD prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
+	unsigned short curr = input.controller_state[controller_id].Gamepad.wButtons;
+	unsigned short prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
     return ((curr & button) != 0) && ((prev & button) == 0);
 }
 
-int platform_gamepad_button_just_released(int controller_id, WORD button) {
+int platform_is_button_released(int controller_id, unsigned short button) {
     if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
     if (!input.controller_connected[controller_id]) return 0;
 
-    WORD curr = input.controller_state[controller_id].Gamepad.wButtons;
-    WORD prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
+	unsigned short curr = input.controller_state[controller_id].Gamepad.wButtons;
+	unsigned short prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
     return ((curr & button) == 0) && ((prev & button) != 0);
 }
 
 // Helper to normalize and apply deadzone
-static Vector2 platform_process_thumbstick(SHORT x, SHORT y, int deadzone) {
+static Vector2 platform_process_thumbstick(short x, short y, int deadzone) {
     Vector2 v = {0};
 
     float fx = (float)x;
@@ -559,24 +550,68 @@ static Vector2 platform_process_thumbstick(SHORT x, SHORT y, int deadzone) {
     return v;
 }
 
-Vector2 platform_get_left_stick_input(int controller_id) {
+Vector2 platform_get_left_stick(int controller_id) {
     if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (Vector2){0};
     if (!input.controller_connected[controller_id]) return (Vector2){0};
 
-    SHORT x = input.controller_state[controller_id].Gamepad.sThumbLX;
-    SHORT y = input.controller_state[controller_id].Gamepad.sThumbLY;
+	short x = input.controller_state[controller_id].Gamepad.sThumbLX;
+	short y = input.controller_state[controller_id].Gamepad.sThumbLY;
 
     return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 }
 
-Vector2 platform_get_right_stick_input(int controller_id) {
+Vector2 platform_get_right_stick(int controller_id) {
     if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (Vector2){0};
     if (!input.controller_connected[controller_id]) return (Vector2){0};
 
-    SHORT x = input.controller_state[controller_id].Gamepad.sThumbRX;
-    SHORT y = input.controller_state[controller_id].Gamepad.sThumbRY;
+	short x = input.controller_state[controller_id].Gamepad.sThumbRX;
+	short y = input.controller_state[controller_id].Gamepad.sThumbRY;
 
     return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+}
+
+float platform_get_right_trigger(int controller_id) {
+	if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0.0f;
+	if (!input.controller_connected[controller_id]) return 0.0f;
+
+	BYTE raw = input.controller_state[controller_id].Gamepad.bRightTrigger;
+
+	return (raw > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+		? (float)raw / 255.0f
+		: 0.0f;
+}
+
+float platform_get_left_trigger(int controller_id) {
+	if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0.0f;
+	if (!input.controller_connected[controller_id]) return 0.0f;
+
+	BYTE raw = input.controller_state[controller_id].Gamepad.bLeftTrigger;
+
+	// Apply threshold (XInput docs recommend 30 as a deadzone)
+	return (raw > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+		? (float)raw / 255.0f
+		: 0.0f;
+}
+
+void platform_set_controller_vibration(int controller_id, float left_motor, float right_motor) {
+	if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return;
+	if (!input.controller_connected[controller_id]) return;
+
+	// Clamp values between 0.0f and 1.0f
+	if (left_motor < 0.0f) left_motor = 0.0f;
+	if (left_motor > 1.0f) left_motor = 1.0f;
+	if (right_motor < 0.0f) right_motor = 0.0f;
+	if (right_motor > 1.0f) right_motor = 1.0f;
+
+	XINPUT_VIBRATION vibration = { 0 };
+	vibration.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
+	vibration.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
+
+	XInputSetState(controller_id, &vibration);
+}
+
+void platform_stop_controller_vibration(int controller_id) {
+	platform_set_controller_vibration(controller_id, 0.0f, 0.0f);
 }
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 8 KB

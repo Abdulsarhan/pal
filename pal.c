@@ -102,6 +102,41 @@ PALAPI void set_mouse_processed(int button) {
 	input.mouse_buttons_processed[button] = 1; // Mark as processed
 }
 
+PALAPI float get_right_trigger(int controller_id) {
+	platform_get_right_trigger(controller_id);
+}
+PALAPI float get_left_trigger(int controller_id) {
+	platform_get_left_trigger(controller_id);
+}
+
+PALAPI Vector2 get_right_stick(int controller_id) {
+	platform_get_right_stick(controller_id);
+}
+
+PALAPI Vector2 get_left_stick(int controller_id) {
+	platform_get_left_stick(controller_id);
+}
+
+PALAPI int is_button_down(int controller_id, unsigned short button) {
+	platform_is_button_down(controller_id, button);
+}
+
+PALAPI int is_button_pressed(int controller_id, unsigned short button) {
+	platform_is_button_pressed(controller_id, button);
+}
+
+PALAPI int is_button_released(int controller_id, unsigned short button) {
+	platform_is_button_released(controller_id, button);
+}
+
+PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor) {
+	platform_set_controller_vibration(controller_id, left_motor, right_motor);
+}
+
+PALAPI void stop_controller_vibration(int controller_id) {
+	platform_stop_controller_vibration(controller_id);
+}
+
 PALAPI void poll_events(void) {
 	(void)platform_poll_events();
 }

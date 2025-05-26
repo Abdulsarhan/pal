@@ -234,7 +234,29 @@ typedef struct Vector4 {
 
 #define KEY_NUMLOCK       0x90
 #define KEY_SCROLLLOCK    0x91
-
+//----------------------------------------------------------------------------------
+// Controller Buttons
+//----------------------------------------------------------------------------------
+#ifdef _WIN32
+#define GAMEPAD_DPAD_UP       0x0001
+#define GAMEPAD_DPAD_DOWN     0x0002
+#define GAMEPAD_DPAD_LEFT     0x0004
+#define GAMEPAD_DPAD_RIGHT    0x0008
+#define GAMEPAD_START         0x0010
+#define GAMEPAD_BACK          0x0020
+#define GAMEPAD_LEFT_THUMB    0x0040
+#define GAMEPAD_RIGHT_THUMB   0x0080
+#define GAMEPAD_LEFT_BUMPER   0x0100
+#define GAMEPAD_RIGHT_BUMPER  0x0200
+#define GAMEPAD_A              0x1000  // Cross on Playstation Controllers
+#define GAMEPAD_B              0x2000  // Circle on Playstation Controllers
+#define GAMEPAD_X              0x4000  // Square on Playstation Controllers
+#define GAMEPAD_Y              0x8000  // Triangle on Playstation Controllers
+#define GAMEPAD_CROSS          GAMEPAD_A
+#define GAMEPAD_CIRCLE         GAMEPAD_B
+#define GAMEPAD_SQUARE         GAMEPAD_X
+#define GAMEPAD_TRIANGLE       GAMEPAD_Y
+#endif
 
 #if defined(__cplusplus)
 #define CLITERAL(type)      type
@@ -268,6 +290,18 @@ PALAPI uint8_t is_mouse_pressed(int button);
 PALAPI uint8_t is_mouse_down(int button);
 PALAPI uint8_t is_mouse_processed(int button);
 PALAPI void set_mouse_processed(int button);
+
+
+// Gamepad Input
+PALAPI int is_button_down(int controller_id, unsigned short button);
+PALAPI int is_button_pressed(int controller_id, unsigned short button);
+PALAPI int is_button_released(int controller_id, unsigned short button);
+PALAPI Vector2 get_right_stick(int controller_id);
+PALAPI Vector2 get_left_stick(int controller_id);
+PALAPI float get_right_trigger(int controller_id);
+PALAPI float get_left_trigger(int controller_id);
+PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor);
+PALAPI void stop_controller_vibration(int controller_id);
 
 PALAPI void begin_drawing(void);
 PALAPI void DrawTriangle(void);
