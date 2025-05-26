@@ -44,7 +44,7 @@ PALAPI Monitor* get_primary_monitor(void) {
 	return platform_get_primary_monitor();
 }
 
-PALAPI void* gl_get_proc_address(const char* proc) {
+PALAPI void* gl_get_proc_address(const unsigned char* proc) {
 	return platform_gl_get_proc_address(proc);
 }
 

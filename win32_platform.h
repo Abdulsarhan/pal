@@ -329,6 +329,7 @@ static int platform_make_context_current(Window* window) {
 }
 
 static int Win32GetRawInputBuffer();
+
 static void platform_poll_events(void) {
 	Win32GetRawInputBuffer();
 

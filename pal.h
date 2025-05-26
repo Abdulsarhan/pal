@@ -252,7 +252,7 @@ PALAPI uint8_t set_window_title(Window* window, const char* string);
 PALAPI void set_window_hint(int type, int value);
 PALAPI VideoMode* get_video_mode(Monitor* monitor);
 PALAPI Monitor* get_primary_monitor(void);
-PALAPI void* gl_get_proc_address(const char* proc);
+PALAPI void* gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t window_should_close(void);
 PALAPI void poll_events(void);
 PALAPI int make_context_current(Window* window);
