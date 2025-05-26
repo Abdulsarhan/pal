@@ -126,8 +126,8 @@ PALAPI void DrawTriangle() {
 
 }
 
-PALAPI void end_drawing(void) {
-	(void)platform_end_drawing();
+PALAPI void end_drawing(Window* window) {
+	(void)platform_end_drawing(window);
 }
 
 /*

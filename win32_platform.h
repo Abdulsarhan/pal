@@ -31,9 +31,6 @@ typedef unsigned __int64 QWORD;
 // because the lifetime of all this shit is related to the lifetime of the window.
 static MSG s_msg = { 0 };
 static HDC s_fakeDC = { 0 };
-static HDC s_hdc = { 0 };
-static HGLRC s_rc = { 0 };
-static HDC s_currenthdc;
 static int s_glVersionMajor = 3;
 static int s_glVersionMinor = 3;
 static int s_glProfile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
@@ -47,6 +44,9 @@ IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
 struct Window {
 	HWND handle;
+	HDC hdc;
+	HGLRC hglrc;
+	uint8_t s_WindowshouldNotClose; //TODO: Figure out how you can make this variable work on windows. Fuck you bill gates.
 };
 struct Monitor {
 	HMONITOR handle;
@@ -256,7 +256,7 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 		return window;
 	}
 
-	s_hdc = GetDC(window->handle);
+	window->hdc = GetDC(window->handle);
 
 	const int pixelAttribs[] = {
 	WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
@@ -274,7 +274,7 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 	};
 
 	int pixelFormatID; UINT numFormats;
-	uint8_t status = wglChoosePixelFormatARB(s_hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
+	uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
 	if (status == 0 || numFormats == 0) {
 		MessageBoxA(window->handle, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
 		return window;
@@ -282,8 +282,8 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 
 	PIXELFORMATDESCRIPTOR PFD;
 	PFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | s_doubleBuffer;
-	DescribePixelFormat(s_hdc, pixelFormatID, sizeof(PFD), &PFD);
-	SetPixelFormat(s_hdc, pixelFormatID, &PFD);
+	DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
+	SetPixelFormat(window->hdc, pixelFormatID, &PFD);
 
 	int contextAttribs[] = {
 		WGL_CONTEXT_MAJOR_VERSION_ARB, s_glVersionMajor,
@@ -293,8 +293,8 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 		0
 	};
 
-	s_rc = wglCreateContextAttribsARB(s_hdc, 0, contextAttribs);
-	if (s_rc) {
+	window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
+	if (window->hglrc) {
 
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(fakeRC);
@@ -319,9 +319,7 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 }
 
 static int platform_make_context_current(Window* window) {
-	s_hdc = GetDC(window->handle);
-	s_currenthdc = s_hdc;
-	if (!wglMakeCurrent(s_currenthdc, s_rc)) {
+	if (!wglMakeCurrent(window->hdc, window->hglrc)) {
 		MessageBoxA(window->handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
 		return 1;
 	}
@@ -396,8 +394,8 @@ void platform_begin_drawing() {
 
 }
 
-void platform_end_drawing() {
-	SwapBuffers(s_currenthdc);
+void platform_end_drawing(Window* window) {
+	SwapBuffers(window->hdc);
 }
 
 

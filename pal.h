@@ -271,7 +271,7 @@ PALAPI void set_mouse_processed(int button);
 
 PALAPI void begin_drawing(void);
 PALAPI void DrawTriangle(void);
-PALAPI void end_drawing(void);
+PALAPI void end_drawing(Window* window);
 
 // Sound
 PALAPI int load_sound(const char* filename, Sound* out);

@@ -19,7 +19,7 @@ static int platform_play_sound( const Sound* sound);
 static int platform_register_raw_input_devices(Window* window);
 
 static void platform_begin_drawing();
-static void platform_end_drawing();
+static void platform_end_drawing(Window* window);
 static void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height); // This function probably shouldn't be here.
 static void* platform_load_dynamic_library(char* dll);
 static void* platform_load_dynamic_function(void* dll, char* func_name);
