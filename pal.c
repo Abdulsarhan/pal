@@ -5,7 +5,7 @@
 #ifdef _WIN32
 #include "win32_platform.h"
 #elif __LINUX__
-#include "linux_platform.h"
+#include "linux_x11_platform.h"
 #endif
 
 PALAPI void init_pal() {
