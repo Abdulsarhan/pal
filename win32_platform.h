@@ -6,6 +6,7 @@
 #include <windowsx.h>         // Useful macros (e.g., GET_X_LPARAM)
 #include <xaudio2.h>          // XAudio2
 #include <mmreg.h>            // WAVEFORMATEX
+#include <Xinput.h>
 
 // C Standard Library
 #include <stdint.h>
@@ -55,12 +56,17 @@ struct Monitor {
 // Keyboard & Mouse Input
 #define MAX_KEYS 256
 #define MAX_MOUSEBUTTONS 32
+#define MAX_CONTROLLERS 4
+
 typedef struct Input {
 	uint8_t keys[MAX_KEYS];
 	uint8_t keys_processed[MAX_KEYS];
 	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
 	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
 	Vector2 mouse;
+	uint8_t controller_connected[MAX_CONTROLLERS];
+	XINPUT_STATE controller_state[MAX_CONTROLLERS];
+	XINPUT_STATE controller_prev_state[MAX_CONTROLLERS];
 }Input;
 Input input = { 0 };
 
@@ -326,10 +332,11 @@ static int platform_make_context_current(Window* window) {
 	return 0;
 }
 
-static int Win32GetRawInputBuffer();
-
+static int platform_get_raw_input_buffer();
+void platform_poll_gamepads(void);
 static void platform_poll_events(void) {
-	Win32GetRawInputBuffer();
+	platform_get_raw_input_buffer();
+	platform_poll_gamepads();
 
 	while (PeekMessageA(&s_msg, NULL , 0, 0, PM_REMOVE)) {
 		if (s_msg.message == WM_QUIT) {
@@ -475,11 +482,108 @@ int platform_register_raw_input_devices(Window* window) {
 	return 0;
 }
 
+
+void platform_init_gamepads(void) {
+    for (int i = 0; i < MAX_CONTROLLERS; ++i) {
+        ZeroMemory(&input.controller_state[i], sizeof(XINPUT_STATE));
+        ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));
+        input.controller_connected[i] = 0;
+    }
+}
+
+void platform_poll_gamepads(void) {
+    for (int i = 0; i < MAX_CONTROLLERS; ++i) {
+        input.controller_prev_state[i] = input.controller_state[i];
+        DWORD res = XInputGetState(i, &input.controller_state[i]);
+        if (res == ERROR_SUCCESS) {
+            if (!input.controller_connected[i]) {
+                ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));
+            }
+            input.controller_connected[i] = 1;
+        } else {
+            if (input.controller_connected[i]) {
+                ZeroMemory(&input.controller_state[i], sizeof(XINPUT_STATE));
+                ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));
+            }
+            input.controller_connected[i] = 0;
+        }
+    }
+}
+
+int platform_gamepad_button_down(int controller_id, WORD button) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
+    if (!input.controller_connected[controller_id]) return 0;
+    return (input.controller_state[controller_id].Gamepad.wButtons & button) != 0;
+}
+
+int platform_gamepad_button_just_pressed(int controller_id, WORD button) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
+    if (!input.controller_connected[controller_id]) return 0;
+
+    WORD curr = input.controller_state[controller_id].Gamepad.wButtons;
+    WORD prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
+    return ((curr & button) != 0) && ((prev & button) == 0);
+}
+
+int platform_gamepad_button_just_released(int controller_id, WORD button) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
+    if (!input.controller_connected[controller_id]) return 0;
+
+    WORD curr = input.controller_state[controller_id].Gamepad.wButtons;
+    WORD prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
+    return ((curr & button) == 0) && ((prev & button) != 0);
+}
+
+// Helper to normalize and apply deadzone
+static Vector2 platform_process_thumbstick(SHORT x, SHORT y, int deadzone) {
+    Vector2 v = {0};
+
+    float fx = (float)x;
+    float fy = (float)y;
+
+    if (x > deadzone || x < -deadzone)
+        fx = (fx > 0) ? (fx - deadzone) : (fx + deadzone);
+    else
+        fx = 0;
+
+    if (y > deadzone || y < -deadzone)
+        fy = (fy > 0) ? (fy - deadzone) : (fy + deadzone);
+    else
+        fy = 0;
+
+    const float max_val = 32767.0f - deadzone;
+
+    v.x = fx / max_val;
+    v.y = fy / max_val;
+
+    return v;
+}
+
+Vector2 platform_get_left_stick_input(int controller_id) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (Vector2){0};
+    if (!input.controller_connected[controller_id]) return (Vector2){0};
+
+    SHORT x = input.controller_state[controller_id].Gamepad.sThumbLX;
+    SHORT y = input.controller_state[controller_id].Gamepad.sThumbLY;
+
+    return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+}
+
+Vector2 platform_get_right_stick_input(int controller_id) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (Vector2){0};
+    if (!input.controller_connected[controller_id]) return (Vector2){0};
+
+    SHORT x = input.controller_state[controller_id].Gamepad.sThumbRX;
+    SHORT y = input.controller_state[controller_id].Gamepad.sThumbRY;
+
+    return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+}
+
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 8 KB
 
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 
-static int Win32GetRawInputBuffer() {
+static int platform_get_raw_input_buffer() {
 	UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
 	UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
