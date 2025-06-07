@@ -38,22 +38,216 @@ static int s_glProfile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
 static int s_resizable = WS_OVERLAPPEDWINDOW;
 static int s_floating = 0;
 static int s_doubleBuffer = PFD_DOUBLEBUFFER;
-static int s_WindowShouldNotClose = 1;
 
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
-struct Window {
-	HWND handle;
+struct pal_window {
+	HWND hwnd;
 	HDC hdc;
 	HGLRC hglrc;
-	uint8_t s_WindowshouldNotClose; //TODO: Figure out how you can make this variable work on windows. Fuck you bill gates.
 };
-struct Monitor {
+
+struct pal_monitor {
 	HMONITOR handle;
 };
 
+struct pal_common_event {
+    int member;
+};
+
+struct pal_display_event {
+    int member;
+};
+
+struct pal_window_event {
+    int member;
+};
+
+struct pal_keyboard_device_event {
+    int member;
+};
+
+struct pal_keyboard_event {
+    int member;
+};
+
+struct pal_text_editing_event {
+    int member;
+};
+
+struct pal_text_editing_candidates_event {
+    int member;
+};
+
+struct pal_text_input_event {
+    int member;
+};
+
+struct pal_mouse_device_event {
+    int member;
+};
+
+struct pal_mouse_motion_event {
+    int member;
+};
+
+struct pal_mouse_button_event {
+    int member;
+};
+
+struct pal_mouse_wheel_event {
+    int member;
+};
+
+struct pal_joy_device_event {
+    int member;
+};
+
+struct pal_joy_axis_event {
+    int member;
+};
+
+struct pal_joy_ball_event {
+    int member;
+};
+
+struct pal_joy_hat_event {
+    int member;
+};
+
+struct pal_joy_button_event {
+    int member;
+};
+
+struct pal_joy_battery_event {
+    int member;
+};
+
+struct pal_gamepad_device_event {
+    int member;
+};
+
+struct pal_gamepad_axis_event {
+    int member;
+};
+
+struct pal_gamepad_button_event {
+    int member;
+};
+
+struct pal_gamepad_touchpad_event {
+    int member;
+};
+
+struct pal_gamepad_sensor_event {
+    int member;
+};
+
+struct pal_audio_device_event {
+    int member;
+};
+
+struct pal_camera_device_event {
+    int member;
+};
+
+struct pal_sensor_event {
+    int member;
+};
+
+struct pal_quit_event {
+    int member;
+};
+
+struct pal_user_event {
+    int member;
+};
+
+struct pal_touch_finger_event {
+    int member;
+};
+
+struct pal_pen_proximity_event {
+    int member;
+};
+
+struct pal_pen_touch_event {
+    int member;
+};
+
+struct pal_pen_motion_event {
+    int member;
+};
+
+struct pal_pen_button_event {
+    int member;
+};
+
+struct pal_pen_axis_event {
+    int member;
+};
+
+struct pal_render_event {
+    int member;
+};
+
+struct pal_drop_event {
+    int member;
+};
+
+struct pal_clipboard_event {
+    int member;
+};
+
+typedef union pal_event
+{
+    uint8_t type;                              /**< Event type, shared with all events, Uint32 to cover user events which are not in the SDL_EventType enumeration */
+    pal_common_event common;                  /**< Common event data */
+    pal_display_event display;                /**< Display event data */
+    pal_window_event window;                  /**< Window event data */
+    pal_keyboard_device_event kdevice;       /**< Keyboard device change event data */
+    pal_keyboard_event key;                   /**< Keyboard event data */
+    pal_text_editing_event edit;              /**< Text editing event data */
+    pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
+    pal_text_input_event text;                /**< Text input event data */
+    pal_mouse_device_event mdevice;           /**< Mouse device change event data */
+    pal_mouse_motion_event motion;            /**< Mouse motion event data */
+    pal_mouse_button_event button;            /**< Mouse button event data */
+    pal_mouse_wheel_event wheel;              /**< Mouse wheel event data */
+    pal_joy_device_event jdevice;             /**< Joystick device change event data */
+    pal_joy_axis_event jaxis;                  /**< Joystick axis event data */
+    pal_joy_ball_event jball;                  /**< Joystick ball event data */
+    pal_joy_hat_event jhat;                    /**< Joystick hat event data */
+    pal_joy_button_event jbutton;              /**< Joystick button event data */
+    pal_joy_battery_event jbattery;            /**< Joystick battery event data */
+    pal_gamepad_device_event gdevice;          /**< Gamepad device event data */
+    pal_gamepad_axis_event gaxis;               /**< Gamepad axis event data */
+    pal_gamepad_button_event gbutton;           /**< Gamepad button event data */
+    pal_gamepad_touchpad_event gtouchpad;       /**< Gamepad touchpad event data */
+    pal_gamepad_sensor_event gsensor;           /**< Gamepad sensor event data */
+    pal_audio_device_event adevice;              /**< Audio device event data */
+    pal_camera_device_event cdevice;             /**< Camera device event data */
+    pal_sensor_event sensor;                     /**< Sensor event data */
+    pal_quit_event quit;                         /**< Quit request event data */
+    pal_user_event user;                         /**< Custom event data */
+    pal_touch_finger_event tfinger;             /**< Touch finger event data */
+    pal_pen_proximity_event pproximity;         /**< Pen proximity event data */
+    pal_pen_touch_event ptouch;                   /**< Pen tip touching event data */
+    pal_pen_motion_event pmotion;                 /**< Pen motion event data */
+    pal_pen_button_event pbutton;                 /**< Pen button event data */
+    pal_pen_axis_event paxis;                     /**< Pen axis event data */
+    pal_render_event render;                       /**< Render event data */
+    pal_drop_event drop;                           /**< Drag and drop event data */
+    pal_clipboard_event clipboard;                 /**< Clipboard event data */
+
+    uint8_t padding[128];
+} pal_event;
+
 // Keyboard & Mouse Input
+//TODO: @fix We should not have this here and just have the user call
+//the functions that fill up the input struct.
+
 #define MAX_KEYS 256
 #define MAX_MOUSEBUTTONS 32
 #define MAX_CONTROLLERS 4
@@ -63,7 +257,8 @@ typedef struct Input {
 	uint8_t keys_processed[MAX_KEYS];
 	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
 	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
-	Vector2 mouse;
+	v2 mouse_position;
+	v2 mouse;
 	uint8_t controller_connected[MAX_CONTROLLERS];
 	XINPUT_STATE controller_state[MAX_CONTROLLERS];
 	XINPUT_STATE controller_prev_state[MAX_CONTROLLERS];
@@ -88,30 +283,117 @@ LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 
 	switch (uMsg) {
 
-	case WM_SIZE:
-
-		// Respond to the message:
-		Win32WindowResizeCallback(hwnd, (UINT)wParam, width, height);
-
+	case WM_CREATE:
 		break;
-
-	case WM_CLOSE:
-		DestroyWindow(hwnd);
-		s_WindowShouldNotClose = 0;
-		PostQuitMessage(0);
-		break;
-
 	case WM_DESTROY:
 		DestroyWindow(hwnd);
-		s_WindowShouldNotClose = 0;
 		break;
-
+	case WM_CLOSE:
+		DestroyWindow(hwnd);
+		PostQuitMessage(0);
+		break;
+	case WM_QUIT:
+		break;
+	case WM_MOVE:
+		break;
+	case WM_SIZE:
+		Win32WindowResizeCallback(hwnd, (UINT)wParam, width, height);
+		break;
+	case WM_SHOWWINDOW:
+		break;
 	case WM_PAINT:
 		break;
-	case WM_SYSKEYUP:
-	case WM_SYSKEYDOWN:
+	case WM_SETFOCUS:
+		break;
+	case WM_KILLFOCUS:
+		break;
+	case WM_ACTIVATE:
+		break;
+	case WM_GETMINMAXINFO:
+		break;
+	case WM_NCACTIVATE:
+		break;
+	case WM_ERASEBKGND:
+		break;
+
+	case WM_MOUSEMOVE:
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONUP:
+	case WM_LBUTTONDBLCLK:
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONUP:
+	case WM_RBUTTONDBLCLK:
+	case WM_MBUTTONDOWN:
+	case WM_MBUTTONUP:
+	case WM_MBUTTONDBLCLK:
+	case WM_XBUTTONDOWN:
+	case WM_XBUTTONUP:
+	case WM_XBUTTONDBLCLK:
+	case WM_MOUSEWHEEL:
+	case WM_MOUSEHWHEEL:
+	case WM_MOUSELEAVE:
+	case WM_MOUSEACTIVATE:
+	case WM_SETCURSOR:
+		break;
+
 	case WM_KEYDOWN:
 	case WM_KEYUP:
+	case WM_CHAR:
+	case WM_SYSKEYDOWN:
+	case WM_SYSKEYUP:
+	case WM_SYSCHAR:
+	case WM_UNICHAR:
+	case WM_DEADCHAR:
+	case WM_SYSDEADCHAR:
+		break;
+
+	case WM_ENTERSIZEMOVE:
+		break;
+
+	case WM_EXITSIZEMOVE:
+		break;
+
+	case WM_DISPLAYCHANGE:
+		break;
+
+	case WM_DPICHANGED:
+		break;
+
+	case WM_WINDOWPOSCHANGED:
+		break;
+
+	case WM_WINDOWPOSCHANGING:
+		break;
+
+	case WM_STYLECHANGED:
+		break;
+
+	case WM_STYLECHANGING:
+		break;
+
+	case WM_SYSCOMMAND:
+		break;
+
+	case WM_COMMAND:
+		break;
+
+	case WM_TIMER:
+		break;
+
+	case WM_HOTKEY:
+		break;
+
+	case WM_INPUT:
+		break;
+
+	case WM_DROPFILES:
+		break;
+
+	case WM_CAPTURECHANGED:
+		break;
+
+	case WM_SETICON:
+	case WM_GETICON:
 		break;
 	}
 
@@ -166,11 +448,11 @@ static void platform_set_window_hint(int type, int value) {
 	}
 }
 
-static Window* platform_init_window(int width, int height, const char* windowTitle) {
-	Window* fakewindow = (Window*)malloc(sizeof(Window));
+static pal_window* platform_init_window(int width, int height, const char* windowTitle) {
+	pal_window* fakewindow = (pal_window*)malloc(sizeof(pal_window));
 	WNDCLASSEXA fakewc = RegisterWindowClass();
 
-	fakewindow->handle = CreateWindowExA(
+	fakewindow->hwnd = CreateWindowExA(
 		0,                              // Optional window styles.
 		fakewc.lpszClassName,                     // Window class
 		"Fake Ass Window.",          // Window text
@@ -185,12 +467,12 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 		NULL        // Additional application data
 	);
 
-	if (fakewindow->handle == NULL)
+	if (fakewindow->hwnd == NULL)
 	{
 		return fakewindow;
 	}
 
-	s_fakeDC = GetDC(fakewindow->handle);
+	s_fakeDC = GetDC(fakewindow->hwnd);
 
 	PIXELFORMATDESCRIPTOR fakePFD;
 	ZeroMemory(&fakePFD, sizeof(fakePFD));
@@ -205,45 +487,45 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 	int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
 
 	if (fakePFDID == 0) {
-		MessageBoxA(fakewindow->handle, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
-		MessageBoxA(fakewindow->handle, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 
 	HGLRC fakeRC = wglCreateContext(s_fakeDC);
 	if (fakeRC == 0) {
-		MessageBoxA(fakewindow->handle, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
-		MessageBoxA(fakewindow->handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
 	wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
 	if (wglChoosePixelFormatARB == NULL) {
-		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
 	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
 	if (wglCreateContextAttribsARB == NULL) {
-		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
 	wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
 	if (wglSwapIntervalEXT == NULL) {
-		MessageBoxA(fakewindow->handle, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
 		return fakewindow;
 	}
 
 	WNDCLASSEXA wc = RegisterWindowClass();
-	Window* window = (Window*)malloc(sizeof(Window));
-	window->handle = CreateWindowExA(
+	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+	window->hwnd = CreateWindowExA(
 		s_floating,           // Optional window styles.
 		wc.lpszClassName,     // Window class
 		windowTitle,          // Window text
@@ -258,11 +540,11 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 		NULL        // Additional application data
 	);
 
-	if (window->handle == NULL) {
+	if (window->hwnd == NULL) {
 		return window;
 	}
 
-	window->hdc = GetDC(window->handle);
+	window->hdc = GetDC(window->hwnd);
 
 	const int pixelAttribs[] = {
 	WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
@@ -282,7 +564,7 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 	int pixelFormatID; UINT numFormats;
 	uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
 	if (status == 0 || numFormats == 0) {
-		MessageBoxA(window->handle, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
 		return window;
 	}
 
@@ -304,60 +586,56 @@ static Window* platform_init_window(int width, int height, const char* windowTit
 
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(fakeRC);
-		ReleaseDC(fakewindow->handle, s_fakeDC);
-		DestroyWindow(fakewindow->handle);
+		ReleaseDC(fakewindow->hwnd, s_fakeDC);
+		DestroyWindow(fakewindow->hwnd);
 
-		ShowWindow(window->handle, SW_SHOWNORMAL);
-		SetForegroundWindow(window->handle);
-		SetFocus(window->handle);
+		ShowWindow(window->hwnd, SW_SHOWNORMAL);
+		SetForegroundWindow(window->hwnd);
+		SetFocus(window->hwnd);
 		OutputDebugStringA("INFO: Using modern OpenGL Context.");
 		return window;
 	}
 	else {
 
-		ShowWindow(fakewindow->handle, SW_SHOW);
-		SetForegroundWindow(fakewindow->handle);
-		SetFocus(fakewindow->handle);
+		ShowWindow(fakewindow->hwnd, SW_SHOW);
+		SetForegroundWindow(fakewindow->hwnd);
+		SetFocus(fakewindow->hwnd);
 		OutputDebugStringA("INFO: Using old OpenGL Context.");
 		return fakewindow;
 	}
 
 }
 
-static int platform_make_context_current(Window* window) {
+static int platform_make_context_current(pal_window* window) {
 	if (!wglMakeCurrent(window->hdc, window->hglrc)) {
-		MessageBoxA(window->handle, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+		MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
 		return 1;
 	}
 	return 0;
 }
 
-static int platform_get_raw_input_buffer();
-void platform_poll_gamepads(void);
-static void platform_poll_events(void) {
+static uint8_t platform_poll_events(pal_event* event) {
 	platform_get_raw_input_buffer();
 	platform_poll_gamepads();
 
 	while (PeekMessageA(&s_msg, NULL , 0, 0, PM_REMOVE)) {
 		if (s_msg.message == WM_QUIT) {
-			s_WindowShouldNotClose = 0;
 			exit(0);
 		}
 		TranslateMessage(&s_msg);
 		DispatchMessageA(&s_msg);
+		return 1;
 	}
-
+	return 0;
 }
 
-static uint8_t platform_window_should_close() {
-	return s_WindowShouldNotClose;
+
+
+static uint8_t platform_set_window_title(pal_window* window, const char* string) {
+	return SetWindowTextA(window->hwnd, string);
 }
 
-static uint8_t platform_set_window_title(Window* window, const char* string) {
-	return SetWindowTextA(window->handle, string);
-}
-
-static VideoMode* platform_get_video_mode(Monitor* monitor) {
+static VideoMode* platform_get_video_mode(pal_monitor* monitor) {
 
 	MONITORINFO mi = { 0 };
 	VideoMode* videoMode = calloc(1, sizeof(VideoMode));
@@ -379,8 +657,8 @@ static VideoMode* platform_get_video_mode(Monitor* monitor) {
 	return videoMode;
 }
 
-static Monitor* platform_get_primary_monitor() {
-	Monitor* monitor = malloc(sizeof(Monitor));
+static pal_monitor* platform_get_primary_monitor() {
+	pal_monitor* monitor = malloc(sizeof(pal_monitor));
 
 	// Define a point at the origin (0, 0)
 	POINT ptZero = { 0, 0 };
@@ -401,10 +679,9 @@ void platform_begin_drawing() {
 
 }
 
-void platform_end_drawing(Window* window) {
+void platform_end_drawing(pal_window* window) {
 	SwapBuffers(window->hdc);
 }
-
 
 #define MAX_RAW_INPUTS 16
 
@@ -417,8 +694,10 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dy = raw->data.mouse.lLastY;
 	USHORT buttons = raw->data.mouse.usButtonFlags;
 
-	input.mouse.x = (float)dx;
-	input.mouse.y = (float)dy;
+	input.mouse = (v2){
+		(float)dx,
+		(float)dy,
+	};
 
 	for (int i = 0; i < 16; ++i) {
 		uint16_t down = (buttons >> (i * 2)) & 1;
@@ -429,6 +708,17 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 	}
 
 	printf("Mouse: dx=%ld dy=%ld buttons=0x%04x\n", dx, dy, buttons);
+}
+
+v2 platform_get_mouse_position(pal_window* window) {
+	POINT cursor_pos = { 0 };
+	GetCursorPos(&cursor_pos);
+
+	ScreenToClient(window->hwnd, &cursor_pos);     // Convert to client-area coordinates
+	return (v2) {
+		(float)cursor_pos.x,
+		(float)cursor_pos.y
+	};
 }
 
 void Win32HandleKeyboard(const RAWINPUT* raw) {
@@ -451,26 +741,26 @@ RawInputHandler Win32InputHandlers[3] = {
 	Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
 
-int platform_register_raw_input_devices(Window* window) {
+int platform_register_raw_input_devices(pal_window* window) {
 	RAWINPUTDEVICE rid[3];
 
 	// 1. Keyboard
 	rid[0].usUsagePage = 0x01; // Generic desktop controls
 	rid[0].usUsage = 0x06;     // Keyboard
 	rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
-	rid[0].hwndTarget = window->handle;
+	rid[0].hwndTarget = window->hwnd;
 
 	// 2. Mouse
 	rid[1].usUsagePage = 0x01; // Generic desktop controls
 	rid[1].usUsage = 0x02;     // Mouse
 	rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-	rid[1].hwndTarget = window->handle;
+	rid[1].hwndTarget = window->hwnd;
 
 	// 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
 	rid[2].usUsagePage = 0x01; // Generic desktop controls
 	rid[2].usUsage = 0x04;     // Joystick
 	rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-	rid[2].hwndTarget = window->handle;
+	rid[2].hwndTarget = window->hwnd;
 
 	if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
 		DWORD error = GetLastError();
@@ -526,8 +816,8 @@ int platform_is_button_released(int controller_id, unsigned short button) {
 }
 
 // Helper to normalize and apply deadzone
-static Vector2 platform_process_thumbstick(short x, short y, int deadzone) {
-    Vector2 v = {0};
+static v2 platform_process_thumbstick(short x, short y, int deadzone) {
+    v2 v = {0};
 
     float fx = (float)x;
     float fy = (float)y;
@@ -550,9 +840,9 @@ static Vector2 platform_process_thumbstick(short x, short y, int deadzone) {
     return v;
 }
 
-Vector2 platform_get_left_stick(int controller_id) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (Vector2){0};
-    if (!input.controller_connected[controller_id]) return (Vector2){0};
+v2 platform_get_left_stick(int controller_id) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2){0};
+    if (!input.controller_connected[controller_id]) return (v2){0};
 
 	short x = input.controller_state[controller_id].Gamepad.sThumbLX;
 	short y = input.controller_state[controller_id].Gamepad.sThumbLY;
@@ -560,9 +850,9 @@ Vector2 platform_get_left_stick(int controller_id) {
     return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 }
 
-Vector2 platform_get_right_stick(int controller_id) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (Vector2){0};
-    if (!input.controller_connected[controller_id]) return (Vector2){0};
+v2 platform_get_right_stick(int controller_id) {
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2){0};
+    if (!input.controller_connected[controller_id]) return (v2){0};
 
 	short x = input.controller_state[controller_id].Gamepad.sThumbRX;
 	short y = input.controller_state[controller_id].Gamepad.sThumbRY;
@@ -660,18 +950,16 @@ static int is_equal_guid(const GUID* a, const GUID* b) {
 	return memcmp(a, b, sizeof(GUID)) == 0;
 }
 
-static int platform_play_sound(const Sound* sound) {
+static int platform_play_sound(const Sound* sound, float volume) {
 	if (!g_xaudio2 || !g_mastering_voice) {
 		return E_FAIL;
 	}
 
-	// PCM: 00000001-0000-0010-8000-00aa00389b71
 	static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
 		0x00000001, 0x0000, 0x0010,
 		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
 	};
 
-	// IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
 	static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
 		0x00000003, 0x0000, 0x0010,
 		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
@@ -695,37 +983,35 @@ static int platform_play_sound(const Sound* sound) {
 		? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
 		: KSDATAFORMAT_SUBTYPE_PCM;
 
-	// Create the source voice
-	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(g_xaudio2, &source_voice, (const WAVEFORMATEX*)&wfex,
+	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
+		g_xaudio2, &source_voice, (const WAVEFORMATEX*)&wfex,
 		0, XAUDIO2_DEFAULT_FREQ_RATIO,
 		NULL, NULL, NULL);
 	if (FAILED(hr)) {
 		return hr;
 	}
 
-	// Prepare the buffer
+	// Set the volume
+	source_voice->lpVtbl->SetVolume(source_voice, volume, 0);
+
 	XAUDIO2_BUFFER buffer = {
 		.AudioBytes = (UINT32)sound->dataSize,
 		.pAudioData = sound->data,
 		.Flags = XAUDIO2_END_OF_STREAM
-
 	};
 
-	// Submit the buffer
 	hr = source_voice->lpVtbl->SubmitSourceBuffer(source_voice, &buffer, NULL);
 	if (FAILED(hr)) {
 		source_voice->lpVtbl->DestroyVoice(source_voice);
 		return hr;
 	}
 
-	// Start playing
 	hr = source_voice->lpVtbl->Start(source_voice, 0, 0);
 	if (FAILED(hr)) {
 		source_voice->lpVtbl->DestroyVoice(source_voice);
 		return hr;
 	}
 
-	// Voice will destroy itself after playback if managed elsewhere
 	return S_OK;
 }
 

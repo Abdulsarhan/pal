@@ -90,10 +90,6 @@ void swap_buffers(pal_window window) {
 	platform_swapbuffers(window);
 }
 
-uint8_t pal_window_should_close(pal_window window) {
-	return window.window_should_close;
-}
-
 void platform_poll_events(pal_window* window) {
 	xcb_generic_event_t* event;
 	while ((event = xcb_poll_for_event(window->xcb_conn))) {
@@ -114,9 +110,9 @@ void* platform_gl_get_proc_address(const char* procname) {
 }
 
 void* platform_load_dynamic_library(char* so_name) {
-	void* handle = dlopen(so_name, RTLD_NOW | RTLD_LOCAL);
-	assert(handle && "Failed to load shared library");
-	return handle;
+	void* hwnd = dlopen(so_name, RTLD_NOW | RTLD_LOCAL);
+	assert(hwnd && "Failed to load shared library");
+	return hwnd;
 }
 
 void* platform_load_dynamic_function(void* so_handle, char* func_name) {

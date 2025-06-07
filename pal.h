@@ -18,11 +18,128 @@ typedef struct {
 	int bitsPerSample;     // Usually 16 or 32
     int isFloat; // 0 = PCM, 1 = IEEE float
 
-} Sound;
+}Sound;
 
-typedef struct Window Window;
-typedef struct Monitor Monitor;
-typedef struct SoundInitInfo SoundInitInfo;
+// events.
+typedef struct pal_common_event pal_common_event;
+typedef struct pal_display_event pal_display_event;
+typedef struct pal_window_event pal_window_event;
+typedef struct pal_keyboard_device_event pal_keyboard_device_event;
+typedef struct pal_keyboard_event pal_keyboard_event;
+typedef struct pal_text_editing_event pal_text_editing_event;
+typedef struct pal_text_editing_candidates_event pal_text_editing_candidates_event;
+typedef struct pal_text_input_event pal_text_input_event;
+typedef struct pal_mouse_device_event pal_mouse_device_event;
+typedef struct pal_mouse_motion_event pal_mouse_motion_event;
+typedef struct pal_mouse_button_event pal_mouse_button_event;
+typedef struct pal_mouse_wheel_event pal_mouse_wheel_event;
+typedef struct pal_joy_device_event pal_joy_device_event;
+typedef struct pal_joy_axis_event pal_joy_axis_event;
+typedef struct pal_joy_ball_event pal_joy_ball_event;
+typedef struct pal_joy_hat_event pal_joy_hat_event;
+typedef struct pal_joy_button_event pal_joy_button_event;
+typedef struct pal_joy_battery_event pal_joy_battery_event;
+typedef struct pal_gamepad_device_event pal_gamepad_device_event;
+typedef struct pal_gamepad_axis_event pal_gamepad_axis_event;
+typedef struct pal_gamepad_button_event pal_gamepad_button_event;
+typedef struct pal_gamepad_touchpad_event pal_gamepad_touchpad_event;
+typedef struct pal_gamepad_sensor_event pal_gamepad_sensor_event;
+typedef struct pal_audio_device_event pal_audio_device_event;
+typedef struct pal_camera_device_event pal_camera_device_event;
+typedef struct pal_sensor_event pal_sensor_event;
+typedef struct pal_quit_event pal_quit_event;
+typedef struct pal_user_event pal_user_event;
+typedef struct pal_touch_finger_event pal_touch_finger_event;
+typedef struct pal_pen_proximity_event pal_pen_proximity_event;
+typedef struct pal_pen_touch_event pal_pen_touch_event;
+typedef struct pal_pen_motion_event pal_pen_motion_event;
+typedef struct pal_pen_button_event pal_pen_button_event;
+typedef struct pal_pen_axis_event pal_pen_axis_event;
+typedef struct pal_render_event pal_render_event;
+typedef struct pal_drop_event pal_drop_event;
+typedef struct pal_clipboard_event pal_clipboard_event;
+
+typedef enum pal_event_type
+{
+    PAL_QUIT = 0x100,
+
+    PAL_WINDOW_EVENT = 0x200,
+    PAL_SYSWM_EVENT,
+
+    PAL_KEY_DOWN = 0x300,
+    PAL_KEY_UP,
+    PAL_TEXT_EDITING,
+    PAL_TEXT_INPUT,
+    PAL_KEYMAP_CHANGED,
+    PAL_TEXT_EDITING_EXT,
+
+    PAL_MOUSE_MOTION = 0x400,
+    PAL_MOUSE_BUTTON_DOWN,
+    PAL_MOUSE_BUTTON_UP,
+    PAL_MOUSE_WHEEL,
+
+    PAL_JOY_AXIS_MOTION = 0x600,
+    PAL_JOY_BALL_MOTION,
+    PAL_JOY_HAT_MOTION,
+    PAL_JOY_BUTTON_DOWN,
+    PAL_JOY_BUTTON_UP,
+    PAL_JOY_DEVICE_ADDED,
+    PAL_JOY_DEVICE_REMOVED,
+    PAL_JOY_BATTERY_UPDATED,
+
+    PAL_GAMEPAD_AXIS_MOTION = 0x650,
+    PAL_GAMEPAD_BUTTON_DOWN,
+    PAL_GAMEPAD_BUTTON_UP,
+    PAL_GAMEPAD_DEVICE_ADDED,
+    PAL_GAMEPAD_DEVICE_REMOVED,
+    PAL_GAMEPAD_REMAPPED,
+    PAL_GAMEPAD_TOUCHPAD_DOWN,
+    PAL_GAMEPAD_TOUCHPAD_MOTION,
+    PAL_GAMEPAD_TOUCHPAD_UP,
+    PAL_GAMEPAD_SENSOR_UPDATE,
+
+    PAL_FINGER_DOWN = 0x700,
+    PAL_FINGER_UP,
+    PAL_FINGER_MOTION,
+
+    PAL_DOLLAR_GESTURE = 0x800,
+    PAL_DOLLAR_RECORD,
+    PAL_MULTI_GESTURE,
+
+    PAL_CLIPBOARD_EVENT = 0x900,
+
+    PAL_DROP_FILE = 0x1000,
+    PAL_DROP_TEXT,
+    PAL_DROP_BEGIN,
+    PAL_DROP_COMPLETE,
+
+    PAL_AUDIO_DEVICE_ADDED = 0x1100,
+    PAL_AUDIO_DEVICE_REMOVED,
+
+    PAL_SENSOR_UPDATE = 0x1200,
+
+    PAL_RENDER_TARGETS_RESET = 0x2000,
+    PAL_RENDER_DEVICE_RESET,
+
+    PAL_PEN_PROXIMITY = 0x1400,
+    PAL_PEN_TOUCH,
+    PAL_PEN_MOTION,
+    PAL_PEN_BUTTON,
+    PAL_PEN_AXIS,
+
+    PAL_CAMERA_DEVICE_ADDED = 0x1500,
+    PAL_CAMERA_DEVICE_REMOVED,
+
+    PAL_TEXT_EDITING_CANDIDATES = 0x1600,
+
+    PAL_USER_EVENT = 0x8000,
+
+    PAL_LAST_EVENT = 0xFFFF
+} pal_event_type;
+
+// Window stuff.
+typedef struct pal_window pal_window;
+typedef struct pal_monitor pal_monitor;
 
 #if defined(_WIN32)
 #if defined(__TINYC__)
@@ -40,7 +157,7 @@ typedef struct SoundInitInfo SoundInitInfo;
 #endif
 
 #ifndef PALAPI
-#define PALAPI       // Functions defined as 'extern' by default (implicit specifiers)
+#define PALAPI extern // extern is default, but it doesn't hurt to be explicit.
 #endif
 
 //----------------------------------------------------------------------------------
@@ -56,26 +173,47 @@ typedef struct SoundInitInfo SoundInitInfo;
 #define RAD2DEG (180.0f/PI)
 #endif
 
-// Vector2, 2 components
-typedef struct Vector2 {
+// v2, 2 components
+typedef struct v2 {
     float x;                // Vector x component
     float y;                // Vector y component
-} Vector2;
+} v2;
 
-// Vector3, 3 components
-typedef struct Vector3 {
+// v3, 3 components
+typedef struct v3 {
     float x;                // Vector x component
     float y;                // Vector y component
     float z;                // Vector z component
-} Vector3;
+} v3;
 
-// Vector4, 4 components
-typedef struct Vector4 {
+// v4, 4 components
+typedef struct v4 {
     float x;                // Vector x component
     float y;                // Vector y component
     float z;                // Vector z component
     float w;                // Vector w component
-} Vector4;
+} v4;
+
+// v2, 2 components
+typedef struct iv2 {
+	int x;                // Vector x component
+	int y;                // Vector y component
+} iv2;
+
+// v3, 3 components
+typedef struct iv3 {
+	int x;                // Vector x component
+	int y;                // Vector y component
+	int z;                // Vector z component
+} iv3;
+
+// v4, 4 components
+typedef struct iv4 {
+	int x;                // Vector x component
+	int y;                // Vector y component
+	int z;                // Vector z component
+	int w;                // Vector w component
+} iv4;
 
 //----------------------------------------------------------------------------------
 // Window Hint Types
@@ -269,17 +407,16 @@ extern "C" {
 #endif
 
 PALAPI void init_pal();
-PALAPI Window* init_window(int width, int height, const char* windowTitle);
-PALAPI uint8_t set_window_title(Window* window, const char* string);
+PALAPI pal_window* init_window(int width, int height, const char* windowTitle);
+PALAPI uint8_t set_window_title(pal_window* window, const char* string);
 PALAPI void set_window_hint(int type, int value);
-PALAPI VideoMode* get_video_mode(Monitor* monitor);
-PALAPI Monitor* get_primary_monitor(void);
+PALAPI VideoMode* get_video_mode(pal_monitor* monitor);
+PALAPI pal_monitor* get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
-PALAPI uint8_t window_should_close(void);
-PALAPI void poll_events(void);
-PALAPI int make_context_current(Window* window);
+PALAPI uint8_t poll_events(void);
+PALAPI int make_context_current(pal_window* window);
 
-PALAPI int register_input_devices(Window* window);
+PALAPI int register_input_devices(pal_window* window);
 PALAPI uint8_t is_key_pressed(int key);
 PALAPI uint8_t is_key_down(int key);
 PALAPI uint8_t is_key_processed(int key);
@@ -289,15 +426,15 @@ PALAPI void set_key_processed(int key);
 PALAPI uint8_t is_mouse_pressed(int button);
 PALAPI uint8_t is_mouse_down(int button);
 PALAPI uint8_t is_mouse_processed(int button);
-PALAPI void set_mouse_processed(int button);
-
+PALAPI void set_mouse_processed(int button); // TODO: @CLEANUP There is probably no reason to give the user access to this, might remove.
+PALAPI v2 get_mouse_position(pal_window* window);
 
 // Gamepad Input
 PALAPI int is_button_down(int controller_id, unsigned short button);
 PALAPI int is_button_pressed(int controller_id, unsigned short button);
 PALAPI int is_button_released(int controller_id, unsigned short button);
-PALAPI Vector2 get_right_stick(int controller_id);
-PALAPI Vector2 get_left_stick(int controller_id);
+PALAPI v2 get_right_stick(int controller_id);
+PALAPI v2 get_left_stick(int controller_id);
 PALAPI float get_right_trigger(int controller_id);
 PALAPI float get_left_trigger(int controller_id);
 PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor);
@@ -305,11 +442,11 @@ PALAPI void stop_controller_vibration(int controller_id);
 
 PALAPI void begin_drawing(void);
 PALAPI void DrawTriangle(void);
-PALAPI void end_drawing(Window* window);
+PALAPI void end_drawing(pal_window* window);
 
 // Sound
 PALAPI int load_sound(const char* filename, Sound* out);
-PALAPI int play_sound(Sound* sound);
+PALAPI int play_sound(Sound* sound, float volume);
 
 PALAPI uint8_t does_file_exist(const char* file_path);
 PALAPI time_t get_file_timestamp(const char* file);

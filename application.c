@@ -54,9 +54,9 @@ int main() {
     set_window_hint(RESIZABLE, 1);
 
     //TODO: @fix monitor and video mode functions have problems.
-    Monitor* monitor = get_primary_monitor();
+    pal_monitor* monitor = get_primary_monitor();
     VideoMode* mode = get_video_mode(monitor);
-    Window* window = init_window(1280, 720, "Fucking Windows!");
+    pal_window* window = init_window(1280, 720, "Fucking Windows!");
     make_context_current(window);
 
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
@@ -71,26 +71,31 @@ int main() {
 	Sound sound = { 0 };
 	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\piano.wav", &sound);
 
-	play_sound(&sound);
+	play_sound(&sound, 0.1);
 
-    while (!window_should_close())
-    {
-        poll_events();
-        if (is_key_down(KEY_SPACE)) {
-            printf("Pressed the A key!");
-        }
+    uint8_t running = 1;
+    while (running) {
+		while (poll_events())
+		{
+			if (is_key_down(KEY_SPACE)) {
+				printf("Pressed the A key!");
+			}
 
-        if (is_mouse_down(SIDE_MOUSE_BUTTON1)) {
-            printf("MOUSE PRESSED!\n");
-        }
+			if (is_mouse_down(SIDE_MOUSE_BUTTON1)) {
+				printf("MOUSE PRESSED!\n");
+			}
 
-        if (is_button_down(1, 0x1000)) {
-            printf("INFO GAMEPAD A PRESSED!\n");
-        }
-        begin_drawing();
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        end_drawing(window);
+			if (is_button_down(1, 0x1000)) {
+				printf("INFO GAMEPAD A PRESSED!\n");
+			}
+			begin_drawing();
+			v2 mouse_pos = get_mouse_position(window);
+			printf("Mouse Position, %f, %f\n", mouse_pos.x, mouse_pos.y);
+			glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			end_drawing(window);
+		}
+
     }
 
     return 0;

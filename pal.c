@@ -21,15 +21,11 @@ PALAPI void init_pal() {
 
 */
 
-PALAPI Window* init_window(int width, int height, const char* windowTitle) {
+PALAPI pal_window* init_window(int width, int height, const char* windowTitle) {
 	 return platform_init_window(width, height, windowTitle);
 }
 
-PALAPI uint8_t window_should_close(void) {
-	return platform_window_should_close();
-}
-
-PALAPI uint8_t set_window_title(Window* window, const char* string) {
+PALAPI uint8_t set_window_title(pal_window* window, const char* string) {
 	return platform_set_window_title(window, string);
 }
 
@@ -37,10 +33,10 @@ PALAPI void set_window_hint(int type, int value) {
 	(void)platform_set_window_hint(type, value);
 }
 
-PALAPI VideoMode* get_video_mode(Monitor* monitor) {
+PALAPI VideoMode* get_video_mode(pal_monitor* monitor) {
 	return platform_get_video_mode(monitor);
 }
-PALAPI Monitor* get_primary_monitor(void) {
+PALAPI pal_monitor* get_primary_monitor(void) {
 	return platform_get_primary_monitor();
 }
 
@@ -48,7 +44,7 @@ PALAPI void* gl_get_proc_address(const unsigned char* proc) {
 	return platform_gl_get_proc_address(proc);
 }
 
-PALAPI int register_input_devices(Window* window) {
+PALAPI int register_input_devices(pal_window* window) {
 	return platform_register_raw_input_devices(window);
 }
 
@@ -79,6 +75,11 @@ PALAPI void set_key_processed(int key) {
 }
 
 // Mouse input
+PALAPI v2 get_mouse_position(pal_window* window) {
+	return platform_get_mouse_position(window);
+
+}
+
 PALAPI uint8_t is_mouse_pressed(int button) {
 
 	if (is_mouse_down(button) && !is_mouse_pressed(button)) {
@@ -103,30 +104,30 @@ PALAPI void set_mouse_processed(int button) {
 }
 
 PALAPI float get_right_trigger(int controller_id) {
-	platform_get_right_trigger(controller_id);
+	return platform_get_right_trigger(controller_id);
 }
 PALAPI float get_left_trigger(int controller_id) {
-	platform_get_left_trigger(controller_id);
+	return platform_get_left_trigger(controller_id);
 }
 
-PALAPI Vector2 get_right_stick(int controller_id) {
-	platform_get_right_stick(controller_id);
+PALAPI v2 get_right_stick(int controller_id) {
+	return  platform_get_right_stick(controller_id);
 }
 
-PALAPI Vector2 get_left_stick(int controller_id) {
-	platform_get_left_stick(controller_id);
+PALAPI v2 get_left_stick(int controller_id) {
+	return  platform_get_left_stick(controller_id);
 }
 
 PALAPI int is_button_down(int controller_id, unsigned short button) {
-	platform_is_button_down(controller_id, button);
+	return platform_is_button_down(controller_id, button);
 }
 
 PALAPI int is_button_pressed(int controller_id, unsigned short button) {
-	platform_is_button_pressed(controller_id, button);
+	return  platform_is_button_pressed(controller_id, button);
 }
 
 PALAPI int is_button_released(int controller_id, unsigned short button) {
-	platform_is_button_released(controller_id, button);
+	return platform_is_button_released(controller_id, button);
 }
 
 PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor) {
@@ -137,11 +138,11 @@ PALAPI void stop_controller_vibration(int controller_id) {
 	platform_stop_controller_vibration(controller_id);
 }
 
-PALAPI void poll_events(void) {
-	(void)platform_poll_events();
+PALAPI uint8_t poll_events(void) {
+	return platform_poll_events();
 }
 
-PALAPI int make_context_current(Window* window) {
+PALAPI int make_context_current(pal_window* window) {
 	return platform_make_context_current(window);
 }
 
@@ -161,7 +162,7 @@ PALAPI void DrawTriangle() {
 
 }
 
-PALAPI void end_drawing(Window* window) {
+PALAPI void end_drawing(pal_window* window) {
 	(void)platform_end_drawing(window);
 }
 
@@ -173,8 +174,8 @@ PALAPI void end_drawing(Window* window) {
 
 */
 
-PALAPI int play_sound(Sound* sound) {
-	return platform_play_sound(sound);
+PALAPI int play_sound(Sound* sound, float volume) {
+	return platform_play_sound(sound, volume);
 }
 
 // TODO: @fix This loads uncompressed .wav files only!
