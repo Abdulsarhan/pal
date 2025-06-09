@@ -40,8 +40,6 @@ static OpenglInfo get_opengl_info(void) {
     return info;
 }
 
-#ifdef _WIN32
-
 int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
@@ -69,43 +67,37 @@ int main() {
         return;
 
 	Sound sound = { 0 };
-	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\piano.wav", &sound);
+	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\sine_wave.wav", &sound);
 
 	play_sound(&sound, 0.1);
 
     uint8_t running = 1;
+    pal_event event;
     while (running) {
-		while (poll_events())
+		while (pal_poll_events(&event, window))
 		{
-			if (is_key_down(KEY_SPACE)) {
-				printf("Pressed the A key!");
-			}
-
-			if (is_mouse_down(SIDE_MOUSE_BUTTON1)) {
-				printf("MOUSE PRESSED!\n");
-			}
-
-			if (is_button_down(1, 0x1000)) {
-				printf("INFO GAMEPAD A PRESSED!\n");
-			}
-			begin_drawing();
-			v2 mouse_pos = get_mouse_position(window);
-			printf("Mouse Position, %f, %f\n", mouse_pos.x, mouse_pos.y);
-			glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			end_drawing(window);
+           // for some fucking reasoon, we are stuck here. 
 		}
+
+		if (is_key_down(KEY_SPACE)) {
+			printf("Pressed the A key!");
+		}
+
+		if (is_mouse_down(SIDE_MOUSE_BUTTON1)) {
+			printf("MOUSE PRESSED!\n");
+		}
+
+		if (is_button_down(1, 0x1000)) {
+			printf("INFO GAMEPAD A PRESSED!\n");
+		}
+		begin_drawing();
+		v2 mouse_pos = get_mouse_position(window);
+		printf("Mouse Position, %f, %f\n", mouse_pos.x, mouse_pos.y);
+		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		end_drawing(window);
 
     }
 
     return 0;
 }
-#endif
-
-#ifdef __linux__
-
-int main() {
-	init_window();
-}
-
-#endif

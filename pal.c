@@ -111,11 +111,11 @@ PALAPI float get_left_trigger(int controller_id) {
 }
 
 PALAPI v2 get_right_stick(int controller_id) {
-	return  platform_get_right_stick(controller_id);
+	return platform_get_right_stick(controller_id);
 }
 
 PALAPI v2 get_left_stick(int controller_id) {
-	return  platform_get_left_stick(controller_id);
+	return platform_get_left_stick(controller_id);
 }
 
 PALAPI int is_button_down(int controller_id, unsigned short button) {
@@ -123,7 +123,7 @@ PALAPI int is_button_down(int controller_id, unsigned short button) {
 }
 
 PALAPI int is_button_pressed(int controller_id, unsigned short button) {
-	return  platform_is_button_pressed(controller_id, button);
+	return platform_is_button_pressed(controller_id, button);
 }
 
 PALAPI int is_button_released(int controller_id, unsigned short button) {
@@ -131,15 +131,15 @@ PALAPI int is_button_released(int controller_id, unsigned short button) {
 }
 
 PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor) {
-	platform_set_controller_vibration(controller_id, left_motor, right_motor);
+	(void)platform_set_controller_vibration(controller_id, left_motor, right_motor);
 }
 
 PALAPI void stop_controller_vibration(int controller_id) {
-	platform_stop_controller_vibration(controller_id);
+	(void)platform_stop_controller_vibration(controller_id);
 }
 
-PALAPI uint8_t poll_events(void) {
-	return platform_poll_events();
+PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window) {
+	return platform_poll_events(event, window);
 }
 
 PALAPI int make_context_current(pal_window* window) {

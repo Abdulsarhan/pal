@@ -30,7 +30,6 @@ typedef unsigned __int64 QWORD;
 
 // TODO: it might be a good idea to move all of this shit into the window structure
 // because the lifetime of all this shit is related to the lifetime of the window.
-static MSG s_msg = { 0 };
 static HDC s_fakeDC = { 0 };
 static int s_glVersionMajor = 3;
 static int s_glVersionMinor = 3;
@@ -43,6 +42,7 @@ IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
 struct pal_window {
+	uint32_t id;
 	HWND hwnd;
 	HDC hdc;
 	HGLRC hglrc;
@@ -51,198 +51,6 @@ struct pal_window {
 struct pal_monitor {
 	HMONITOR handle;
 };
-
-struct pal_common_event {
-    int member;
-};
-
-struct pal_display_event {
-    int member;
-};
-
-struct pal_window_event {
-    int member;
-};
-
-struct pal_keyboard_device_event {
-    int member;
-};
-
-struct pal_keyboard_event {
-    int member;
-};
-
-struct pal_text_editing_event {
-    int member;
-};
-
-struct pal_text_editing_candidates_event {
-    int member;
-};
-
-struct pal_text_input_event {
-    int member;
-};
-
-struct pal_mouse_device_event {
-    int member;
-};
-
-struct pal_mouse_motion_event {
-    int member;
-};
-
-struct pal_mouse_button_event {
-    int member;
-};
-
-struct pal_mouse_wheel_event {
-    int member;
-};
-
-struct pal_joy_device_event {
-    int member;
-};
-
-struct pal_joy_axis_event {
-    int member;
-};
-
-struct pal_joy_ball_event {
-    int member;
-};
-
-struct pal_joy_hat_event {
-    int member;
-};
-
-struct pal_joy_button_event {
-    int member;
-};
-
-struct pal_joy_battery_event {
-    int member;
-};
-
-struct pal_gamepad_device_event {
-    int member;
-};
-
-struct pal_gamepad_axis_event {
-    int member;
-};
-
-struct pal_gamepad_button_event {
-    int member;
-};
-
-struct pal_gamepad_touchpad_event {
-    int member;
-};
-
-struct pal_gamepad_sensor_event {
-    int member;
-};
-
-struct pal_audio_device_event {
-    int member;
-};
-
-struct pal_camera_device_event {
-    int member;
-};
-
-struct pal_sensor_event {
-    int member;
-};
-
-struct pal_quit_event {
-    int member;
-};
-
-struct pal_user_event {
-    int member;
-};
-
-struct pal_touch_finger_event {
-    int member;
-};
-
-struct pal_pen_proximity_event {
-    int member;
-};
-
-struct pal_pen_touch_event {
-    int member;
-};
-
-struct pal_pen_motion_event {
-    int member;
-};
-
-struct pal_pen_button_event {
-    int member;
-};
-
-struct pal_pen_axis_event {
-    int member;
-};
-
-struct pal_render_event {
-    int member;
-};
-
-struct pal_drop_event {
-    int member;
-};
-
-struct pal_clipboard_event {
-    int member;
-};
-
-typedef union pal_event
-{
-    uint8_t type;                              /**< Event type, shared with all events, Uint32 to cover user events which are not in the SDL_EventType enumeration */
-    pal_common_event common;                  /**< Common event data */
-    pal_display_event display;                /**< Display event data */
-    pal_window_event window;                  /**< Window event data */
-    pal_keyboard_device_event kdevice;       /**< Keyboard device change event data */
-    pal_keyboard_event key;                   /**< Keyboard event data */
-    pal_text_editing_event edit;              /**< Text editing event data */
-    pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
-    pal_text_input_event text;                /**< Text input event data */
-    pal_mouse_device_event mdevice;           /**< Mouse device change event data */
-    pal_mouse_motion_event motion;            /**< Mouse motion event data */
-    pal_mouse_button_event button;            /**< Mouse button event data */
-    pal_mouse_wheel_event wheel;              /**< Mouse wheel event data */
-    pal_joy_device_event jdevice;             /**< Joystick device change event data */
-    pal_joy_axis_event jaxis;                  /**< Joystick axis event data */
-    pal_joy_ball_event jball;                  /**< Joystick ball event data */
-    pal_joy_hat_event jhat;                    /**< Joystick hat event data */
-    pal_joy_button_event jbutton;              /**< Joystick button event data */
-    pal_joy_battery_event jbattery;            /**< Joystick battery event data */
-    pal_gamepad_device_event gdevice;          /**< Gamepad device event data */
-    pal_gamepad_axis_event gaxis;               /**< Gamepad axis event data */
-    pal_gamepad_button_event gbutton;           /**< Gamepad button event data */
-    pal_gamepad_touchpad_event gtouchpad;       /**< Gamepad touchpad event data */
-    pal_gamepad_sensor_event gsensor;           /**< Gamepad sensor event data */
-    pal_audio_device_event adevice;              /**< Audio device event data */
-    pal_camera_device_event cdevice;             /**< Camera device event data */
-    pal_sensor_event sensor;                     /**< Sensor event data */
-    pal_quit_event quit;                         /**< Quit request event data */
-    pal_user_event user;                         /**< Custom event data */
-    pal_touch_finger_event tfinger;             /**< Touch finger event data */
-    pal_pen_proximity_event pproximity;         /**< Pen proximity event data */
-    pal_pen_touch_event ptouch;                   /**< Pen tip touching event data */
-    pal_pen_motion_event pmotion;                 /**< Pen motion event data */
-    pal_pen_button_event pbutton;                 /**< Pen button event data */
-    pal_pen_axis_event paxis;                     /**< Pen axis event data */
-    pal_render_event render;                       /**< Render event data */
-    pal_drop_event drop;                           /**< Drag and drop event data */
-    pal_clipboard_event clipboard;                 /**< Clipboard event data */
-
-    uint8_t padding[128];
-} pal_event;
 
 // Keyboard & Mouse Input
 //TODO: @fix We should not have this here and just have the user call
@@ -270,133 +78,173 @@ void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height)
 	// Handle resizing
 }
 
+pal_event win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window* window) {
+    pal_event e = {0};
+
+    switch (uMsg) {
+        case WM_DESTROY:
+        case WM_QUIT:
+        case WM_CLOSE:
+            e.type = PAL_QUIT;
+            e.quit = (pal_quit_event){ .code = 0 };
+            break;
+
+        case WM_MOVE:
+        case WM_SIZE:
+        case WM_WINDOWPOSCHANGED:
+        case WM_WINDOWPOSCHANGING:
+            e.type = PAL_WINDOW_EVENT;
+            e.window = (pal_window_event){
+                .windowid = window->id,
+                .event_code = uMsg,
+                .x = LOWORD(lParam),
+                .y = HIWORD(lParam),
+                .width = LOWORD(lParam),
+                .height = HIWORD(lParam),
+                .focused = 1, // guess; could adjust later
+                .visible = 1
+            };
+            break;
+
+        case WM_MOUSEMOVE:
+            e.type = PAL_MOUSE_MOTION;
+            e.motion = (pal_mouse_motion_event){
+                .x = GET_X_LPARAM(lParam),
+                .y = GET_Y_LPARAM(lParam),
+                .delta_x = 0, // you could track previous pos elsewhere
+                .delta_y = 0,
+                .buttons = wParam
+            };
+            break;
+
+        case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
+        case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
+        case WM_XBUTTONDOWN: case WM_XBUTTONDBLCLK:
+            e.type = PAL_MOUSE_BUTTON_DOWN;
+            e.button = (pal_mouse_button_event){
+                .x = GET_X_LPARAM(lParam),
+                .y = GET_Y_LPARAM(lParam),
+                .pressed = 1,
+                .button = uMsg, // optionally remap to your enum
+                .modifiers = wParam
+            };
+            break;
+
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+        case WM_XBUTTONUP:
+            e.type = PAL_MOUSE_BUTTON_UP;
+            e.button = (pal_mouse_button_event){
+                .x = GET_X_LPARAM(lParam),
+                .y = GET_Y_LPARAM(lParam),
+                .pressed = 0,
+                .button = uMsg,
+                .modifiers = wParam
+            };
+            break;
+
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL: {
+            int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            e.type = PAL_MOUSE_WHEEL;
+            e.wheel = (pal_mouse_wheel_event){
+                .x = GET_X_LPARAM(lParam),
+                .y = GET_Y_LPARAM(lParam),
+                .delta_x = (uMsg == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
+                .delta_y = (uMsg == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
+                .modifiers = GET_KEYSTATE_WPARAM(wParam)
+            };
+            break;
+        }
+
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            e.type = PAL_KEY_DOWN;
+            e.key = (pal_keyboard_event){
+                .virtual_key = (uint32_t)wParam,
+                .scancode = (uint32_t)((lParam >> 16) & 0xFF),
+                .pressed = 1,
+                .repeat = (lParam >> 30) & 1,
+                .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0 // or more bits
+            };
+            break;
+
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            e.type = PAL_KEY_UP;
+            e.key = (pal_keyboard_event){
+                .virtual_key = (uint32_t)wParam,
+                .scancode = (uint32_t)((lParam >> 16) & 0xFF),
+                .pressed = 0,
+                .repeat = 0,
+                .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0
+            };
+            break;
+
+        case WM_CHAR:
+        case WM_UNICHAR:
+            e.type = PAL_TEXT_INPUT;
+            e.text = (pal_text_input_event){
+                .utf8_text = {0}
+            };
+            {
+                char utf8[8] = {0};
+                int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&wParam, 1, utf8, sizeof(utf8), NULL, NULL);
+                memcpy(e.text.utf8_text, utf8, len);
+            }
+            break;
+
+        case WM_INPUT:
+            e.type = PAL_SENSOR_UPDATE;
+            e.sensor = (pal_sensor_event){
+                .device_id = 0,
+                .x = 0, .y = 0, .z = 0,
+                .sensor_type = 0
+            };
+            break;
+
+        case WM_DROPFILES: {
+            e.type = PAL_DROP_FILE;
+            HDROP hDrop = (HDROP)wParam;
+            UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+            const char** paths = malloc(sizeof(char*) * count);
+            for (UINT i = 0; i < count; ++i) {
+                WCHAR buffer[MAX_PATH];
+                DragQueryFileW(hDrop, i, buffer, MAX_PATH);
+                int len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
+                char* utf8 = malloc(len);
+                WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
+                paths[i] = utf8;
+            }
+            e.drop = (pal_drop_event){
+                .paths = paths,
+                .count = count
+            };
+            DragFinish(hDrop);
+            break;
+        }
+
+        default:
+            e.type = PAL_NONE;
+            break;
+    }
+
+    return e;
+}
+
+void win32_handle_event() {
+
+}
+
 LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// Mouse Shit
 	UINT button = GET_XBUTTON_WPARAM(wParam);
 	int xPos = GET_X_LPARAM(lParam);
 	int yPos = GET_Y_LPARAM(lParam);
-
-	// Screen Size Shit.
-	int width = LOWORD(lParam);  // Macro to get the low-order word.
-	int height = HIWORD(lParam); // Macro to get the high-order word.
-
-	switch (uMsg) {
-
-	case WM_CREATE:
-		break;
-	case WM_DESTROY:
-		DestroyWindow(hwnd);
-		break;
-	case WM_CLOSE:
-		DestroyWindow(hwnd);
-		PostQuitMessage(0);
-		break;
-	case WM_QUIT:
-		break;
-	case WM_MOVE:
-		break;
-	case WM_SIZE:
-		Win32WindowResizeCallback(hwnd, (UINT)wParam, width, height);
-		break;
-	case WM_SHOWWINDOW:
-		break;
-	case WM_PAINT:
-		break;
-	case WM_SETFOCUS:
-		break;
-	case WM_KILLFOCUS:
-		break;
-	case WM_ACTIVATE:
-		break;
-	case WM_GETMINMAXINFO:
-		break;
-	case WM_NCACTIVATE:
-		break;
-	case WM_ERASEBKGND:
-		break;
-
-	case WM_MOUSEMOVE:
-	case WM_LBUTTONDOWN:
-	case WM_LBUTTONUP:
-	case WM_LBUTTONDBLCLK:
-	case WM_RBUTTONDOWN:
-	case WM_RBUTTONUP:
-	case WM_RBUTTONDBLCLK:
-	case WM_MBUTTONDOWN:
-	case WM_MBUTTONUP:
-	case WM_MBUTTONDBLCLK:
-	case WM_XBUTTONDOWN:
-	case WM_XBUTTONUP:
-	case WM_XBUTTONDBLCLK:
-	case WM_MOUSEWHEEL:
-	case WM_MOUSEHWHEEL:
-	case WM_MOUSELEAVE:
-	case WM_MOUSEACTIVATE:
-	case WM_SETCURSOR:
-		break;
-
-	case WM_KEYDOWN:
-	case WM_KEYUP:
-	case WM_CHAR:
-	case WM_SYSKEYDOWN:
-	case WM_SYSKEYUP:
-	case WM_SYSCHAR:
-	case WM_UNICHAR:
-	case WM_DEADCHAR:
-	case WM_SYSDEADCHAR:
-		break;
-
-	case WM_ENTERSIZEMOVE:
-		break;
-
-	case WM_EXITSIZEMOVE:
-		break;
-
-	case WM_DISPLAYCHANGE:
-		break;
-
-	case WM_DPICHANGED:
-		break;
-
-	case WM_WINDOWPOSCHANGED:
-		break;
-
-	case WM_WINDOWPOSCHANGING:
-		break;
-
-	case WM_STYLECHANGED:
-		break;
-
-	case WM_STYLECHANGING:
-		break;
-
-	case WM_SYSCOMMAND:
-		break;
-
-	case WM_COMMAND:
-		break;
-
-	case WM_TIMER:
-		break;
-
-	case WM_HOTKEY:
-		break;
-
-	case WM_INPUT:
-		break;
-
-	case WM_DROPFILES:
-		break;
-
-	case WM_CAPTURECHANGED:
-		break;
-
-	case WM_SETICON:
-	case WM_GETICON:
-		break;
-	}
-
+	int width = LOWORD(lParam);
+	int height = HIWORD(lParam);
 
 	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
@@ -614,22 +462,29 @@ static int platform_make_context_current(pal_window* window) {
 	return 0;
 }
 
-static uint8_t platform_poll_events(pal_event* event) {
+static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	platform_get_raw_input_buffer();
 	platform_poll_gamepads();
 
-	while (PeekMessageA(&s_msg, NULL , 0, 0, PM_REMOVE)) {
-		if (s_msg.message == WM_QUIT) {
-			exit(0);
+    MSG msg;
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
+
+		if (msg.message = WM_DESTROY) {
+		    PostQuitMessage(0);
 		}
-		TranslateMessage(&s_msg);
-		DispatchMessageA(&s_msg);
-		return 1;
-	}
-	return 0;
+
+        TranslateMessage(&msg);
+
+        *event = win32_translate_message(msg.message, msg.wParam, msg.lParam, window);
+
+        if (event->type == PAL_NONE) {
+            DispatchMessage(&msg);
+			return 0;
+        }
+    }
+
+	return 1;
 }
-
-
 
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {
 	return SetWindowTextA(window->hwnd, string);
@@ -776,6 +631,7 @@ void platform_poll_gamepads(void) {
     for (int i = 0; i < MAX_CONTROLLERS; ++i) {
         input.controller_prev_state[i] = input.controller_state[i];
         DWORD res = XInputGetState(i, &input.controller_state[i]);
+
         if (res == ERROR_SUCCESS) {
             if (!input.controller_connected[i]) {
                 ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));

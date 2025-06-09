@@ -90,7 +90,7 @@ void swap_buffers(pal_window window) {
 	platform_swapbuffers(window);
 }
 
-void platform_poll_events(pal_window* window) {
+uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	xcb_generic_event_t* event;
 	while ((event = xcb_poll_for_event(window->xcb_conn))) {
 		switch (event->response_type & ~0x80) {
@@ -101,7 +101,7 @@ void platform_poll_events(pal_window* window) {
 	}
 }
 
-void pal_poll_events(pal_window* window) {
+uint8_t pal_poll_events(pal_window* window) {
 	platform_poll_events(window);
 }
 

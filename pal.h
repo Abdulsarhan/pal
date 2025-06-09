@@ -3,6 +3,7 @@
 
 #include <stdint.h> // For Clearly Defined Types.
 #include <sys/stat.h> // For time_t and stat.
+typedef uint8_t pal_bool;
 
 typedef struct VideoMode {
 	int width;
@@ -20,47 +21,15 @@ typedef struct {
 
 }Sound;
 
+// Window stuff.
+typedef struct pal_window pal_window;
+typedef struct pal_monitor pal_monitor;
+
 // events.
-typedef struct pal_common_event pal_common_event;
-typedef struct pal_display_event pal_display_event;
-typedef struct pal_window_event pal_window_event;
-typedef struct pal_keyboard_device_event pal_keyboard_device_event;
-typedef struct pal_keyboard_event pal_keyboard_event;
-typedef struct pal_text_editing_event pal_text_editing_event;
-typedef struct pal_text_editing_candidates_event pal_text_editing_candidates_event;
-typedef struct pal_text_input_event pal_text_input_event;
-typedef struct pal_mouse_device_event pal_mouse_device_event;
-typedef struct pal_mouse_motion_event pal_mouse_motion_event;
-typedef struct pal_mouse_button_event pal_mouse_button_event;
-typedef struct pal_mouse_wheel_event pal_mouse_wheel_event;
-typedef struct pal_joy_device_event pal_joy_device_event;
-typedef struct pal_joy_axis_event pal_joy_axis_event;
-typedef struct pal_joy_ball_event pal_joy_ball_event;
-typedef struct pal_joy_hat_event pal_joy_hat_event;
-typedef struct pal_joy_button_event pal_joy_button_event;
-typedef struct pal_joy_battery_event pal_joy_battery_event;
-typedef struct pal_gamepad_device_event pal_gamepad_device_event;
-typedef struct pal_gamepad_axis_event pal_gamepad_axis_event;
-typedef struct pal_gamepad_button_event pal_gamepad_button_event;
-typedef struct pal_gamepad_touchpad_event pal_gamepad_touchpad_event;
-typedef struct pal_gamepad_sensor_event pal_gamepad_sensor_event;
-typedef struct pal_audio_device_event pal_audio_device_event;
-typedef struct pal_camera_device_event pal_camera_device_event;
-typedef struct pal_sensor_event pal_sensor_event;
-typedef struct pal_quit_event pal_quit_event;
-typedef struct pal_user_event pal_user_event;
-typedef struct pal_touch_finger_event pal_touch_finger_event;
-typedef struct pal_pen_proximity_event pal_pen_proximity_event;
-typedef struct pal_pen_touch_event pal_pen_touch_event;
-typedef struct pal_pen_motion_event pal_pen_motion_event;
-typedef struct pal_pen_button_event pal_pen_button_event;
-typedef struct pal_pen_axis_event pal_pen_axis_event;
-typedef struct pal_render_event pal_render_event;
-typedef struct pal_drop_event pal_drop_event;
-typedef struct pal_clipboard_event pal_clipboard_event;
 
 typedef enum pal_event_type
 {
+    PAL_NONE = 0x0,
     PAL_QUIT = 0x100,
 
     PAL_WINDOW_EVENT = 0x200,
@@ -137,9 +106,280 @@ typedef enum pal_event_type
     PAL_LAST_EVENT = 0xFFFF
 } pal_event_type;
 
-// Window stuff.
-typedef struct pal_window pal_window;
-typedef struct pal_monitor pal_monitor;
+typedef struct pal_common_event {
+    int32_t dummy;
+} pal_common_event;
+
+typedef struct pal_display_event {
+    int32_t display_index;
+    int32_t width;
+    int32_t height;
+    float dpi;
+} pal_display_event;
+
+typedef struct pal_window_event {
+    uint32_t windowid;
+    int32_t event_code;
+    int32_t x;
+    int32_t y;
+    int32_t width;
+    int32_t height;
+    uint8_t focused;
+    uint8_t visible;
+} pal_window_event;
+
+typedef struct pal_keyboard_device_event {
+    int32_t device_id;
+    uint8_t connected;
+} pal_keyboard_device_event;
+
+typedef struct pal_keyboard_event {
+    uint32_t virtual_key;
+    uint32_t scancode;
+    uint8_t pressed;
+    uint8_t repeat;
+    uint32_t modifiers;
+} pal_keyboard_event;
+
+typedef struct pal_text_editing_event {
+    char text[32];
+    int32_t start;
+    int32_t length;
+} pal_text_editing_event;
+
+typedef struct pal_text_editing_candidates_event {
+    char candidates[8][32];
+    int32_t count;
+} pal_text_editing_candidates_event;
+
+typedef struct pal_text_input_event {
+    char utf8_text[8];
+} pal_text_input_event;
+
+typedef struct pal_mouse_device_event {
+    int32_t device_id;
+    uint8_t connected;
+} pal_mouse_device_event;
+
+typedef struct pal_mouse_motion_event {
+    int32_t x;
+    int32_t y;
+    int32_t delta_x;
+    int32_t delta_y;
+    uint32_t buttons;
+} pal_mouse_motion_event;
+
+typedef struct pal_mouse_button_event {
+    int32_t x;
+    int32_t y;
+    uint8_t pressed;
+    uint32_t button;
+    uint32_t modifiers;
+} pal_mouse_button_event;
+
+typedef struct pal_mouse_wheel_event {
+    int32_t x;
+    int32_t y;
+    float delta_x;
+    float delta_y;
+    uint32_t modifiers;
+} pal_mouse_wheel_event;
+
+typedef struct pal_joy_device_event {
+    int32_t device_id;
+    uint8_t connected;
+} pal_joy_device_event;
+
+typedef struct pal_joy_axis_event {
+    int32_t device_id;
+    uint8_t axis;
+    float value;
+} pal_joy_axis_event;
+
+typedef struct pal_joy_ball_event {
+    int32_t device_id;
+    uint8_t ball;
+    int32_t delta_x;
+    int32_t delta_y;
+} pal_joy_ball_event;
+
+typedef struct pal_joy_hat_event {
+    int32_t device_id;
+    uint8_t hat;
+    uint8_t value;
+} pal_joy_hat_event;
+
+typedef struct pal_joy_button_event {
+    int32_t device_id;
+    uint8_t button;
+    uint8_t pressed;
+} pal_joy_button_event;
+
+typedef struct pal_joy_battery_event {
+    int32_t device_id;
+    uint8_t level;      // 0-100
+    uint8_t charging;
+} pal_joy_battery_event;
+
+typedef struct pal_gamepad_device_event {
+    int32_t device_id;
+    uint8_t connected;
+} pal_gamepad_device_event;
+
+typedef struct pal_gamepad_axis_event {
+    int32_t device_id;
+    uint8_t axis;
+    float value;
+} pal_gamepad_axis_event;
+
+typedef struct pal_gamepad_button_event {
+    int32_t device_id;
+    uint8_t button;
+    uint8_t pressed;
+} pal_gamepad_button_event;
+
+typedef struct pal_gamepad_touchpad_event {
+    int32_t device_id;
+    int32_t x;
+    int32_t y;
+    uint8_t pressed;
+} pal_gamepad_touchpad_event;
+
+typedef struct pal_gamepad_sensor_event {
+    int32_t device_id;
+    float x;
+    float y;
+    float z;
+    uint8_t sensor_type;
+} pal_gamepad_sensor_event;
+
+typedef struct pal_audio_device_event {
+    int32_t device_id;
+    uint8_t input;
+    uint8_t connected;
+} pal_audio_device_event;
+
+typedef struct pal_camera_device_event {
+    int32_t device_id;
+    uint8_t connected;
+} pal_camera_device_event;
+
+typedef struct pal_sensor_event {
+    int32_t device_id;
+    float x;
+    float y;
+    float z;
+    uint8_t sensor_type;
+} pal_sensor_event;
+
+typedef struct pal_quit_event {
+    int32_t code;
+} pal_quit_event;
+
+typedef struct pal_user_event {
+    int32_t code;
+    void* data1;
+    void* data2;
+} pal_user_event;
+
+typedef struct pal_touch_finger_event {
+    int64_t touch_id;
+    int64_t finger_id;
+    float x;
+    float y;
+    float pressure;
+    uint8_t pressed;
+} pal_touch_finger_event;
+
+typedef struct pal_pen_proximity_event {
+    int32_t device_id;
+    uint8_t in_range;
+} pal_pen_proximity_event;
+
+typedef struct pal_pen_touch_event {
+    int32_t x;
+    int32_t y;
+    float pressure;
+    uint8_t pressed;
+} pal_pen_touch_event;
+
+typedef struct pal_pen_motion_event {
+    int32_t x;
+    int32_t y;
+    float pressure;
+} pal_pen_motion_event;
+
+typedef struct pal_pen_button_event {
+    uint8_t button;
+    uint8_t pressed;
+} pal_pen_button_event;
+
+typedef struct pal_pen_axis_event {
+    float tilt_x;
+    float tilt_y;
+    float rotation;
+} pal_pen_axis_event;
+
+typedef struct pal_render_event {
+    uint32_t windowid;
+} pal_render_event;
+
+typedef struct pal_drop_event {
+    const char** paths;
+    int32_t count;
+} pal_drop_event;
+
+typedef struct pal_clipboard_event {
+    const char* text;
+} pal_clipboard_event;
+
+typedef union pal_event
+{
+	// Event type, This is just an enum that contains all the types of events. The user will have these in the event loop
+	// To check what kinds of events they have received.
+    uint8_t type;                              /**< Event type, shared with all events, Uint32 to cover user events which are not in the SDL_EventType enumeration */
+	// Event data:
+    pal_common_event common;                  /**< Common event data */
+    pal_display_event display;                /**< Display event data */
+    pal_window_event window;                  /**< Window event data */
+    pal_keyboard_device_event kdevice;       /**< Keyboard device change event data */
+    pal_keyboard_event key;                   /**< Keyboard event data */
+    pal_text_editing_event edit;              /**< Text editing event data */
+    pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
+    pal_text_input_event text;                /**< Text input event data */
+    pal_mouse_device_event mdevice;           /**< Mouse device change event data */
+    pal_mouse_motion_event motion;            /**< Mouse motion event data */
+    pal_mouse_button_event button;            /**< Mouse button event data */
+    pal_mouse_wheel_event wheel;              /**< Mouse wheel event data */
+    pal_joy_device_event jdevice;             /**< Joystick device change event data */
+    pal_joy_axis_event jaxis;                  /**< Joystick axis event data */
+    pal_joy_ball_event jball;                  /**< Joystick ball event data */
+    pal_joy_hat_event jhat;                    /**< Joystick hat event data */
+    pal_joy_button_event jbutton;              /**< Joystick button event data */
+    pal_joy_battery_event jbattery;            /**< Joystick battery event data */
+    pal_gamepad_device_event gdevice;          /**< Gamepad device event data */
+    pal_gamepad_axis_event gaxis;               /**< Gamepad axis event data */
+    pal_gamepad_button_event gbutton;           /**< Gamepad button event data */
+    pal_gamepad_touchpad_event gtouchpad;       /**< Gamepad touchpad event data */
+    pal_gamepad_sensor_event gsensor;           /**< Gamepad sensor event data */
+    pal_audio_device_event adevice;              /**< Audio device event data */
+    pal_camera_device_event cdevice;             /**< Camera device event data */
+    pal_sensor_event sensor;                     /**< Sensor event data */
+    pal_quit_event quit;                         /**< Quit request event data */
+    pal_user_event user;                         /**< Custom event data */
+    pal_touch_finger_event tfinger;             /**< Touch finger event data */
+    pal_pen_proximity_event pproximity;         /**< Pen proximity event data */
+    pal_pen_touch_event ptouch;                   /**< Pen tip touching event data */
+    pal_pen_motion_event pmotion;                 /**< Pen motion event data */
+    pal_pen_button_event pbutton;                 /**< Pen button event data */
+    pal_pen_axis_event paxis;                     /**< Pen axis event data */
+    pal_render_event render;                       /**< Render event data */
+    pal_drop_event drop;                           /**< Drag and drop event data */
+    pal_clipboard_event clipboard;                 /**< Clipboard event data */
+
+    uint8_t padding[128];
+} pal_event;
+
 
 #if defined(_WIN32)
 #if defined(__TINYC__)
@@ -413,7 +653,7 @@ PALAPI void set_window_hint(int type, int value);
 PALAPI VideoMode* get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
-PALAPI uint8_t poll_events(void);
+PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
 PALAPI int make_context_current(pal_window* window);
 
 PALAPI int register_input_devices(pal_window* window);
