@@ -610,26 +610,30 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	platform_get_raw_input_buffer();
 	platform_poll_gamepads();
 
+	//TODO: Handle all the messages in one go.
+// this function is supposed to return 0 if there are no more events in peekmessage,
+	// and 1 if there are events.
+
 	MSG msg = {0};
-    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
+	if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
 
 		if (msg.message == WM_DESTROY) {
-		    PostQuitMessage(0);
+			PostQuitMessage(0);
 		}
 
-        TranslateMessage(&msg);
+		TranslateMessage(&msg);
 
         win32_translate_message(msg.message, msg.wParam, msg.lParam, window, event);
 
         if (event->type == PAL_NONE) {
             DispatchMessage(&msg);
-			return 0;
         }
+		return 1;
+	}
+	else {
+		return 0;
+	}
 
-		break;
-    }
-
-	    return 1;
 }
 
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {
