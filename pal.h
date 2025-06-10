@@ -174,6 +174,7 @@ typedef struct pal_mouse_button_event {
     int32_t y;
     uint8_t pressed;
     uint32_t button;
+    uint8_t clicks;
     uint32_t modifiers;
 } pal_mouse_button_event;
 
@@ -333,12 +334,13 @@ typedef struct pal_clipboard_event {
     const char* text;
 } pal_clipboard_event;
 
-typedef union pal_event
+typedef struct pal_event
 {
 	// Event type, This is just an enum that contains all the types of events. The user will have these in the event loop
 	// To check what kinds of events they have received.
-    uint8_t type;                              /**< Event type, shared with all events, Uint32 to cover user events which are not in the SDL_EventType enumeration */
+    uint32_t type;                              /**< Event type, shared with all events, Uint32 to cover user events which are not in the SDL_EventType enumeration */
 	// Event data:
+    union {
     pal_common_event common;                  /**< Common event data */
     pal_display_event display;                /**< Display event data */
     pal_window_event window;                  /**< Window event data */
@@ -376,6 +378,7 @@ typedef union pal_event
     pal_render_event render;                       /**< Render event data */
     pal_drop_event drop;                           /**< Drag and drop event data */
     pal_clipboard_event clipboard;                 /**< Clipboard event data */
+    };
 
     uint8_t padding[128];
 } pal_event;

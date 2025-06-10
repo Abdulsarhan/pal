@@ -76,9 +76,27 @@ int main() {
     while (running) {
 		while (pal_poll_events(&event, window))
 		{
-           // for some fucking reasoon, we are stuck here. 
-		}
 
+            switch (event.type) {
+
+            case PAL_MOUSE_BUTTON_DOWN:
+				printf("Pressed mouse button!\n");
+                break;
+            case PAL_MOUSE_BUTTON_UP:
+				printf("Released mouse button!\n");
+                break;
+            case PAL_KEY_DOWN:
+				printf("Pressed mouse button!\n");
+                break;
+            case PAL_KEY_UP:
+				printf("Pressed mouse button!\n");
+                break;
+            default:
+                //printf("%d\n", event.type);
+                break;
+            }
+		}
+/*
 		if (is_key_down(KEY_SPACE)) {
 			printf("Pressed the A key!");
 		}
@@ -90,13 +108,12 @@ int main() {
 		if (is_button_down(1, 0x1000)) {
 			printf("INFO GAMEPAD A PRESSED!\n");
 		}
+
+*/
 		begin_drawing();
-		v2 mouse_pos = get_mouse_position(window);
-		printf("Mouse Position, %f, %f\n", mouse_pos.x, mouse_pos.y);
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		end_drawing(window);
-
     }
 
     return 0;
