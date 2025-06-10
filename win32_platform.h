@@ -78,9 +78,9 @@ void Win32WindowResizeCallback(HWND hwnd, UINT flag, int width, int height)
 	// Handle resizing
 }
 
-int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window* window, pal_event* event) {
+int win32_translate_message(MSG msg, pal_window* window, pal_event* event) {
 
-    switch (uMsg) {
+    switch (msg.message) {
         case WM_DESTROY:
         case WM_QUIT:
         case WM_CLOSE:
@@ -92,8 +92,8 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 			event->window = (pal_window_event){
 				.windowid = window->id,
 				.event_code = WM_MOVE,
-				.x = LOWORD(lParam),
-				.y = HIWORD(lParam),
+				.x = LOWORD(msg.lParam),
+				.y = HIWORD(msg.lParam),
 				.width = 0,
 				.height = 0,
 				.focused = 1,
@@ -107,8 +107,8 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 				.event_code = WM_SIZE,
 				.x = 0,
 				.y = 0,
-				.width = LOWORD(lParam),
-				.height = HIWORD(lParam),
+				.width = LOWORD(msg.lParam),
+				.height = HIWORD(msg.lParam),
 				.focused = 1,
 				.visible = 1
 			};
@@ -118,11 +118,11 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
             event->type = PAL_WINDOW_EVENT;
             event->window = (pal_window_event){
                 .windowid = window->id,
-                .event_code = uMsg,
-                .x = LOWORD(lParam),
-                .y = HIWORD(lParam),
-                .width = LOWORD(lParam),
-                .height = HIWORD(lParam),
+                .event_code = msg.message,
+                .x = LOWORD(msg.lParam),
+                .y = HIWORD(msg.lParam),
+                .width = LOWORD(msg.lParam),
+                .height = HIWORD(msg.lParam),
                 .focused = 1, // guess; could adjust later
                 .visible = 1
             };
@@ -131,11 +131,11 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
         case WM_MOUSEMOVE:
             event->type = PAL_MOUSE_MOTION;
             event->motion = (pal_mouse_motion_event){
-                .x = GET_X_LPARAM(lParam),
-                .y = GET_Y_LPARAM(lParam),
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
                 .delta_x = 0, // you could track previous pos elsewhere
                 .delta_y = 0,
-                .buttons = wParam
+                .buttons = msg.wParam
             };
             break;
 
@@ -143,24 +143,24 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 			printf("Left Mouse down!\n");
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
                 .button = LEFT_MOUSE_BUTTON, // optionally remap to your enum
 				.clicks = 1,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 
         case WM_RBUTTONDOWN: 
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
                 .button = RIGHT_MOUSE_BUTTON, // optionally remap to your enum
 				.clicks = 1,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 
@@ -168,12 +168,12 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
                 .button = MIDDLE_MOUSE_BUTTON, // optionally remap to your enum
 				.clicks = 1,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 
@@ -181,13 +181,13 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
 				.clicks = 1,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
-			if (GET_XBUTTON_WPARAM(wParam) == MK_XBUTTON1)
+			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
 				event->button.button = SIDE_MOUSE_BUTTON1;
 			else 
 				event->button.button = SIDE_MOUSE_BUTTON2;
@@ -196,48 +196,48 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
         case WM_LBUTTONDBLCLK:
             event->type = PAL_MOUSE_BUTTON_DOWN;
 			event->button = (pal_mouse_button_event){
-				.x = GET_X_LPARAM(lParam), // xpos of the mouse
-				.y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+				.x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+				.y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
 				.pressed = 1, // pressed state of the mouse, might remove.
 				.button = LEFT_MOUSE_BUTTON, // optionally remap to your enum
 				.clicks = 2,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 		case WM_RBUTTONDBLCLK:
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
                 .button = RIGHT_MOUSE_BUTTON, // optionally remap to your enum
 				.clicks = 2,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 		case WM_MBUTTONDBLCLK:
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
                 .button = MIDDLE_MOUSE_BUTTON, // optionally remap to your enum
 				.clicks = 2,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 
 		case WM_XBUTTONDBLCLK:
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(lParam), // ypos of the mouse.
+                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
+                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
 				.clicks = 2,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
 
-			if (GET_XBUTTON_WPARAM(wParam) == MK_XBUTTON1)
+			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
 				event->button.button = SIDE_MOUSE_BUTTON1;
 			else 
 				event->button.button = SIDE_MOUSE_BUTTON2;
@@ -246,43 +246,43 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
         case WM_LBUTTONUP:
             event->type = PAL_MOUSE_BUTTON_UP;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam),
-                .y = GET_Y_LPARAM(lParam),
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
                 .button = LEFT_MOUSE_BUTTON,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
         case WM_RBUTTONUP:
             event->type = PAL_MOUSE_BUTTON_UP;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam),
-                .y = GET_Y_LPARAM(lParam),
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
                 .button = RIGHT_MOUSE_BUTTON,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
         case WM_MBUTTONUP:
             event->type = PAL_MOUSE_BUTTON_UP;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam),
-                .y = GET_Y_LPARAM(lParam),
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
                 .button = MIDDLE_MOUSE_BUTTON,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
             break;
 
         case WM_XBUTTONUP:
             event->type = PAL_MOUSE_BUTTON_UP;
             event->button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lParam),
-                .y = GET_Y_LPARAM(lParam),
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
-                .modifiers = wParam
+                .modifiers = msg.wParam
             };
-			if (GET_XBUTTON_WPARAM(wParam) == MK_XBUTTON1)
+			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
 				event->button.button = SIDE_MOUSE_BUTTON1;
 			else 
 				event->button.button = SIDE_MOUSE_BUTTON2;
@@ -290,14 +290,14 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 
         case WM_MOUSEWHEEL:
         case WM_MOUSEHWHEEL: {
-            int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            int delta = GET_WHEEL_DELTA_WPARAM(msg.wParam);
             event->type = PAL_MOUSE_WHEEL;
             event->wheel = (pal_mouse_wheel_event){
-                .x = GET_X_LPARAM(lParam),
-                .y = GET_Y_LPARAM(lParam),
-                .delta_x = (uMsg == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .delta_y = (uMsg == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .modifiers = GET_KEYSTATE_WPARAM(wParam)
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
+                .delta_x = (msg.message == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
+                .delta_y = (msg.message == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
+                .modifiers = GET_KEYSTATE_WPARAM(msg.wParam)
             };
             break;
         }
@@ -306,10 +306,10 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
         case WM_SYSKEYDOWN:
             event->type = PAL_KEY_DOWN;
             event->key = (pal_keyboard_event){
-                .virtual_key = (uint32_t)wParam,
-                .scancode = (uint32_t)((lParam >> 16) & 0xFF),
+                .virtual_key = (uint32_t)msg.wParam,
+                .scancode = (uint32_t)((msg.lParam >> 16) & 0xFF),
                 .pressed = 1,
-                .repeat = (lParam >> 30) & 1,
+                .repeat = (msg.lParam >> 30) & 1,
                 .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0 // or more bits
             };
             break;
@@ -318,8 +318,8 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
         case WM_SYSKEYUP:
             event->type = PAL_KEY_UP;
             event->key = (pal_keyboard_event){
-                .virtual_key = (uint32_t)wParam,
-                .scancode = (uint32_t)((lParam >> 16) & 0xFF),
+                .virtual_key = (uint32_t)msg.wParam,
+                .scancode = (uint32_t)((msg.lParam >> 16) & 0xFF),
                 .pressed = 0,
                 .repeat = 0,
                 .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0
@@ -334,7 +334,7 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
             };
             {
                 char utf8[8] = {0};
-                int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&wParam, 1, utf8, sizeof(utf8), NULL, NULL);
+                int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&msg.wParam, 1, utf8, sizeof(utf8), NULL, NULL);
                 memcpy(event->text.utf8_text, utf8, len);
             }
             break;
@@ -350,7 +350,7 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 
         case WM_DROPFILES: {
             event->type = PAL_DROP_FILE;
-            HDROP hDrop = (HDROP)wParam;
+            HDROP hDrop = (HDROP)msg.wParam;
             UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
             const char** paths = malloc(sizeof(char*) * count);
             for (UINT i = 0; i < count; ++i) {
@@ -371,6 +371,7 @@ int win32_translate_message(UINT uMsg, WPARAM wParam, LPARAM lParam, pal_window*
 
         default:
             event->type = PAL_NONE;
+            DispatchMessage(&msg);
             break;
     }
 
@@ -616,18 +617,15 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 
 	MSG msg = {0};
 	if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
-
+	
 		if (msg.message == WM_DESTROY) {
 			PostQuitMessage(0);
 		}
 
 		TranslateMessage(&msg);
 
-        win32_translate_message(msg.message, msg.wParam, msg.lParam, window, event);
+        win32_translate_message(msg, window, event);
 
-        if (event->type == PAL_NONE) {
-            DispatchMessage(&msg);
-        }
 		return 1;
 	}
 	else {
