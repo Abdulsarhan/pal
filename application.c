@@ -43,13 +43,13 @@ static OpenglInfo get_opengl_info(void) {
 int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
-    init_pal();
+    pal_init();
     //TODO: @fix Make the API of this better (if possible).
-    set_window_hint(GL_VERSION_MAJOR, 3);
-    set_window_hint(GL_VERSION_MINOR, 3);
-    set_window_hint(FLOATING, 0);
-    set_window_hint(DOUBLE_BUFFER, 1);
-    set_window_hint(RESIZABLE, 1);
+    pal_window_hint(GL_VERSION_MAJOR, 3);
+    pal_window_hint(GL_VERSION_MINOR, 3);
+    pal_window_hint(FLOATING, 0);
+    pal_window_hint(DOUBLE_BUFFER, 1);
+    pal_window_hint(RESIZABLE, 1);
 
     //TODO: @fix monitor and video mode functions have problems.
     pal_monitor* monitor = get_primary_monitor();
@@ -73,6 +73,7 @@ int main() {
 
     uint8_t running = 1;
     pal_event event;
+    pal_set_window_icon_legacy(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\icon.ico");
     while (running) {
 		while (pal_poll_events(&event, window))
 		{

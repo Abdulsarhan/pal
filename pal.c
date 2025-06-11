@@ -1,6 +1,8 @@
 #include "pal.h"
 #define STB_VORBIS_IMPLEMENTATION
 #include "stb_vorbis.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #ifdef _WIN32
 #include "win32_platform.h"
@@ -8,7 +10,7 @@
 #include "linux_x11_platform.h"
 #endif
 
-PALAPI void init_pal() {
+PALAPI void pal_init() {
 	platform_init_sound();
 
 }
@@ -25,11 +27,19 @@ PALAPI pal_window* init_window(int width, int height, const char* windowTitle) {
 	 return platform_init_window(width, height, windowTitle);
 }
 
-PALAPI uint8_t set_window_title(pal_window* window, const char* string) {
+PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
 	return platform_set_window_title(window, string);
 }
 
-PALAPI void set_window_hint(int type, int value) {
+PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
+	(void)platform_set_window_icon(window, image_path);
+}
+
+PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path) {
+	(void)platform_set_window_icon_legacy(window, image_path);
+}
+
+PALAPI void pal_window_hint(int type, int value) {
 	(void)platform_set_window_hint(type, value);
 }
 

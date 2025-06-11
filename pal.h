@@ -583,16 +583,16 @@ typedef struct iv4 {
 #define KEY_RWIN          0x5C
 #define KEY_APPS          0x5D
 
-#define KEY_NUMPAD0       0x60
-#define KEY_NUMPAD1       0x61
-#define KEY_NUMPAD2       0x62
-#define KEY_NUMPAD3       0x63
-#define KEY_NUMPAD4       0x64
-#define KEY_NUMPAD5       0x65
-#define KEY_NUMPAD6       0x66
-#define KEY_NUMPAD7       0x67
-#define KEY_NUMPAD8       0x68
-#define KEY_NUMPAD9       0x69
+#define KEY_NUMPAD_0       0x60
+#define KEY_NUMPAD_1       0x61
+#define KEY_NUMPAD_2       0x62
+#define KEY_NUMPAD_3       0x63
+#define KEY_NUMPAD_4       0x64
+#define KEY_NUMPAD_5       0x65
+#define KEY_NUMPAD_6       0x66
+#define KEY_NUMPAD_7       0x67
+#define KEY_NUMPAD_8       0x68
+#define KEY_NUMPAD_9       0x69
 #define KEY_MULTIPLY      0x6A
 #define KEY_ADD           0x6B
 #define KEY_SEPARATOR     0x6C // Most modern keyboards don't have this.
@@ -649,16 +649,17 @@ typedef struct iv4 {
 extern "C" {
 #endif
 
-PALAPI void init_pal();
+PALAPI void pal_init();
 PALAPI pal_window* init_window(int width, int height, const char* windowTitle);
-PALAPI uint8_t set_window_title(pal_window* window, const char* string);
-PALAPI void set_window_hint(int type, int value);
+PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
+PALAPI void pal_set_window_icon(pal_window* window, const char* image_path);
+PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path);
+PALAPI void pal_window_hint(int type, int value);
 PALAPI VideoMode* get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
 PALAPI int make_context_current(pal_window* window);
-
 PALAPI int register_input_devices(pal_window* window);
 PALAPI uint8_t is_key_pressed(int key);
 PALAPI uint8_t is_key_down(int key);
