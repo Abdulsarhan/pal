@@ -92,78 +92,51 @@ typedef struct {
 } ICONDIRENTRY;
 #pragma pack(pop)
 
-void platform_set_window_icon(pal_window* window, const char* image_path) {
+static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     FILE* file = fopen(image_path, "rb");
-    if (!file) {
-        MessageBoxA(window->hwnd, "Failed to open image file", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
+    if (!file) return NULL;
 
-    // Inline is_ico_file by header check
-    int is_ico = 0;
-    {
-        ICONDIR dir;
-        if (fread(&dir, 1, sizeof(dir), file) == sizeof(dir)) {
-            if (dir.idReserved == 0 && dir.idType == 1 && dir.idCount >= 1) {
-                is_ico = 1;
-            }
-        }
-        rewind(file);
-    }
-
-    if (is_ico) {
+    uint8_t header[8];
+    if (fread(header, 1, sizeof(header), file) < sizeof(header)) {
         fclose(file);
-        HICON hIcon = (HICON)LoadImageA(NULL, image_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
-        if (hIcon) {
-            SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-            SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        } else {
-            MessageBoxA(window->hwnd, "Failed to load .ico file", "Error", MB_OK | MB_ICONERROR);
-        }
-        return;
+        return NULL;
     }
 
-    // Inline is_png_file by signature check
-    int is_png = 0;
-    {
-        unsigned char sig[8];
-        if (fread(sig, 1, 8, file) == 8) {
-            rewind(file);
-            const unsigned char png_sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-            if (memcmp(sig, png_sig, 8) == 0) {
-                is_png = 1;
-            }
-        } else {
-            rewind(file);
-        }
+    // Check for ICO header
+    if (header[0] == 0x00 && header[1] == 0x00 &&
+        header[2] == 0x01 && header[3] == 0x00) {
+        fclose(file);
+        return (HICON)LoadImageA(NULL, image_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE | LR_SHARED);
     }
 
-    if (is_png) {
+    // Check for PNG header
+    const unsigned char png_sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+    BOOL is_png = (memcmp(header, png_sig, 8) == 0);
+    fseek(file, 0, SEEK_SET);
+
+    if (is_png && !legacy) {
         fseek(file, 0, SEEK_END);
         long size = ftell(file);
         rewind(file);
         if (size <= 0) {
             fclose(file);
-            MessageBoxA(window->hwnd, "Empty PNG file", "Error", MB_OK | MB_ICONERROR);
-            return;
+            return NULL;
         }
 
         uint8_t* png_data = (uint8_t*)malloc(size);
         if (!png_data) {
             fclose(file);
-            MessageBoxA(window->hwnd, "Out of memory", "Error", MB_OK | MB_ICONERROR);
-            return;
+            return NULL;
         }
         fread(png_data, 1, size, file);
         fclose(file);
 
-        const size_t header_size = sizeof(ICONDIR) + sizeof(ICONDIRENTRY);
+        size_t header_size = sizeof(ICONDIR) + sizeof(ICONDIRENTRY);
         size_t total_size = header_size + size;
         uint8_t* ico_data = (uint8_t*)malloc(total_size);
         if (!ico_data) {
             free(png_data);
-            MessageBoxA(window->hwnd, "Out of memory", "Error", MB_OK | MB_ICONERROR);
-            return;
+            return NULL;
         }
 
         ICONDIR* icon_dir = (ICONDIR*)ico_data;
@@ -172,8 +145,8 @@ void platform_set_window_icon(pal_window* window, const char* image_path) {
         icon_dir->idCount = 1;
 
         ICONDIRENTRY* entry = (ICONDIRENTRY*)(ico_data + sizeof(ICONDIR));
-        entry->bWidth = 0;  // 256 px
-        entry->bHeight = 0; // 256 px
+        entry->bWidth = 0;
+        entry->bHeight = 0;
         entry->bColorCount = 0;
         entry->bReserved = 0;
         entry->wPlanes = 1;
@@ -194,145 +167,31 @@ void platform_set_window_icon(pal_window* window, const char* image_path) {
         );
 
         free(ico_data);
-
-        if (hIcon) {
-            SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-            SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        } else {
-            MessageBoxA(window->hwnd, "Failed to create icon from PNG", "Error", MB_OK | MB_ICONERROR);
-        }
-        return;
+        return hIcon;
     }
 
-    // Otherwise decode jpeg or bmp - legacy path
-
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    rewind(file);
-    if (size <= 0) {
-        fclose(file);
-        MessageBoxA(window->hwnd, "Empty image file", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    uint8_t* img_data = (uint8_t*)malloc(size);
-    if (!img_data) {
-        fclose(file);
-        MessageBoxA(window->hwnd, "Out of memory", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    fread(img_data, 1, size, file);
+    // Fallback: decode image with stb_image (PNG in legacy mode, JPEG, BMP)
     fclose(file);
-
-    int width, height, channels;
-    uint8_t* rgba = stbi_load_from_memory(img_data, (int)size, &width, &height, &channels, 4);
-    free(img_data);
-
-    if (!rgba) {
-        MessageBoxA(window->hwnd, "Failed to decode image", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    // Inline create_icon_from_rgba with corrected RGBA->BGRA conversion
-    {
-        BITMAPV5HEADER bi = {0};
-        bi.bV5Size = sizeof(BITMAPV5HEADER);
-        bi.bV5Width = width;
-        bi.bV5Height = -height; // top-down DIB
-        bi.bV5Planes = 1;
-        bi.bV5BitCount = 32;
-        bi.bV5Compression = BI_BITFIELDS;
-        bi.bV5RedMask   = 0x00FF0000;
-        bi.bV5GreenMask = 0x0000FF00;
-        bi.bV5BlueMask  = 0x000000FF;
-        bi.bV5AlphaMask = 0xFF000000;
-
-        void* dib_pixels = NULL;
-        HDC hdc = GetDC(NULL);
-        HBITMAP color_bitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &dib_pixels, NULL, 0);
-        ReleaseDC(NULL, hdc);
-
-        if (!color_bitmap || !dib_pixels) {
-            stbi_image_free(rgba);
-            MessageBoxA(window->hwnd, "Failed to create DIB section", "Error", MB_OK | MB_ICONERROR);
-            return;
-        }
-
-        // Convert RGBA to BGRA for Windows
-        uint8_t* dst = (uint8_t*)dib_pixels;
-        for (int i = 0; i < width * height; i++) {
-            dst[4*i + 0] = rgba[4*i + 2]; // B
-            dst[4*i + 1] = rgba[4*i + 1]; // G
-            dst[4*i + 2] = rgba[4*i + 0]; // R
-            dst[4*i + 3] = rgba[4*i + 3]; // A
-        }
-
-        HBITMAP mask_bitmap = CreateBitmap(width, height, 1, 1, NULL);
-
-        ICONINFO ii = {0};
-        ii.fIcon = TRUE;
-        ii.hbmMask = mask_bitmap;
-        ii.hbmColor = color_bitmap;
-
-        HICON hIcon = CreateIconIndirect(&ii);
-
-        DeleteObject(color_bitmap);
-        DeleteObject(mask_bitmap);
-        stbi_image_free(rgba);
-
-        if (hIcon) {
-            SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-            SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        } else {
-            MessageBoxA(window->hwnd, "Failed to create icon from image", "Error", MB_OK | MB_ICONERROR);
-        }
-    }
-}
-
-void platform_set_window_icon_legacy(pal_window* window, const char* image_path) {
-    FILE* file = fopen(image_path, "rb");
-    if (!file) {
-        MessageBoxA(window->hwnd, "Failed to open image file", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    uint8_t header[8];
-    if (fread(header, 1, sizeof(header), file) < sizeof(header)) {
-        fclose(file);
-        MessageBoxA(window->hwnd, "Failed to read image header", "Error", MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    fseek(file, 0, SEEK_SET);
-
-    // Check for ICO header
-    if (header[0] == 0x00 && header[1] == 0x00 &&
-        header[2] == 0x01 && header[3] == 0x00) {
-        fclose(file);
-        HICON hIcon = (HICON)LoadImageA(NULL, image_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE | LR_SHARED);
-        if (hIcon) {
-            SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-            SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-        } else {
-            MessageBoxA(window->hwnd, "Failed to load .ico file", "Error", MB_OK | MB_ICONERROR);
-        }
-        return;
-    }
-
-    fclose(file);
-
     int width, height, channels;
     uint8_t* rgba = stbi_load(image_path, &width, &height, &channels, 4);
-    if (!rgba) {
-        MessageBoxA(window->hwnd, "Failed to decode image", "Error", MB_OK | MB_ICONERROR);
-        return;
+    if (!rgba) return NULL;
+
+    // Convert RGBA to BGRA
+    for (int i = 0; i < width * height; ++i) {
+        uint8_t r = rgba[i * 4 + 0];
+        uint8_t g = rgba[i * 4 + 1];
+        uint8_t b = rgba[i * 4 + 2];
+        uint8_t a = rgba[i * 4 + 3];
+        rgba[i * 4 + 0] = b;
+        rgba[i * 4 + 1] = g;
+        rgba[i * 4 + 2] = r;
+        rgba[i * 4 + 3] = a;
     }
 
     BITMAPV5HEADER bi = {0};
     bi.bV5Size = sizeof(BITMAPV5HEADER);
     bi.bV5Width = width;
-    bi.bV5Height = -height; // top-down DIB
+    bi.bV5Height = -height;
     bi.bV5Planes = 1;
     bi.bV5BitCount = 32;
     bi.bV5Compression = BI_BITFIELDS;
@@ -348,19 +207,10 @@ void platform_set_window_icon_legacy(pal_window* window, const char* image_path)
 
     if (!color_bitmap || !dib_pixels) {
         stbi_image_free(rgba);
-        MessageBoxA(window->hwnd, "Failed to create DIB section", "Error", MB_OK | MB_ICONERROR);
-        return;
+        return NULL;
     }
 
-    // Convert RGBA to BGRA before copying
-    uint8_t* dst = (uint8_t*)dib_pixels;
-    for (int i = 0; i < width * height; i++) {
-        dst[4*i + 0] = rgba[4*i + 2]; // B
-        dst[4*i + 1] = rgba[4*i + 1]; // G
-        dst[4*i + 2] = rgba[4*i + 0]; // R
-        dst[4*i + 3] = rgba[4*i + 3]; // A
-    }
-
+    memcpy(dib_pixels, rgba, width * height * 4);
     stbi_image_free(rgba);
 
     HBITMAP mask_bitmap = CreateBitmap(width, height, 1, 1, NULL);
@@ -375,12 +225,7 @@ void platform_set_window_icon_legacy(pal_window* window, const char* image_path)
     DeleteObject(color_bitmap);
     DeleteObject(mask_bitmap);
 
-    if (hIcon) {
-        SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-        SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-    } else {
-        MessageBoxA(window->hwnd, "Failed to create icon from bitmap", "Error", MB_OK | MB_ICONERROR);
-    }
+    return hIcon;
 }
 
 int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
@@ -682,8 +527,44 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
     return 0;
 }
 
-void win32_handle_event() {
+void platform_set_window_icon(pal_window* window, const char* image_path) {
+    HICON hIcon = load_icon_from_file(image_path, FALSE);
+    if (hIcon) {
+        SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+    } else {
+        MessageBoxA(window->hwnd, "Failed to load window icon", "Error", MB_OK | MB_ICONERROR);
+    }
+}
 
+void platform_set_window_icon_legacy(pal_window* window, const char* image_path) {
+    HICON hIcon = load_icon_from_file(image_path, TRUE);
+    if (hIcon) {
+        SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+    } else {
+        MessageBoxA(window->hwnd, "Failed to load window icon", "Error", MB_OK | MB_ICONERROR);
+    }
+}
+
+void platform_set_taskbar_icon(pal_window* window, const char* image_path) {
+    HICON hIcon = load_icon_from_file(image_path, FALSE);
+    if (hIcon) {
+        SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
+        SetClassLongPtr(window->hwnd, GCLP_HICON,   (LONG_PTR)hIcon);
+    } else {
+        MessageBoxA(window->hwnd, "Failed to load taskbar icon", "Error", MB_OK | MB_ICONERROR);
+    }
+}
+
+void platform_set_taskbar_icon_legacy(pal_window* window, const char* image_path) {
+    HICON hIcon = load_icon_from_file(image_path, TRUE);
+    if (hIcon) {
+        SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
+        SetClassLongPtr(window->hwnd, GCLP_HICON,   (LONG_PTR)hIcon);
+    } else {
+        MessageBoxA(window->hwnd, "Failed to load legacy taskbar icon", "Error", MB_OK | MB_ICONERROR);
+    }
 }
 
 LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)

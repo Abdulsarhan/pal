@@ -39,6 +39,14 @@ PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_pat
 	(void)platform_set_window_icon_legacy(window, image_path);
 }
 
+PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path) {
+	(void)platform_set_taskbar_icon(taskbar, image_path);
+}
+
+PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path) {
+	(void)platform_set_taskbar_icon_legacy(taskbar, image_path);
+}
+
 PALAPI void pal_window_hint(int type, int value) {
 	(void)platform_set_window_hint(type, value);
 }

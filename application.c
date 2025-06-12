@@ -74,6 +74,7 @@ int main() {
     uint8_t running = 1;
     pal_event event;
     pal_set_window_icon_legacy(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\icon.ico");
+    pal_set_taskbar_icon(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png");
     while (running) {
 		while (pal_poll_events(&event, window))
 		{

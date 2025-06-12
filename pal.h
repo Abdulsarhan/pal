@@ -654,6 +654,8 @@ PALAPI pal_window* init_window(int width, int height, const char* windowTitle);
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path);
 PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path);
+PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);
+PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path);
 PALAPI void pal_window_hint(int type, int value);
 PALAPI VideoMode* get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* get_primary_monitor(void);
