@@ -991,6 +991,12 @@ static pal_window* platform_init_window(int width, int height, const char* windo
 		SetForegroundWindow(window->hwnd);
 		SetFocus(window->hwnd);
 		OutputDebugStringA("INFO: Using modern OpenGL Context.");
+        // save the window style and the window rect in case the user sets the window to windowed before setting it to fullscreen.
+        // The fullscreen function is supposed to save this state whenever the user calls it,
+        // but if the user doesn't, the make_window_windowed() function uses a state that's all zeroes
+        //, so we have to save it here.
+		window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
+		GetWindowRect(window->hwnd, &window->windowedRect); // size and pos of the window.
 		return window;
 	}
 	else {
