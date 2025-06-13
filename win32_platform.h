@@ -46,6 +46,8 @@ struct pal_window {
 	HWND hwnd;
 	HDC hdc;
 	HGLRC hglrc;
+    DWORD windowedStyle;
+    RECT windowedRect;
 };
 
 struct pal_monitor {
@@ -91,6 +93,224 @@ typedef struct {
     uint32_t dwImageOffset; // Offset to PNG data (after header)
 } ICONDIRENTRY;
 #pragma pack(pop)
+
+pal_bool platform_make_window_fullscreen(pal_window* window) {
+    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
+    GetWindowRect(window->hwnd, &window->windowedRect);
+
+    DEVMODE dm = {0};
+    dm.dmSize = sizeof(dm);
+
+    HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFOEXA mi = { .cbSize = sizeof(mi) };
+    if (!GetMonitorInfoA(monitor, (MONITORINFO*)&mi)) {
+        MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
+        return FALSE;
+    }
+
+    if (!EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
+        MessageBoxA(window->hwnd, "Failed to get current monitor settings.", "Error", MB_OK);
+        return FALSE;
+    }
+
+    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+
+    if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
+        MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
+        return FALSE;
+    }
+
+    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+    SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
+        dm.dmPelsWidth, dm.dmPelsHeight,
+        SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+
+    return TRUE;
+}
+pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refreshRate) {
+    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
+    GetWindowRect(window->hwnd, &window->windowedRect);
+
+    DEVMODE dm = {0};
+    dm.dmSize = sizeof(dm);
+    dm.dmPelsWidth = width;
+    dm.dmPelsHeight = height;
+    dm.dmBitsPerPel = 32;
+    dm.dmDisplayFrequency = refreshRate;
+    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+
+    if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
+        MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
+        return FALSE;
+    }
+
+    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+    SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
+        width, height,
+        SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+
+    return TRUE;
+}
+pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
+    // Save the current window style and rect
+    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
+    GetWindowRect(window->hwnd, &window->windowedRect);
+
+    // Get the monitor bounds
+    HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { .cbSize = sizeof(mi) };
+    if (!GetMonitorInfo(monitor, &mi)) {
+        MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
+        return FALSE;
+    }
+
+    // Set the window to borderless fullscreen
+    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+    if (!SetWindowPos(window->hwnd, HWND_TOP,
+        mi.rcMonitor.left, mi.rcMonitor.top,
+        mi.rcMonitor.right - mi.rcMonitor.left,
+        mi.rcMonitor.bottom - mi.rcMonitor.top,
+        SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
+        MessageBoxA(window->hwnd, "Failed to resize window.", "Error", MB_OK);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+pal_bool platform_make_window_windowed(pal_window* window) {
+    // Restore display mode (in case exclusive mode was used)
+    ChangeDisplaySettings(NULL, 0);
+
+    // Restore the window style
+    if (SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle) == 0) {
+        MessageBoxA(window->hwnd, "Failed to restore window style.", "Error", MB_OK);
+        return FALSE;
+    }
+
+    // Restore the window's size and position
+    if (!SetWindowPos(window->hwnd, NULL,
+        window->windowedRect.left, window->windowedRect.top,
+        window->windowedRect.right - window->windowedRect.left,
+        window->windowedRect.bottom - window->windowedRect.top,
+        SWP_NOZORDER | SWP_FRAMECHANGED)) {
+        MessageBoxA(window->hwnd, "Failed to restore window position.", "Error", MB_OK);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+void platform_set_cursor(pal_window *window, const char *filepath, int size) {
+    // Clamp size to reasonable max, e.g. 256 (you can adjust)
+    if (size <= 0) size = 32;
+    if (size > 256) size = 256;
+
+    FILE *f = fopen(filepath, "rb");
+    if (!f) {
+        MessageBoxA(window->hwnd, "Failed to open cursor file.", "SetCustomCursor Error", MB_ICONERROR);
+        return;
+    }
+
+    unsigned char header[12] = {0};
+    fread(header, 1, sizeof(header), f);
+    fclose(f);
+
+    HCURSOR hCursor = NULL;
+
+    if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "ACON", 4) == 0) {
+        hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
+        if (!hCursor) {
+            MessageBoxA(window->hwnd, "Failed to load .ani cursor.", "SetCustomCursor Error", MB_ICONERROR);
+            return;
+        }
+    }
+    else if (header[0] == 0x00 && header[1] == 0x00 && header[2] == 0x02 && header[3] == 0x00) {
+        hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
+        if (!hCursor) {
+            MessageBoxA(window->hwnd, "Failed to load .cur cursor.", "SetCustomCursor Error", MB_ICONERROR);
+            return;
+        }
+    }
+    else {
+        int width, height, channels;
+        unsigned char *pixels = stbi_load(filepath, &width, &height, &channels, 4);
+        if (!pixels) {
+            MessageBoxA(window->hwnd, "Failed to load image with stb_image.", "SetCustomCursor Error", MB_ICONERROR);
+            return;
+        }
+
+        unsigned char *resized = malloc(size * size * 4);
+        if (!resized) {
+            stbi_image_free(pixels);
+            MessageBoxA(window->hwnd, "Failed to allocate memory for resized image.", "SetCustomCursor Error", MB_ICONERROR);
+            return;
+        }
+
+        stbir_resize_uint8_srgb(
+            pixels, width, height, width * 4,
+            resized, size, size, size * 4,
+            STBIR_RGBA
+        );
+        stbi_image_free(pixels);
+
+        HDC hdc = GetDC(NULL);
+
+        BITMAPV5HEADER bi = {0};
+        bi.bV5Size = sizeof(BITMAPV5HEADER);
+        bi.bV5Width = size;
+        bi.bV5Height = -size;
+        bi.bV5Planes = 1;
+        bi.bV5BitCount = 32;
+        bi.bV5Compression = BI_BITFIELDS;
+        bi.bV5RedMask   = 0x00FF0000;
+        bi.bV5GreenMask = 0x0000FF00;
+        bi.bV5BlueMask  = 0x000000FF;
+        bi.bV5AlphaMask = 0xFF000000;
+
+        void *bitmapData = NULL;
+        HBITMAP hBitmap = CreateDIBSection(hdc, (BITMAPINFO *)&bi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
+        ReleaseDC(NULL, hdc);
+
+        if (!hBitmap || !bitmapData) {
+            free(resized);
+            MessageBoxA(window->hwnd, "Failed to create DIB section.", "SetCustomCursor Error", MB_ICONERROR);
+            return;
+        }
+
+        for (int y = 0; y < size; ++y) {
+            for (int x = 0; x < size; ++x) {
+                unsigned char *src = &resized[(y * size + x) * 4];
+                unsigned char *dst = (unsigned char *)bitmapData + (y * size + x) * 4;
+                dst[0] = src[2]; // B
+                dst[1] = src[1]; // G
+                dst[2] = src[0]; // R
+                dst[3] = src[3]; // A
+            }
+        }
+
+        free(resized);
+
+        ICONINFO ii = {0};
+        ii.fIcon = FALSE;
+        ii.xHotspot = 0;
+        ii.yHotspot = 0;
+        ii.hbmColor = hBitmap;
+        ii.hbmMask = CreateBitmap(size, size, 1, 1, NULL);
+
+        hCursor = CreateIconIndirect(&ii);
+
+        DeleteObject(ii.hbmMask);
+        DeleteObject(hBitmap);
+
+        if (!hCursor) {
+            MessageBoxA(window->hwnd, "Failed to create cursor from image.", "SetCustomCursor Error", MB_ICONERROR);
+            return;
+        }
+    }
+
+    SetClassLongPtr(window->hwnd, GCLP_HCURSOR, (LONG_PTR)hCursor);
+    SetCursor(hCursor);
+}
 
 static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     FILE* file = fopen(image_path, "rb");

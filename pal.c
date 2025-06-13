@@ -3,6 +3,8 @@
 #include "stb_vorbis.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize2.h"
 
 #ifdef _WIN32
 #include "win32_platform.h"
@@ -31,6 +33,22 @@ PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
 	return platform_set_window_title(window, string);
 }
 
+PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
+	return platform_make_window_fullscreen(window);
+}
+
+PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refreshrate) {
+	return platform_make_window_fullscreen_ex(window, width, height, refreshrate);
+}
+
+PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
+	return platform_make_window_fullscreen_windowed(window);
+}
+
+PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
+	return platform_make_window_windowed(window);
+}
+
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
 	(void)platform_set_window_icon(window, image_path);
 }
@@ -45,6 +63,10 @@ PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path) {
 
 PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path) {
 	(void)platform_set_taskbar_icon_legacy(taskbar, image_path);
+}
+
+PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size) {
+	(void)platform_set_cursor(window, image_path, size);
 }
 
 PALAPI void pal_window_hint(int type, int value) {
