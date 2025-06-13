@@ -52,9 +52,9 @@ int main() {
     pal_window_hint(RESIZABLE, 1);
 
     //TODO: @fix monitor and video mode functions have problems.
-    pal_monitor* monitor = get_primary_monitor();
-    VideoMode* mode = get_video_mode(monitor);
-    pal_window* window = init_window(1280, 720, "Fucking Windows!");
+    pal_monitor* monitor = pal_get_primary_monitor();
+    VideoMode* mode = pal_get_video_mode(monitor);
+    pal_window* window = pal_create_window(1280, 720, "Fucking Windows!");
     make_context_current(window);
 
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {

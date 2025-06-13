@@ -25,7 +25,7 @@ PALAPI void pal_init() {
 
 */
 
-PALAPI pal_window* init_window(int width, int height, const char* windowTitle) {
+PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle) {
 	 return platform_init_window(width, height, windowTitle);
 }
 
@@ -73,10 +73,10 @@ PALAPI void pal_window_hint(int type, int value) {
 	(void)platform_set_window_hint(type, value);
 }
 
-PALAPI VideoMode* get_video_mode(pal_monitor* monitor) {
+PALAPI VideoMode* pal_get_video_mode(pal_monitor* monitor) {
 	return platform_get_video_mode(monitor);
 }
-PALAPI pal_monitor* get_primary_monitor(void) {
+PALAPI pal_monitor* pal_get_primary_monitor(void) {
 	return platform_get_primary_monitor();
 }
 
