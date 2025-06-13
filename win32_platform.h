@@ -7,6 +7,7 @@
 #include <xaudio2.h>          // XAudio2
 #include <mmreg.h>            // WAVEFORMATEX
 #include <Xinput.h>
+#include <hidsdi.h>   // Link with hid.lib
 
 // C Standard Library
 #include <stdint.h>
@@ -59,7 +60,7 @@ struct pal_monitor {
 //the functions that fill up the input struct.
 
 #define MAX_KEYS 256
-#define MAX_MOUSEBUTTONS 32
+#define MAX_MOUSEBUTTONS 33 // 0 is reserved as a default value, and we want 32 buttons, so we do 33.
 #define MAX_CONTROLLERS 4
 
 typedef struct Input {
@@ -994,13 +995,15 @@ static pal_window* platform_init_window(int width, int height, const char* windo
         // save the window style and the window rect in case the user sets the window to windowed before setting it to fullscreen.
         // The fullscreen function is supposed to save this state whenever the user calls it,
         // but if the user doesn't, the make_window_windowed() function uses a state that's all zeroes
-        //, so we have to save it here.
+        //, so we have to save it here. - Abdelrahman june 13, 2024
 		window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
 		GetWindowRect(window->hwnd, &window->windowedRect); // size and pos of the window.
+        free(fakewindow);
 		return window;
 	}
 	else {
-
+        // This is supposed to be a fallback in case we can't create the context that we want.
+        // Ideally, this should never happen. - Abdelrahman june 13, 2024
 		ShowWindow(fakewindow->hwnd, SW_SHOW);
 		SetForegroundWindow(fakewindow->hwnd);
 		SetFocus(fakewindow->hwnd);
@@ -1101,27 +1104,156 @@ void platform_end_drawing(pal_window* window) {
 
 // Handler function signatures
 typedef void (*RawInputHandler)(const RAWINPUT*);
+// Helper struct to hold reusable buffers
 
-// Mouse input handler
+#define MAX_MOUSE_BUTTONS 64
+#define MAX_BUTTON_CAPS 32
+
+typedef struct {
+    PHIDP_PREPARSED_DATA prep_data;
+    HIDP_BUTTON_CAPS button_caps[MAX_BUTTON_CAPS];
+    USHORT num_button_caps;
+} MouseHIDBuffers;
+
+MouseHIDBuffers hid_buffer = {0};
+
+pal_bool InitMouseHIDBuffers(HANDLE device_handle) {
+    UINT prep_size = 0;
+    if (GetRawInputDeviceInfo(device_handle, RIDI_PREPARSEDDATA, NULL, &prep_size) == (UINT)-1)
+        return FALSE;
+
+    if (hid_buffer.prep_data) {
+        HidD_FreePreparsedData(hid_buffer.prep_data);
+        hid_buffer.prep_data = NULL;
+    }
+
+    hid_buffer.prep_data = (PHIDP_PREPARSED_DATA)malloc(prep_size);
+    if (!hid_buffer.prep_data)
+        return FALSE;
+
+    if (GetRawInputDeviceInfo(device_handle, RIDI_PREPARSEDDATA, hid_buffer.prep_data, &prep_size) == (UINT)-1) {
+        free(hid_buffer.prep_data);
+        hid_buffer.prep_data = NULL;
+        return FALSE;
+    }
+
+    hid_buffer.num_button_caps = MAX_BUTTON_CAPS;
+    NTSTATUS status = HidP_GetButtonCaps(
+        HidP_Input,
+        hid_buffer.button_caps,
+        &hid_buffer.num_button_caps,
+        hid_buffer.prep_data
+    );
+
+    if (status != HIDP_STATUS_SUCCESS) {
+        HidD_FreePreparsedData(hid_buffer.prep_data);
+        free(hid_buffer.prep_data);
+        hid_buffer.prep_data = NULL;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+pal_bool get_device_handle() {
+    UINT device_count = 0;
+    if (GetRawInputDeviceList(NULL, &device_count, sizeof(RAWINPUTDEVICELIST)) != 0 || device_count == 0)
+        return FALSE;
+
+    RAWINPUTDEVICELIST* device_list = (RAWINPUTDEVICELIST*)malloc(sizeof(RAWINPUTDEVICELIST) * device_count);
+    if (!device_list)
+        return FALSE;
+
+    if (GetRawInputDeviceList(device_list, &device_count, sizeof(RAWINPUTDEVICELIST)) == (UINT)-1) {
+        free(device_list);
+        return FALSE;
+    }
+
+    pal_bool initialized = FALSE;
+    for (UINT i = 0; i < device_count; ++i) {
+        if (device_list[i].dwType == RIM_TYPEMOUSE)
+            continue; // skip traditional mice
+
+        RID_DEVICE_INFO info = {0};
+        info.cbSize = sizeof(info);
+        UINT size = sizeof(info);
+        if (GetRawInputDeviceInfo(device_list[i].hDevice, RIDI_DEVICEINFO, &info, &size) == (UINT)-1)
+            continue;
+
+        if (info.dwType == RIM_TYPEHID && info.hid.usUsagePage == 0x01 && info.hid.usUsage == 0x02) {
+            if (InitMouseHIDBuffers(device_list[i].hDevice)) {
+                initialized = TRUE;
+                break;
+            }
+        }
+    }
+
+    free(device_list);
+    return initialized;
+}
+
+void FreeMouseHIDBuffers() {
+    if (hid_buffer.prep_data) {
+        HidD_FreePreparsedData(hid_buffer.prep_data);
+        free(hid_buffer.prep_data);
+        hid_buffer.prep_data = NULL;
+    }
+    hid_buffer.num_button_caps = 0;
+}
+
+void Win32HandleHidMouse(const RAWINPUT* raw) {
+    if (raw->header.dwType != RIM_TYPEHID)
+        return;
+
+    input.mouse = (v2){ (float)raw->data.mouse.lLastX, (float)raw->data.mouse.lLastY };
+
+    if (!hid_buffer.prep_data)
+        return;
+
+    for (int i = 0; i < MAX_MOUSE_BUTTONS; ++i)
+        input.mouse_buttons[i] = 0;
+
+    for (ULONG i = 0; i < hid_buffer.num_button_caps; ++i) {
+        ULONG usage_count = MAX_MOUSE_BUTTONS;
+        USAGE usages[MAX_MOUSE_BUTTONS] = {0};
+
+        NTSTATUS status = HidP_GetUsages(
+            HidP_Input,
+            hid_buffer.button_caps[i].UsagePage,
+            0,
+            usages,
+            &usage_count,
+            hid_buffer.prep_data,
+            (PCHAR)raw->data.hid.bRawData,
+            raw->data.hid.dwSizeHid
+        );
+
+        if (status == HIDP_STATUS_SUCCESS || status == HIDP_STATUS_BUFFER_TOO_SMALL) {
+            for (ULONG j = 0; j < usage_count; ++j) {
+                USAGE usage_id = usages[j];
+                if (usage_id < MAX_MOUSE_BUTTONS)
+                    input.mouse_buttons[usage_id] = 1;
+            }
+        }
+    }
+}
+
 void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
 	USHORT buttons = raw->data.mouse.usButtonFlags;
-
 	input.mouse = (v2){
 		(float)dx,
 		(float)dy,
 	};
-
+ 
 	for (int i = 0; i < 16; ++i) {
 		uint16_t down = (buttons >> (i * 2)) & 1;
 		uint16_t up = (buttons >> (i * 2 + 1)) & 1;
-
+ 
 		// If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
 		input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
 	}
-
-	//printf("Mouse: dx=%ld dy=%ld buttons=0x%04x\n", dx, dy, buttons);
 }
 
 v2 platform_get_mouse_position(pal_window* window) {
@@ -1256,8 +1388,8 @@ static v2 platform_process_thumbstick(short x, short y, int deadzone) {
 }
 
 v2 platform_get_left_stick(int controller_id) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2){0};
-    if (!input.controller_connected[controller_id]) return (v2){0};
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2) {0};
+    if (!input.controller_connected[controller_id]) return (v2) {0};
 
 	short x = input.controller_state[controller_id].Gamepad.sThumbLX;
 	short y = input.controller_state[controller_id].Gamepad.sThumbLY;
@@ -1266,8 +1398,8 @@ v2 platform_get_left_stick(int controller_id) {
 }
 
 v2 platform_get_right_stick(int controller_id) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2){0};
-    if (!input.controller_connected[controller_id]) return (v2){0};
+    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2) {0};
+    if (!input.controller_connected[controller_id]) return (v2) {0};
 
 	short x = input.controller_state[controller_id].Gamepad.sThumbRX;
 	short y = input.controller_state[controller_id].Gamepad.sThumbRY;
@@ -1330,7 +1462,15 @@ static int platform_get_raw_input_buffer() {
 	PRAWINPUT raw = (PRAWINPUT)g_rawInputBuffer;
 	for (UINT i = 0; i < inputEventCount; ++i) {
 		UINT type = raw->header.dwType;
-		Win32InputHandlers[type](raw);
+        if (type == RIM_TYPEMOUSE) {
+            Win32HandleMouse(raw);
+        }
+        else if (type == RIM_TYPEKEYBOARD) {
+            Win32HandleKeyboard(raw);
+        }
+        else {
+            Win32HandleHidMouse(raw);
+        }
 		raw = NEXTRAWINPUTBLOCK(raw);
 	}
 	return 0;

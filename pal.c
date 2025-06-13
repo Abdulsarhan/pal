@@ -14,7 +14,7 @@
 
 PALAPI void pal_init() {
 	platform_init_sound();
-
+	get_device_handle();
 }
 
 /*
