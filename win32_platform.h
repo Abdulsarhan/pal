@@ -482,11 +482,11 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
             event->type = PAL_WINDOW_EVENT;
-            WINDOWPOS* pos = ;
+            WINDOWPOS* pos = (WINDOWPOS*)msg.lParam;
             event->window = (pal_window_event){
                 .windowid = window->id,
                 .event_code = msg.message,
-                .x = (WINDOWPOS*)msg.lParam->x,
+                .x = pos->x,
                 .y = pos->y,
                 .width = pos->cx,
                 .height = pos->cy,
