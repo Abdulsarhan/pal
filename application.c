@@ -54,7 +54,7 @@ int main() {
     //TODO: @fix monitor and video mode functions have problems.
     pal_monitor* monitor = pal_get_primary_monitor();
     VideoMode* mode = pal_get_video_mode(monitor);
-    pal_window* window = pal_create_window(1280, 720, "Fucking Windows!");
+    pal_window* window = pal_create_window(1280, 720, "Window Title");
     make_context_current(window);
 
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
@@ -96,6 +96,10 @@ int main() {
                 break;
             case PAL_KEY_UP:
 				printf("Keyboard UP!\n");
+                break;
+            case PAL_QUIT:
+                printf("SHOULD HAVE CLOSED THE WINDOW!\n");
+                running = FALSE;
                 break;
             default:
                 //printf("%d\n", event.type);

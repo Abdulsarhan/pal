@@ -482,13 +482,14 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
             event->type = PAL_WINDOW_EVENT;
+            WINDOWPOS* pos = ;
             event->window = (pal_window_event){
                 .windowid = window->id,
                 .event_code = msg.message,
-                .x = LOWORD(msg.lParam),
-                .y = HIWORD(msg.lParam),
-                .width = LOWORD(msg.lParam),
-                .height = HIWORD(msg.lParam),
+                .x = (WINDOWPOS*)msg.lParam->x,
+                .y = pos->y,
+                .width = pos->cx,
+                .height = pos->cy,
                 .focused = 1, // guess; could adjust later
                 .visible = 1
             };
@@ -783,38 +784,37 @@ void platform_set_taskbar_icon_legacy(pal_window* window, const char* image_path
     }
 }
 
+
+LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
+}
+
 LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	UINT button = GET_XBUTTON_WPARAM(wParam);
-	int xPos = GET_X_LPARAM(lParam);
-	int yPos = GET_Y_LPARAM(lParam);
+    // TODO: maybe put these in the window message handler that we have made?
 	int width = LOWORD(lParam);
 	int height = HIWORD(lParam);
 
+    switch (uMsg) {
+        case WM_CLOSE:
+            DestroyWindow(hwnd); // This is required to get WM_DESTROY
+            return 0;
+        case WM_DESTROY:
+            PostQuitMessage(0); // Posts WM_QUIT to the message queue
+            return 0;
+    }
 
 	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
 
-WNDCLASSEXA RegisterWindowClass() {
-	WNDCLASSEXA wc = { 0 };
-
-	wc.cbSize = sizeof(WNDCLASSEXA);
-	wc.lpfnWndProc = win32_window_proc;
-	wc.hInstance = GetModuleHandleA(0);
-	wc.lpszClassName = "Win32 Window Classs";
-	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
-
-	RegisterClassExA(&wc);
-	return wc;
-}
-
 // Window Hints
 static void platform_set_window_hint(int type, int value) {
+    // This is very jank-tastic. There is probably a better way of doing this. 
+    // maybe some of this should become window flags that are passed into the create_window() function?
 	switch (type) {
-	case GL_VERSION_MAJOR: s_glVersionMajor = value;
-		break;
-	case GL_VERSION_MINOR: s_glVersionMinor = value;
-		break;
+    case GL_VERSION_MAJOR: s_glVersionMajor = value; break;
+    case GL_VERSION_MINOR: s_glVersionMinor = value; break;
 	case RESIZABLE:
 		if (value)
 			s_resizable = WS_OVERLAPPEDWINDOW;
@@ -844,7 +844,15 @@ static void platform_set_window_hint(int type, int value) {
 
 static pal_window* platform_init_window(int width, int height, const char* windowTitle) {
 	pal_window* fakewindow = (pal_window*)malloc(sizeof(pal_window));
-	WNDCLASSEXA fakewc = RegisterWindowClass();
+    WNDCLASSEXA fakewc = { 0 };
+
+	fakewc.cbSize = sizeof(WNDCLASSEXA);
+	fakewc.lpfnWndProc = win32_fake_window_proc;
+	fakewc.hInstance = GetModuleHandleA(0);
+	fakewc.lpszClassName = "Win32 Fake Window Class";
+	fakewc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+
+	RegisterClassExA(&fakewc);
 
 	fakewindow->hwnd = CreateWindowExA(
 		0,                              // Optional window styles.
@@ -917,7 +925,16 @@ static pal_window* platform_init_window(int width, int height, const char* windo
 		return fakewindow;
 	}
 
-	WNDCLASSEXA wc = RegisterWindowClass();
+    WNDCLASSEXA wc = {0};
+
+	wc.cbSize = sizeof(WNDCLASSEXA);
+	wc.lpfnWndProc = win32_window_proc;
+	wc.hInstance = GetModuleHandleA(0);
+	wc.lpszClassName = "Win32 Window Class";
+	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+
+	RegisterClassExA(&wc);
+
 	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
 	window->hwnd = CreateWindowExA(
 		s_floating,           // Optional window styles.
