@@ -74,8 +74,6 @@ int main() {
     pal_set_window_icon_legacy(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\icon.ico");
     pal_set_taskbar_icon(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png");
     pal_set_cursor(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png", 16);
-    pal_make_window_windowed(window);
-
     uint8_t running = 1;
     pal_event event;
     while (running) {
@@ -85,6 +83,7 @@ int main() {
             switch (event.type) {
 
             case PAL_MOUSE_BUTTON_DOWN:
+                if(event.button.button == LEFT_MOUSE_BUTTON)
 				printf("Mouse button DOWN!\n");
                 break;
             case PAL_MOUSE_BUTTON_UP:
@@ -106,9 +105,7 @@ int main() {
         if (is_key_down(KEY_W)) {
             printf("PRESSED W!\n");
         }
-        if (is_mouse_down(LEFT_MOUSE_BUTTON)) {
-            printf("mouse pressed!\n");
-        }
+
 /*
 		if (is_key_down(KEY_SPACE)) {
 			printf("Pressed the A key!");

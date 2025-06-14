@@ -29,8 +29,6 @@
 
 typedef unsigned __int64 QWORD;
 
-// TODO: it might be a good idea to move all of this shit into the window structure
-// because the lifetime of all this shit is related to the lifetime of the window.
 static HDC s_fakeDC = { 0 };
 static int s_glVersionMajor = 3;
 static int s_glVersionMinor = 3;
@@ -56,11 +54,9 @@ struct pal_monitor {
 };
 
 // Keyboard & Mouse Input
-//TODO: @fix We should not have this here and just have the user call
-//the functions that fill up the input struct.
 
 #define MAX_KEYS 256
-#define MAX_MOUSEBUTTONS 33 // 0 is reserved as a default value, and we want 32 buttons, so we do 33.
+#define MAX_MOUSEBUTTONS 32
 #define MAX_CONTROLLERS 4
 
 typedef struct Input {
@@ -510,7 +506,6 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
         case WM_LBUTTONDOWN: 
-			printf("Left Mouse down!\n");
             event->type = PAL_MOUSE_BUTTON_DOWN;
             event->button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
@@ -1025,10 +1020,6 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	platform_get_raw_input_buffer();
 	platform_poll_gamepads();
 
-	//TODO: Handle all the messages in one go.
-// this function is supposed to return 0 if there are no more events in peekmessage,
-	// and 1 if there are events.
-
 	MSG msg = {0};
 	if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
 	
@@ -1277,7 +1268,6 @@ void Win32HandleKeyboard(const RAWINPUT* raw) {
 // Handles Gamepads, Joysticks, Steering wheels, etc...
 void Win32HandleHID(const RAWINPUT* raw) {
 	printf("%d", raw->data.hid.dwCount);
-	//TODO: TEST THIS.
 }
 
 // Handler function table indexed by dwType (0 = mouse, 1 = keyboard, 2 = HID)
