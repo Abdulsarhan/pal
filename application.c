@@ -66,16 +66,20 @@ int main() {
     if (register_input_devices(window) != 0)
         return;
 
-	Sound sound = { 0 };
-	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\sine_wave.wav", &sound);
+	Sound song = { 0 };
+	Sound sine_wave = { 0 };
+	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\goreshit_fine_night.ogg", &song);
+	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\sine_wave.wav", &sine_wave);
 
-	play_sound(&sound, 0.1);
+	play_sound(&song, 0.1);
+	play_sound(&sine_wave, 0.1);
 
     pal_set_window_icon_legacy(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\icon.ico");
     pal_set_taskbar_icon(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png");
     pal_set_cursor(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png", 16);
     uint8_t running = 1;
     pal_event event;
+    pal_gamepad_state state;
     while (running) {
 		while (pal_poll_events(&event, window))
 		{
@@ -92,7 +96,6 @@ int main() {
             case PAL_KEY_DOWN:
                 if (event.key.virtual_key == KEY_ENTER )
                     printf("%d\n", event.key.modifiers);
-                    printf("pressed alt!\n");
                 break;
             case PAL_KEY_UP:
 				printf("Keyboard UP!\n");
@@ -101,6 +104,7 @@ int main() {
                 printf("SHOULD HAVE CLOSED THE WINDOW!\n");
                 running = FALSE;
                 break;
+            case PAL_MOUSE_MOTION:
             default:
                 //printf("%d\n", event.type);
                 break;
@@ -108,6 +112,25 @@ int main() {
 		}
         if (is_key_down(KEY_W)) {
             printf("PRESSED W!\n");
+        }
+        for (int i = 0; i < pal_get_gamepad_count(); i++) {
+            if (pal_get_gamepad_state(i, &state)) {
+
+                printf("\nController %d: %s\n", i, state.name);
+                printf("  Left Stick: %.2f, %.2f\n", state.axes.left_x, state.axes.left_y);
+                printf("  Right Stick: %.2f, %.2f\n", state.axes.right_x, state.axes.right_y);
+                printf("  Triggers: L=%.2f R=%.2f\n", state.axes.left_trigger, state.axes.right_trigger);
+                printf("  Buttons: A=%d B=%d X=%d Y=%d\n", 
+                      state.buttons.a, state.buttons.b, 
+                      state.buttons.x, state.buttons.y);
+
+                // 6. Example vibration (Xbox controllers only)
+                if (state.buttons.a && state.is_xinput) {
+                    pal_set_gamepad_vibration(i, 0.5f, 0.5f, 0, 0);
+                } else {
+                    pal_stop_gamepad_vibration(i);
+                }
+            }
         }
 
 /*

@@ -21,6 +21,50 @@ typedef struct {
 
 }Sound;
 
+#define PAL_MAX_TOUCHES 2
+typedef struct {
+    // Standard gamepad controls
+    struct {
+        float left_x, left_y;
+        float right_x, right_y;
+        float left_trigger, right_trigger;
+    } axes;
+    
+    struct {
+        pal_bool a, b, x, y;
+        pal_bool back, start, guide;
+        pal_bool left_stick, right_stick;
+        pal_bool left_shoulder, right_shoulder;
+        pal_bool dpad_up, dpad_down, dpad_left, dpad_right;
+        pal_bool touchpad_button;
+    } buttons;
+    
+    // Identification
+    char name[128];
+    uint16_t vendor_id;
+    uint16_t product_id;
+    pal_bool connected;
+    pal_bool is_xinput;
+
+    // Battery information
+    float battery_level;        // 0.0-1.0
+    pal_bool is_charging;
+
+    // Motion sensors
+    float accel_x, accel_y, accel_z;  // In G's
+    float gyro_x, gyro_y, gyro_z;     // In degrees/second
+
+    // Touchpad
+    struct {
+        int touch_count;
+        struct {
+            int id;            // Touch ID
+            float x, y;        // Normalized coordinates (0-1)
+            pal_bool down;     // Is touch active
+        } touches[PAL_MAX_TOUCHES]; // Two fingers on the touch pad at the same time. Kinky. commonly used for scrolling, zooming and rotating.
+    } touchpad;
+} pal_gamepad_state;
+
 // Window stuff.
 typedef struct pal_window pal_window;
 typedef struct pal_monitor pal_monitor;
@@ -681,15 +725,10 @@ PALAPI void set_mouse_processed(int button);
 PALAPI v2 get_mouse_position(pal_window* window);
 
 // Gamepad Input
-PALAPI int is_button_down(int controller_id, unsigned short button);
-PALAPI int is_button_pressed(int controller_id, unsigned short button);
-PALAPI int is_button_released(int controller_id, unsigned short button);
-PALAPI v2 get_right_stick(int controller_id);
-PALAPI v2 get_left_stick(int controller_id);
-PALAPI float get_right_trigger(int controller_id);
-PALAPI float get_left_trigger(int controller_id);
-PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor);
-PALAPI void stop_controller_vibration(int controller_id);
+PALAPI int pal_get_gamepad_count();
+PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state);
+PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger);
+PALAPI void pal_stop_gamepad_vibration(int controller_id);
 
 PALAPI void begin_drawing(void);
 PALAPI void DrawTriangle(void);

@@ -143,39 +143,18 @@ PALAPI void set_mouse_processed(int button) {
 	input.mouse_buttons_processed[button] = 1; // Mark as processed
 }
 
-PALAPI float get_right_trigger(int controller_id) {
-	return platform_get_right_trigger(controller_id);
+PALAPI int pal_get_gamepad_count() {
+	return platform_get_gamepad_count();
 }
-PALAPI float get_left_trigger(int controller_id) {
-	return platform_get_left_trigger(controller_id);
+PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
+	return platform_gamepad_get_state(index, out_state);
 }
-
-PALAPI v2 get_right_stick(int controller_id) {
-	return platform_get_right_stick(controller_id);
-}
-
-PALAPI v2 get_left_stick(int controller_id) {
-	return platform_get_left_stick(controller_id);
+PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
+	(void)platform_set_gamepad_vibration(controller_id, left_motor, right_motor, left_trigger, right_trigger);
 }
 
-PALAPI int is_button_down(int controller_id, unsigned short button) {
-	return platform_is_button_down(controller_id, button);
-}
-
-PALAPI int is_button_pressed(int controller_id, unsigned short button) {
-	return platform_is_button_pressed(controller_id, button);
-}
-
-PALAPI int is_button_released(int controller_id, unsigned short button) {
-	return platform_is_button_released(controller_id, button);
-}
-
-PALAPI void set_controller_vibration(int controller_id, float left_motor, float right_motor) {
-	(void)platform_set_controller_vibration(controller_id, left_motor, right_motor);
-}
-
-PALAPI void stop_controller_vibration(int controller_id) {
-	(void)platform_stop_controller_vibration(controller_id);
+PALAPI void pal_stop_gamepad_vibration(int controller_id) {
+	(void)platform_stop_gamepad_vibration(controller_id);
 }
 
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window) {
@@ -359,7 +338,7 @@ static int load_ogg(const char* filename, Sound* out) {
 	return 0;
 }
 
-// --- Unified Sound Loader ---
+// loader for uncompressed .wav and ogg vorbis files.
 int load_sound(const char* filename, Sound* out) {
 	FILE* file = fopen(filename, "rb");
 	if (!file) return 0;

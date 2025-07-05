@@ -1,4 +1,4 @@
-#ifndef WIN32_PLATFORM_H
+﻿#ifndef WIN32_PLATFORM_H
 #define WIN32_PLATFORM_H
 
 // Windows system headers
@@ -18,6 +18,11 @@
 #include <gl/gl.h>
 #include <GL/glext.h>
 #include <GL/wglext.h>
+
+// Windows Gaming Input (For Xbone / Series S Controllers)
+#define COBJMACROS
+#include <roapi.h>
+#include <winstring.h>
 
 // Project headers (always last)
 #include "pal_platform.h"
@@ -57,20 +62,67 @@ struct pal_monitor {
 
 #define MAX_KEYS 256
 #define MAX_MOUSEBUTTONS 32
-#define MAX_CONTROLLERS 4
+#define MAX_XINPUT_CONTROLLERS 4
+#define PAL_MAX_GAMEPADS 16
+#define PAL_MAX_BUTTONS 32
+#define PAL_MAX_AXES 16
+#define PAL_MAX_MAPPINGS 256
 
-typedef struct Input {
+typedef struct pal_input {
 	uint8_t keys[MAX_KEYS];
 	uint8_t keys_processed[MAX_KEYS];
 	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
 	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
 	v2 mouse_position;
 	v2 mouse;
-	uint8_t controller_connected[MAX_CONTROLLERS];
-	XINPUT_STATE controller_state[MAX_CONTROLLERS];
-	XINPUT_STATE controller_prev_state[MAX_CONTROLLERS];
-}Input;
-Input input = { 0 };
+}pal_input;
+pal_input input = { 0 };
+
+typedef struct {
+    uint8_t usage;
+    float value;
+} win32_gamepad_button;
+
+typedef struct {
+    uint8_t usage;
+    float value;
+    int32_t min, max;
+    pal_bool inverted;
+} win32_gamepad_axis;
+
+typedef struct {
+    uint16_t vendor_id;
+    uint16_t product_id;
+    char name[128];
+    uint8_t button_map[15];
+    struct {
+        uint8_t usage;
+        pal_bool inverted;
+    } axis_map[6];
+} win32_gamepad_mapping;
+
+typedef struct {
+    uint8_t report[64];
+    uint8_t report_size;   
+    pal_bool has_report;
+    OVERLAPPED overlapped;
+} win32_dualsense_state;
+
+
+// Global State
+typedef struct hid_device{
+        HANDLE handle;
+        PHIDP_PREPARSED_DATA pp_data;
+        uint16_t vendor_id;
+        uint16_t product_id;
+        char name[128];
+        win32_gamepad_button buttons[PAL_MAX_BUTTONS];
+        uint8_t button_count;
+        win32_gamepad_axis axes[PAL_MAX_AXES];
+        uint8_t axis_count;
+        pal_bool connected;
+
+}hid_device;
 
 #pragma pack(push, 1)
 typedef struct {
@@ -500,7 +552,7 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             event->motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
-                .delta_x = 0, // you could track previous pos elsewhere
+                .delta_x = 0, // this should be assigned when we get raw input from the mouse.
                 .delta_y = 0,
                 .buttons = msg.wParam
             };
@@ -784,28 +836,431 @@ void platform_set_taskbar_icon_legacy(pal_window* window, const char* image_path
     }
 }
 
-
 LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
 
-LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    // TODO: maybe put these in the window message handler that we have made?
-	int width = LOWORD(lParam);
-	int height = HIWORD(lParam);
+void win32_handle_raw_input(HRAWINPUT raw_input) {
+// currently unused. This is for GetRawInputData(). 
+    // we currently use GetRawInputBuffer(), because it's better for high-polling rate mice.
+}
 
-    switch (uMsg) {
+void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
+ }
+
+static void win32_update_xinput() {
+}
+
+// --- COM interface IDs (IIDs) ---
+
+static const IID IID_IGamepadStatics = { 0x6a44c408, 0x6ff0, 0x46ab, {0xb6, 0x22, 0xd9, 0x18, 0x19, 0x7b, 0x03, 0x23} };
+static const IID IID_IGamepad = {0x3C1689BD, 0x5915, 0x4489, 0x83, 0x13, 0xF6, 0xE3, 0xFC, 0xBF, 0xE7, 0x9C};
+static const IID IID_IGamepad2 = { 0x0e2b57cc, 0x4a5d, 0x4b66, {0xb6, 0xbb, 0x38, 0xbb, 0x8b, 0x3c, 0xb7, 0x0a} };
+static const IID IID_IVectorView = { 0xbbe1fa4c, 0x7110, 0x4af6, {0xba, 0x5b, 0xd8, 0x2f, 0xe0, 0x9f, 0x0c, 0x1f} };
+
+// --- COM interfaces (IGamepad, IGamepadStatics, IVectorView) ---
+
+typedef struct IGamepad IGamepad;
+typedef struct IGamepadVtbl IGamepadVtbl;
+typedef struct IGamepadStatics IGamepadStatics;
+typedef struct IGamepadStaticsVtbl IGamepadStaticsVtbl;
+typedef struct IVectorView IVectorView;
+typedef struct IVectorViewVtbl IVectorViewVtbl;
+
+static IGamepadStatics* g_statics = NULL;
+typedef struct GamepadReading {
+    uint16_t LeftThumbstickX;
+    uint16_t LeftThumbstickY;
+    uint16_t RightThumbstickX;
+    uint16_t RightThumbstickY;
+    float LeftTrigger;
+    float RightTrigger;
+    uint16_t Buttons;
+} GamepadReading;
+
+typedef struct GamepadVibration {
+    float LeftMotor;
+    float RightMotor;
+    float LeftTrigger;
+    float RightTrigger;
+} GamepadVibration;
+
+struct IGamepadVtbl {
+    HRESULT(STDMETHODCALLTYPE* QueryInterface)(IGamepad* This, REFIID riid, void** ppvObject);
+    ULONG(STDMETHODCALLTYPE* AddRef)(IGamepad* This);
+    ULONG(STDMETHODCALLTYPE* Release)(IGamepad* This);
+    HRESULT(STDMETHODCALLTYPE* GetIids)(IGamepad* This, ULONG* iidCount, IID** iids);
+    HRESULT(STDMETHODCALLTYPE* GetRuntimeClassName)(IGamepad* This, HSTRING* className);
+    HRESULT(STDMETHODCALLTYPE* GetTrustLevel)(IGamepad* This, int* trustLevel);
+    HRESULT(STDMETHODCALLTYPE* GetCurrentReading)(IGamepad* This, GamepadReading* reading);
+    HRESULT(STDMETHODCALLTYPE* get_Vibration)(IGamepad* This, GamepadVibration* vibration);
+    HRESULT(STDMETHODCALLTYPE* put_Vibration)(IGamepad* This, GamepadVibration vibration);
+    HRESULT(STDMETHODCALLTYPE* add_GamepadRemoved)(IGamepad* This, IUnknown* handler, void* token);
+    HRESULT(STDMETHODCALLTYPE* remove_GamepadRemoved)(IGamepad* This, void* token);
+    HRESULT(STDMETHODCALLTYPE* add_GamepadAdded)(IGamepad* This, IUnknown* handler, void* token);
+    HRESULT(STDMETHODCALLTYPE* remove_GamepadAdded)(IGamepad* This, void* token);
+};
+
+struct IGamepad {
+    IGamepadVtbl* lpVtbl;
+};
+
+struct IVectorViewVtbl {
+    HRESULT(STDMETHODCALLTYPE* QueryInterface)(IVectorView* This, REFIID riid, void** ppvObject);
+    ULONG(STDMETHODCALLTYPE* AddRef)(IVectorView* This);
+    ULONG(STDMETHODCALLTYPE* Release)(IVectorView* This);
+    HRESULT(STDMETHODCALLTYPE* GetIids)(IVectorView* This, ULONG* iidCount, IID** iids);
+    HRESULT(STDMETHODCALLTYPE* GetRuntimeClassName)(IVectorView* This, HSTRING* className);
+    HRESULT(STDMETHODCALLTYPE* GetTrustLevel)(IVectorView* This, int* trustLevel);
+    HRESULT(STDMETHODCALLTYPE* GetAt)(IVectorView* This, UINT32 index, IGamepad** item);
+    HRESULT(STDMETHODCALLTYPE* get_Size)(IVectorView* This, UINT32* size);
+    HRESULT(STDMETHODCALLTYPE* IndexOf)(IVectorView* This, IGamepad* value, UINT32* index, BOOL* found);
+    HRESULT(STDMETHODCALLTYPE* GetMany)(IVectorView* This, UINT32 startIndex, UINT32 capacity, IGamepad** items, UINT32* actual);
+};
+
+struct IVectorView {
+    IVectorViewVtbl* lpVtbl;
+};
+
+struct IGamepadStaticsVtbl {
+    HRESULT(STDMETHODCALLTYPE* QueryInterface)(IGamepadStatics* This, REFIID riid, void** ppvObject);
+    ULONG(STDMETHODCALLTYPE* AddRef)(IGamepadStatics* This);
+    ULONG(STDMETHODCALLTYPE* Release)(IGamepadStatics* This);
+    HRESULT(STDMETHODCALLTYPE* GetIids)(IGamepadStatics* This, ULONG* iidCount, IID** iids);
+    HRESULT(STDMETHODCALLTYPE* GetRuntimeClassName)(IGamepadStatics* This, HSTRING* className);
+    HRESULT(STDMETHODCALLTYPE* GetTrustLevel)(IGamepadStatics* This, int* trustLevel);
+    HRESULT(STDMETHODCALLTYPE* get_Gamepads)(IGamepadStatics* This, IVectorView** gamepads);
+    HRESULT(STDMETHODCALLTYPE* add_GamepadAdded)(IGamepadStatics* This, IUnknown* handler, void* token);
+    HRESULT(STDMETHODCALLTYPE* remove_GamepadAdded)(IGamepadStatics* This, void* token);
+    HRESULT(STDMETHODCALLTYPE* add_GamepadRemoved)(IGamepadStatics* This, IUnknown* handler, void* token);
+    HRESULT(STDMETHODCALLTYPE* remove_GamepadRemoved)(IGamepadStatics* This, void* token);
+};
+
+struct IGamepadStatics {
+    IGamepadStaticsVtbl* lpVtbl;
+};
+
+typedef struct IGamepad2Vtbl {
+    HRESULT (STDMETHODCALLTYPE* QueryInterface)(void* This, REFIID riid, void** ppvObject);
+    ULONG (STDMETHODCALLTYPE* AddRef)(void* This);
+    ULONG (STDMETHODCALLTYPE* Release)(void* This);
+    HRESULT (STDMETHODCALLTYPE* GetIids)(void* This, ULONG* iidCount, IID** iids);
+    HRESULT (STDMETHODCALLTYPE* GetRuntimeClassName)(void* This, HSTRING* className);
+    HRESULT (STDMETHODCALLTYPE* GetTrustLevel)(void* This, TrustLevel* trustLevel);
+    HRESULT (STDMETHODCALLTYPE* get_Vibration)(void* This, GamepadVibration* value);
+    HRESULT (STDMETHODCALLTYPE* put_Vibration)(void* This, GamepadVibration value);
+} IGamepad2Vtbl;
+
+typedef struct IGamepad2 {
+    IGamepad2Vtbl* lpVtbl;
+} IGamepad2;
+
+
+// --- Helper macros ---
+#define SAFE_RELEASE(p) do { if (p) { (p)->lpVtbl->Release(p); (p) = NULL; } } while (0)
+
+// --- pal_gamepad_state (simplified) ---
+typedef struct win32_gamepad_context{
+    uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
+    XINPUT_STATE xinput_state[MAX_XINPUT_CONTROLLERS];
+
+    // windows gaming input.
+    IVectorView* wgi_gamepads;
+    UINT32 wgi_count;
+
+    uint8_t raw_input_buffer[1024];  // <-- THIS IS THE BUFFER
+
+    struct hid_device hid_devices[PAL_MAX_GAMEPADS];
+    struct { // DualSense/DS4
+        HANDLE handle;
+        win32_dualsense_state state;
+        uint16_t vendor_id;
+        uint16_t product_id;
+        char name[128];
+        pal_bool connected;
+    } ds_devices[PAL_MAX_GAMEPADS];
+
+    win32_gamepad_mapping mappings[PAL_MAX_MAPPINGS];
+    int mapping_count;
+    pal_bool initialized;
+    HWND hwnd;
+}win32_gamepad_context;
+win32_gamepad_context win32_gamepad_ctx = {0};
+
+// --- Win32 context ---
+
+
+// --- Your init function ---
+
+static const wchar_t* RuntimeClass_Gamepad = L"Windows.Gaming.Input.Gamepad";
+
+int init_windows_gaming_input(void) {
+    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return 0;
+
+    HSTRING class_str;
+    hr = WindowsCreateString(RuntimeClass_Gamepad, (UINT32)wcslen(RuntimeClass_Gamepad), &class_str);
+    if (FAILED(hr)) return 0;
+
+    hr = RoGetActivationFactory(class_str, &IID_IGamepadStatics, (void**)&g_statics);
+    WindowsDeleteString(class_str);
+
+    return SUCCEEDED(hr);
+}
+
+// --- platform_get_gamepad_count ---
+
+int platform_get_gamepad_count(void) {
+    UINT32 wgi_count = 0;
+    IVectorView* gamepads = NULL;
+
+    if (g_statics && SUCCEEDED(g_statics->lpVtbl->get_Gamepads(g_statics, (void**)&gamepads)) && gamepads) {
+        gamepads->lpVtbl->get_Size(gamepads, &wgi_count);
+    }
+    SAFE_RELEASE(gamepads);
+
+    win32_gamepad_ctx.wgi_count = wgi_count;
+
+    // Track XInput slots used by WGI
+    pal_bool xinput_slot_used[MAX_XINPUT_CONTROLLERS] = { FALSE };
+    for (UINT32 i = 0; i < wgi_count && i < MAX_XINPUT_CONTROLLERS; ++i) {
+        xinput_slot_used[i] = TRUE;
+    }
+
+    // Poll remaining XInput slots
+    for (DWORD i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
+        if (xinput_slot_used[i]) {
+            // we check xinput_connected when polling input to ensure that the same gamepad is not polled twice when it's in xinput and wgi.
+            win32_gamepad_ctx.xinput_connected[i] = FALSE; 
+            continue;
+        }
+
+        XINPUT_STATE state;
+        if (XInputGetState(i, &state) == ERROR_SUCCESS) {
+            win32_gamepad_ctx.xinput_connected[i] = TRUE;
+            win32_gamepad_ctx.xinput_state[i] = state;
+        } else {
+            win32_gamepad_ctx.xinput_connected[i] = FALSE;
+        }
+    }
+
+    int total_count = (int)wgi_count;
+    for (int i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
+        if (win32_gamepad_ctx.xinput_connected[i]) total_count++;
+    }
+
+    return total_count;
+}
+// --- platform_gamepad_get_state ---
+
+#define GamepadButtons_None             0x0000
+#define GamepadButtons_Menu             0x0001  // Start button
+#define GamepadButtons_View             0x0002  // Back button
+#define GamepadButtons_DPadUp           0x0004
+#define GamepadButtons_DPadDown         0x0008
+#define GamepadButtons_DPadLeft         0x0010
+#define GamepadButtons_DPadRight        0x0020
+#define GamepadButtons_LeftThumbstick  0x0040
+#define GamepadButtons_RightThumbstick 0x0080
+#define GamepadButtons_LeftShoulder    0x0100
+#define GamepadButtons_RightShoulder   0x0200
+#define GamepadButtons_A                0x1000
+#define GamepadButtons_B                0x2000
+#define GamepadButtons_X                0x4000
+#define GamepadButtons_Y                0x8000
+
+pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
+    memset(out_state, 0, sizeof(pal_gamepad_state));
+
+    // WGI controllers
+    if (g_statics && index < (int)win32_gamepad_ctx.wgi_count) {
+        IVectorView* gamepads = NULL;
+        if (FAILED(g_statics->lpVtbl->get_Gamepads(g_statics, (void**)&gamepads)) || !gamepads)
+            return FALSE;
+
+        IGamepad* pad = NULL;
+        HRESULT hr = gamepads->lpVtbl->GetAt(gamepads, (UINT32)index, &pad);
+        SAFE_RELEASE(gamepads);
+        if (FAILED(hr) || !pad) return FALSE;
+
+        GamepadReading reading = {0};
+        hr = pad->lpVtbl->GetCurrentReading(pad, &reading);
+        SAFE_RELEASE(pad);
+        if (FAILED(hr)) return FALSE;
+
+        // Normalize & deadzone
+        const float DEADZONE = 0.25f;
+        float lx = reading.LeftThumbstickX;
+        float ly = reading.LeftThumbstickY;
+        float rx = reading.RightThumbstickX;
+        float ry = reading.RightThumbstickY;
+
+        if (sqrtf(lx*lx + ly*ly) < DEADZONE) lx = ly = 0;
+        if (sqrtf(rx*rx + ry*ry) < DEADZONE) rx = ry = 0;
+
+        out_state->axes.left_x = lx;
+        out_state->axes.left_y = ly;
+        out_state->axes.right_x = rx;
+        out_state->axes.right_y = ry;
+        out_state->axes.left_trigger = reading.LeftTrigger;
+        out_state->axes.right_trigger = reading.RightTrigger;
+
+        out_state->buttons.a = (reading.Buttons & GamepadButtons_A) != 0;
+        out_state->buttons.b = (reading.Buttons & GamepadButtons_B) != 0;
+        out_state->buttons.x = (reading.Buttons & GamepadButtons_X) != 0;
+        out_state->buttons.y = (reading.Buttons & GamepadButtons_Y) != 0;
+        out_state->buttons.back = (reading.Buttons & GamepadButtons_View) != 0;
+        out_state->buttons.start = (reading.Buttons & GamepadButtons_Menu) != 0;
+        out_state->buttons.left_stick = (reading.Buttons & GamepadButtons_LeftThumbstick) != 0;
+        out_state->buttons.right_stick = (reading.Buttons & GamepadButtons_RightThumbstick) != 0;
+        out_state->buttons.left_shoulder = (reading.Buttons & GamepadButtons_LeftShoulder) != 0;
+        out_state->buttons.right_shoulder = (reading.Buttons & GamepadButtons_RightShoulder) != 0;
+        out_state->buttons.dpad_up = (reading.Buttons & GamepadButtons_DPadUp) != 0;
+        out_state->buttons.dpad_down = (reading.Buttons & GamepadButtons_DPadDown) != 0;
+        out_state->buttons.dpad_left = (reading.Buttons & GamepadButtons_DPadLeft) != 0;
+        out_state->buttons.dpad_right = (reading.Buttons & GamepadButtons_DPadRight) != 0;
+
+        strncpy(out_state->name, "Windows Gaming Input Controller", sizeof(out_state->name));
+        out_state->vendor_id = 0x045E;
+        out_state->product_id = 0;
+        out_state->connected = TRUE;
+        out_state->is_xinput = FALSE;
+        return TRUE;
+    }
+
+    // XInput controllers
+    index -= (int)win32_gamepad_ctx.wgi_count;
+
+    for (int i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
+        if (win32_gamepad_ctx.xinput_connected[i]) {
+            if (index == 0) {
+                const XINPUT_GAMEPAD* pad = &win32_gamepad_ctx.xinput_state[i].Gamepad;
+
+                float lx = pad->sThumbLX;
+                float ly = pad->sThumbLY;
+                float rx = pad->sThumbRX;
+                float ry = pad->sThumbRY;
+
+                if (abs(lx) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) lx = 0;
+                if (abs(ly) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) ly = 0;
+                if (abs(rx) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) rx = 0;
+                if (abs(ry) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) ry = 0;
+
+                out_state->axes.left_x = fmaxf(-1.0f, lx / 32767.0f);
+                out_state->axes.left_y = fmaxf(-1.0f, ly / 32767.0f);
+                out_state->axes.right_x = fmaxf(-1.0f, rx / 32767.0f);
+                out_state->axes.right_y = fmaxf(-1.0f, ry / 32767.0f);
+
+                out_state->axes.left_trigger = (pad->bLeftTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bLeftTrigger / 255.0f);
+                out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bRightTrigger / 255.0f);
+
+                WORD b = pad->wButtons;
+                out_state->buttons.a = (b & XINPUT_GAMEPAD_A) != 0;
+                out_state->buttons.b = (b & XINPUT_GAMEPAD_B) != 0;
+                out_state->buttons.x = (b & XINPUT_GAMEPAD_X) != 0;
+                out_state->buttons.y = (b & XINPUT_GAMEPAD_Y) != 0;
+                out_state->buttons.back = (b & XINPUT_GAMEPAD_BACK) != 0;
+                out_state->buttons.start = (b & XINPUT_GAMEPAD_START) != 0;
+                out_state->buttons.left_stick = (b & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
+                out_state->buttons.right_stick = (b & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
+                out_state->buttons.left_shoulder = (b & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
+                out_state->buttons.right_shoulder = (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
+                out_state->buttons.dpad_up = (b & XINPUT_GAMEPAD_DPAD_UP) != 0;
+                out_state->buttons.dpad_down = (b & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
+                out_state->buttons.dpad_left = (b & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
+                out_state->buttons.dpad_right = (b & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
+
+                strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name));
+                out_state->vendor_id = 0x045E;
+                out_state->product_id = 0xDEADBEEF;
+                out_state->connected = TRUE;
+                out_state->is_xinput = TRUE;
+                return TRUE;
+            }
+            --index;
+        }
+    }
+
+    return FALSE;
+}
+// --- platform_set_controller_vibration ---
+
+void platform_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
+    // Clamp all values to [0.0f, 1.0f]
+    if (left_motor < 0.0f) left_motor = 0.0f;
+    if (left_motor > 1.0f) left_motor = 1.0f;
+    if (right_motor < 0.0f) right_motor = 0.0f;
+    if (right_motor > 1.0f) right_motor = 1.0f;
+
+    // --- WGI Gamepads ---
+    if (controller_id >= 0 && controller_id < (int)win32_gamepad_ctx.wgi_count && win32_gamepad_ctx.wgi_gamepads) {
+        IGamepad* gamepad = NULL;
+        HRESULT hr = win32_gamepad_ctx.wgi_gamepads->lpVtbl->GetAt(
+            win32_gamepad_ctx.wgi_gamepads,
+            (UINT32)controller_id,
+            &gamepad
+        );
+
+        if (SUCCEEDED(hr) && gamepad) {
+            // Try to query IGamepad2 for trigger vibration support
+            IGamepad2* gamepad2 = NULL;
+            hr = gamepad->lpVtbl->QueryInterface(gamepad, &IID_IGamepad2, (void**)&gamepad2);
+            if (SUCCEEDED(hr) && gamepad2) {
+                GamepadVibration vibration = {
+                    .LeftMotor = left_motor,
+                    .RightMotor = right_motor,
+                    .LeftTrigger = left_trigger,
+                    .RightTrigger = right_trigger
+                };
+                gamepad2->lpVtbl->put_Vibration(gamepad2, vibration);
+                gamepad2->lpVtbl->Release(gamepad2);
+                gamepad->lpVtbl->Release(gamepad);
+                return;
+            }
+
+            // Fallback: if only IGamepad (no trigger vibration support)
+            GamepadVibration vib = { left_motor, right_motor, 0.0f, 0.0f };
+            gamepad->lpVtbl->put_Vibration(gamepad, vib);
+            gamepad->lpVtbl->Release(gamepad);
+            return;
+        }
+    }
+
+    // --- XInput Gamepads ---
+    int xinput_index = controller_id - (int)win32_gamepad_ctx.wgi_count;
+    if (xinput_index >= 0 && xinput_index < MAX_XINPUT_CONTROLLERS && win32_gamepad_ctx.xinput_connected[xinput_index]) {
+        XINPUT_VIBRATION vibration = {
+            .wLeftMotorSpeed = (WORD)(left_motor * 65535.0f),
+            .wRightMotorSpeed = (WORD)(right_motor * 65535.0f)
+        };
+        XInputSetState(xinput_index, &vibration);
+    }
+}
+
+void platform_stop_gamepad_vibration(int controller_id) {
+    platform_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+
+    switch (msg) {
         case WM_CLOSE:
             DestroyWindow(hwnd); // This is required to get WM_DESTROY
             return 0;
         case WM_DESTROY:
             PostQuitMessage(0); // Posts WM_QUIT to the message queue
             return 0;
+        case WM_INPUT:
+            win32_handle_raw_input((HRAWINPUT)lparam);
+            return 0;
+            
+        case WM_INPUT_DEVICE_CHANGE:
+            win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
+            printf("Device Changed!\n");
+            return 0;
     }
-
-	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
+      return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 // Window Hints
@@ -1035,7 +1490,6 @@ static int platform_make_context_current(pal_window* window) {
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	platform_get_raw_input_buffer();
-	platform_poll_gamepads();
 
 	MSG msg = {0};
 	if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
@@ -1209,43 +1663,6 @@ void FreeMouseHIDBuffers() {
     hid_buffer.num_button_caps = 0;
 }
 
-void Win32HandleHidMouse(const RAWINPUT* raw) {
-    if (raw->header.dwType != RIM_TYPEHID)
-        return;
-
-    input.mouse = (v2){ (float)raw->data.mouse.lLastX, (float)raw->data.mouse.lLastY };
-
-    if (!hid_buffer.prep_data)
-        return;
-
-    for (int i = 0; i < MAX_MOUSE_BUTTONS; ++i)
-        input.mouse_buttons[i] = 0;
-
-    for (ULONG i = 0; i < hid_buffer.num_button_caps; ++i) {
-        ULONG usage_count = MAX_MOUSE_BUTTONS;
-        USAGE usages[MAX_MOUSE_BUTTONS] = {0};
-
-        NTSTATUS status = HidP_GetUsages(
-            HidP_Input,
-            hid_buffer.button_caps[i].UsagePage,
-            0,
-            usages,
-            &usage_count,
-            hid_buffer.prep_data,
-            (PCHAR)raw->data.hid.bRawData,
-            raw->data.hid.dwSizeHid
-        );
-
-        if (status == HIDP_STATUS_SUCCESS || status == HIDP_STATUS_BUFFER_TOO_SMALL) {
-            for (ULONG j = 0; j < usage_count; ++j) {
-                USAGE usage_id = usages[j];
-                if (usage_id < MAX_MOUSE_BUTTONS)
-                    input.mouse_buttons[usage_id] = 1;
-            }
-        }
-    }
-}
-
 void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
@@ -1325,139 +1742,6 @@ int platform_register_raw_input_devices(pal_window* window) {
 	return 0;
 }
 
-void platform_poll_gamepads(void) {
-    for (int i = 0; i < MAX_CONTROLLERS; ++i) {
-        input.controller_prev_state[i] = input.controller_state[i];
-        DWORD res = XInputGetState(i, &input.controller_state[i]);
-
-        if (res == ERROR_SUCCESS) {
-            if (!input.controller_connected[i]) {
-                ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));
-            }
-            input.controller_connected[i] = 1;
-        } else {
-            if (input.controller_connected[i]) {
-                ZeroMemory(&input.controller_state[i], sizeof(XINPUT_STATE));
-                ZeroMemory(&input.controller_prev_state[i], sizeof(XINPUT_STATE));
-            }
-            input.controller_connected[i] = 0;
-        }
-    }
-}
-
-int platform_is_button_down(int controller_id, unsigned short button) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
-    if (!input.controller_connected[controller_id]) return 0;
-    return (input.controller_state[controller_id].Gamepad.wButtons & button) != 0;
-}
-
-int platform_is_button_pressed(int controller_id, unsigned short button) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
-    if (!input.controller_connected[controller_id]) return 0;
-
-	unsigned short curr = input.controller_state[controller_id].Gamepad.wButtons;
-	unsigned short prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
-    return ((curr & button) != 0) && ((prev & button) == 0);
-}
-
-int platform_is_button_released(int controller_id, unsigned short button) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0;
-    if (!input.controller_connected[controller_id]) return 0;
-
-	unsigned short curr = input.controller_state[controller_id].Gamepad.wButtons;
-	unsigned short prev = input.controller_prev_state[controller_id].Gamepad.wButtons;
-    return ((curr & button) == 0) && ((prev & button) != 0);
-}
-
-// Helper to normalize and apply deadzone
-static v2 platform_process_thumbstick(short x, short y, int deadzone) {
-    v2 v = {0};
-
-    float fx = (float)x;
-    float fy = (float)y;
-
-    if (x > deadzone || x < -deadzone)
-        fx = (fx > 0) ? (fx - deadzone) : (fx + deadzone);
-    else
-        fx = 0;
-
-    if (y > deadzone || y < -deadzone)
-        fy = (fy > 0) ? (fy - deadzone) : (fy + deadzone);
-    else
-        fy = 0;
-
-    const float max_val = 32767.0f - deadzone;
-
-    v.x = fx / max_val;
-    v.y = fy / max_val;
-
-    return v;
-}
-
-v2 platform_get_left_stick(int controller_id) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2) {0};
-    if (!input.controller_connected[controller_id]) return (v2) {0};
-
-	short x = input.controller_state[controller_id].Gamepad.sThumbLX;
-	short y = input.controller_state[controller_id].Gamepad.sThumbLY;
-
-    return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-}
-
-v2 platform_get_right_stick(int controller_id) {
-    if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return (v2) {0};
-    if (!input.controller_connected[controller_id]) return (v2) {0};
-
-	short x = input.controller_state[controller_id].Gamepad.sThumbRX;
-	short y = input.controller_state[controller_id].Gamepad.sThumbRY;
-
-    return platform_process_thumbstick(x, y, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
-}
-
-float platform_get_right_trigger(int controller_id) {
-	if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0.0f;
-	if (!input.controller_connected[controller_id]) return 0.0f;
-
-	BYTE raw = input.controller_state[controller_id].Gamepad.bRightTrigger;
-
-	return (raw > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-		? (float)raw / 255.0f
-		: 0.0f;
-}
-
-float platform_get_left_trigger(int controller_id) {
-	if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return 0.0f;
-	if (!input.controller_connected[controller_id]) return 0.0f;
-
-	BYTE raw = input.controller_state[controller_id].Gamepad.bLeftTrigger;
-
-	// Apply threshold (XInput docs recommend 30 as a deadzone)
-	return (raw > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-		? (float)raw / 255.0f
-		: 0.0f;
-}
-
-void platform_set_controller_vibration(int controller_id, float left_motor, float right_motor) {
-	if (controller_id < 0 || controller_id >= MAX_CONTROLLERS) return;
-	if (!input.controller_connected[controller_id]) return;
-
-	// Clamp values between 0.0f and 1.0f
-	if (left_motor < 0.0f) left_motor = 0.0f;
-	if (left_motor > 1.0f) left_motor = 1.0f;
-	if (right_motor < 0.0f) right_motor = 0.0f;
-	if (right_motor > 1.0f) right_motor = 1.0f;
-
-	XINPUT_VIBRATION vibration = { 0 };
-	vibration.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
-	vibration.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
-
-	XInputSetState(controller_id, &vibration);
-}
-
-void platform_stop_controller_vibration(int controller_id) {
-	platform_set_controller_vibration(controller_id, 0.0f, 0.0f);
-}
-
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 8 KB
 
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
@@ -1476,7 +1760,7 @@ static int platform_get_raw_input_buffer() {
             Win32HandleKeyboard(raw);
         }
         else {
-            Win32HandleHidMouse(raw);
+            Win32HandleHID(raw);
         }
 		raw = NEXTRAWINPUTBLOCK(raw);
 	}
@@ -1537,7 +1821,7 @@ static int platform_play_sound(const Sound* sound, float volume) {
 	wfex.Format.wBitsPerSample = sound->bitsPerSample;
 	wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
 	wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
-	wfex.Format.cbSize = 22;
+	wfex.Format.cbSize = sizeof(wfex);
 
 	wfex.Samples.wValidBitsPerSample = sound->bitsPerSample;
 	wfex.dwChannelMask = (sound->channels == 2) ? SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT : 0;
