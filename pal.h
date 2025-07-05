@@ -525,7 +525,6 @@ typedef struct iv4 {
 //----------------------------------------------------------------------------------
 // Keyboard and Mouse Buttons
 //----------------------------------------------------------------------------------
-// NOTE: These are used for raw input, so this might not be platform-specific.
 #define LEFT_MOUSE_BUTTON 0x0
 #define RIGHT_MOUSE_BUTTON 0x1
 #define MIDDLE_MOUSE_BUTTON 0x2
@@ -562,103 +561,102 @@ typedef struct iv4 {
 #define EXTRA_MOUSE_BUTTON29 0x21
 #define EXTRA_MOUSE_BUTTON30 0x22
 
-#ifdef _WIN32 
-#define KEY_BACKSPACE     0x08
-#define KEY_TAB           0x09
-#define KEY_ENTER         0x0D
-#define KEY_SHIFT         0x10
-#define KEY_CONTROL       0x11
-#define KEY_ALT           0x12
-#define KEY_PAUSE         0x13
-#define KEY_CAPSLOCK      0x14
-#define KEY_ESCAPE        0x1B
-#define KEY_SPACE         0x20
-#define KEY_PAGEUP        0x21
-#define KEY_PAGEDOWN      0x22
-#define KEY_END           0x23
-#define KEY_HOME          0x24
-#define KEY_LEFT          0x25
-#define KEY_UP            0x26
-#define KEY_RIGHT         0x27
-#define KEY_DOWN          0x28
-#define KEY_PRINTSCREEN   0x2C
-#define KEY_INSERT        0x2D
-#define KEY_DELETE        0x2E
+#define PAL_BACKSPACE     0x08
+#define PAL_TAB           0x09
+#define PAL_ENTER         0x0D
+#define PAL_SHIFT         0x10
+#define PAL_CONTROL       0x11
+#define PAL_ALT           0x12
+#define PAL_PAUSE         0x13
+#define PAL_CAPSLOCK      0x14
+#define PAL_ESCAPE        0x1B
+#define PAL_SPACE         0x20
+#define PAL_PAGEUP        0x21
+#define PAL_PAGEDOWN      0x22
+#define PAL_END           0x23
+#define PAL_HOME          0x24
+#define PAL_LEFT          0x25
+#define PAL_UP            0x26
+#define PAL_RIGHT         0x27
+#define PAL_DOWN          0x28
+#define PAL_PRINTSCREEN   0x2C
+#define PAL_INSERT        0x2D
+#define PAL_DELETE        0x2E
 
-#define KEY_0             0x30
-#define KEY_1             0x31
-#define KEY_2             0x32
-#define KEY_3             0x33
-#define KEY_4             0x34
-#define KEY_5             0x35
-#define KEY_6             0x36
-#define KEY_7             0x37
-#define KEY_8             0x38
-#define KEY_9             0x39
+#define PAL_0             0x30
+#define PAL_1             0x31
+#define PAL_2             0x32
+#define PAL_3             0x33
+#define PAL_4             0x34
+#define PAL_5             0x35
+#define PAL_6             0x36
+#define PAL_7             0x37
+#define PAL_8             0x38
+#define PAL_9             0x39
 
-#define KEY_A             0x41
-#define KEY_B             0x42
-#define KEY_C             0x43
-#define KEY_D             0x44
-#define KEY_E             0x45
-#define KEY_F             0x46
-#define KEY_G             0x47
-#define KEY_H             0x48
-#define KEY_I             0x49
-#define KEY_J             0x4A
-#define KEY_K             0x4B
-#define KEY_L             0x4C
-#define KEY_M             0x4D
-#define KEY_N             0x4E
-#define KEY_O             0x4F
-#define KEY_P             0x50
-#define KEY_Q             0x51
-#define KEY_R             0x52
-#define KEY_S             0x53
-#define KEY_T             0x54
-#define KEY_U             0x55
-#define KEY_V             0x56
-#define KEY_W             0x57
-#define KEY_X             0x58
-#define KEY_Y             0x59
-#define KEY_Z             0x5A
+#define PAL_A             0x41
+#define PAL_B             0x42
+#define PAL_C             0x43
+#define PAL_D             0x44
+#define PAL_E             0x45
+#define PAL_F             0x46
+#define PAL_G             0x47
+#define PAL_H             0x48
+#define PAL_I             0x49
+#define PAL_J             0x4A
+#define PAL_K             0x4B
+#define PAL_L             0x4C
+#define PAL_M             0x4D
+#define PAL_N             0x4E
+#define PAL_O             0x4F
+#define PAL_P             0x50
+#define PAL_Q             0x51
+#define PAL_R             0x52
+#define PAL_S             0x53
+#define PAL_T             0x54
+#define PAL_U             0x55
+#define PAL_V             0x56
+#define PAL_W             0x57
+#define PAL_X             0x58
+#define PAL_Y             0x59
+#define PAL_Z             0x5A
 
-#define KEY_LWIN          0x5B // This is also known as the super key on linux.
-#define KEY_RWIN          0x5C
-#define KEY_APPS          0x5D
+#define PAL_LWIN          0x5B // This is also known as the super PAL on linux.
+#define PAL_RWIN          0x5C
+#define PAL_APPS          0x5D
 
-#define KEY_NUMPAD_0       0x60
-#define KEY_NUMPAD_1       0x61
-#define KEY_NUMPAD_2       0x62
-#define KEY_NUMPAD_3       0x63
-#define KEY_NUMPAD_4       0x64
-#define KEY_NUMPAD_5       0x65
-#define KEY_NUMPAD_6       0x66
-#define KEY_NUMPAD_7       0x67
-#define KEY_NUMPAD_8       0x68
-#define KEY_NUMPAD_9       0x69
-#define KEY_MULTIPLY      0x6A
-#define KEY_ADD           0x6B
-#define KEY_SEPARATOR     0x6C // Most modern keyboards don't have this.
-#define KEY_SUBTRACT      0x6D
-#define KEY_DECIMAL       0x6E
-#define KEY_DIVIDE        0x6F
+#define PAL_NUMPAD_0       0x60
+#define PAL_NUMPAD_1       0x61
+#define PAL_NUMPAD_2       0x62
+#define PAL_NUMPAD_3       0x63
+#define PAL_NUMPAD_4       0x64
+#define PAL_NUMPAD_5       0x65
+#define PAL_NUMPAD_6       0x66
+#define PAL_NUMPAD_7       0x67
+#define PAL_NUMPAD_8       0x68
+#define PAL_NUMPAD_9       0x69
+#define PAL_MULTIPLY      0x6A
+#define PAL_ADD           0x6B
+#define PAL_SEPARATOR     0x6C // Most modern PALboards don't have this.
+#define PAL_SUBTRACT      0x6D
+#define PAL_DECIMAL       0x6E
+#define PAL_DIVIDE        0x6F
 
-#define KEY_F1            0x70
-#define KEY_F2            0x71
-#define KEY_F3            0x72
-#define KEY_F4            0x73
-#define KEY_F5            0x74
-#define KEY_F6            0x75
-#define KEY_F7            0x76
-#define KEY_F8            0x77
-#define KEY_F9            0x78
-#define KEY_F10           0x79
-#define KEY_F11           0x7A
-#define KEY_F12           0x7B
+#define PAL_F1            0x70
+#define PAL_F2            0x71
+#define PAL_F3            0x72
+#define PAL_F4            0x73
+#define PAL_F5            0x74
+#define PAL_F6            0x75
+#define PAL_F7            0x76
+#define PAL_F8            0x77
+#define PAL_F9            0x78
+#define PAL_F10           0x79
+#define PAL_F11           0x7A
+#define PAL_F12           0x7B
 
-#define KEY_NUMLOCK       0x90
-#define KEY_SCROLLLOCK    0x91
+#define PAL_NUMLOCK       0x90
+#define PAL_SCROLLLOCK    0x91
 
 //----------------------------------------------------------------------------------
 // Controller Buttons
@@ -681,7 +679,6 @@ typedef struct iv4 {
 #define GAMEPAD_CIRCLE         GAMEPAD_B
 #define GAMEPAD_SQUARE         GAMEPAD_X
 #define GAMEPAD_TRIANGLE       GAMEPAD_Y
-#endif
 
 #if defined(__cplusplus)
 #define CLITERAL(type)      type

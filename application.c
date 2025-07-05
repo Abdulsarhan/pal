@@ -93,9 +93,12 @@ int main() {
             case PAL_MOUSE_BUTTON_UP:
 				printf("Mouse Button UP!\n");
                 break;
+#if 0
+                VK_RETURN
+#endif
             case PAL_KEY_DOWN:
-                if (event.key.virtual_key == KEY_ENTER )
-                    printf("%d\n", event.key.modifiers);
+                if (event.key.virtual_key == PAL_NUMLOCK)
+                    printf("ENTER KEY PRESSED!%d\n", event.key.modifiers);
                 break;
             case PAL_KEY_UP:
 				printf("Keyboard UP!\n");
@@ -110,12 +113,12 @@ int main() {
                 break;
             }
 		}
-        if (is_key_down(KEY_W)) {
+        if (is_key_down(PAL_W)) {
             printf("PRESSED W!\n");
         }
         for (int i = 0; i < pal_get_gamepad_count(); i++) {
             if (pal_get_gamepad_state(i, &state)) {
-
+/*
                 printf("\nController %d: %s\n", i, state.name);
                 printf("  Left Stick: %.2f, %.2f\n", state.axes.left_x, state.axes.left_y);
                 printf("  Right Stick: %.2f, %.2f\n", state.axes.right_x, state.axes.right_y);
@@ -123,7 +126,7 @@ int main() {
                 printf("  Buttons: A=%d B=%d X=%d Y=%d\n", 
                       state.buttons.a, state.buttons.b, 
                       state.buttons.x, state.buttons.y);
-
+*/
                 // 6. Example vibration (Xbox controllers only)
                 if (state.buttons.a && state.is_xinput) {
                     pal_set_gamepad_vibration(i, 0.5f, 0.5f, 0, 0);

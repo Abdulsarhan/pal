@@ -18,7 +18,6 @@ static int platform_make_context_current(pal_window* window);
 static int platform_play_sound(const Sound* sound, float volume);
 static int platform_register_raw_input_devices(pal_window* window);
 static int platform_get_raw_input_buffer();
-void platform_poll_gamepads(void);
 v2 platform_get_mouse_position(pal_window* window);
 static void platform_begin_drawing();
 static void platform_end_drawing(pal_window* window);
