@@ -65,6 +65,8 @@ typedef struct {
     } touchpad;
 } pal_gamepad_state;
 
+
+
 // Window stuff.
 typedef struct pal_window pal_window;
 typedef struct pal_monitor pal_monitor;
@@ -425,6 +427,13 @@ typedef struct pal_event
     uint8_t padding[128];
 } pal_event;
 
+typedef struct pal_event_queue {
+    size_t size;
+    size_t capacity;
+    int front;
+    int back;
+    pal_event* events;
+}pal_event_queue;
 
 #if defined(_WIN32)
 #if defined(__TINYC__)

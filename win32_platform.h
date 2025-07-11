@@ -52,6 +52,7 @@ struct pal_window {
 	HGLRC hglrc;
     DWORD windowedStyle;
     RECT windowedRect;
+    pal_event_queue queue;
 };
 
 struct pal_monitor {
@@ -555,17 +556,20 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     return hIcon;
 }
 
-int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
+int platform_translate_message(MSG msg, pal_window* window) {
+    pal_event event;
+    // test WM_QUIT, WM_DESTORY, and WM_CLOSE
     switch (msg.message) {
         case WM_DESTROY:
+            PostQuitMessage(0);
         case WM_QUIT:
         case WM_CLOSE:
-            event->type = PAL_QUIT;
-            event->quit = (pal_quit_event){ .code = 0 };
+            event.type = PAL_QUIT;
+            event.quit = (pal_quit_event){ .code = 0 };
             break;
 		case WM_MOVE:
-			event->type = PAL_WINDOW_EVENT;
-			event->window = (pal_window_event){
+			event.type = PAL_WINDOW_EVENT;
+			event.window = (pal_window_event){
 				.windowid = window->id,
 				.event_code = WM_MOVE,
 				.x = LOWORD(msg.lParam),
@@ -577,8 +581,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 			};
 			break;
 		case WM_SIZE:
-			event->type = PAL_WINDOW_EVENT;
-			event->window = (pal_window_event){
+			event.type = PAL_WINDOW_EVENT;
+			event.window = (pal_window_event){
 				.windowid = window->id,
 				.event_code = WM_SIZE,
 				.x = 0,
@@ -591,9 +595,9 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 			break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
-            event->type = PAL_WINDOW_EVENT;
+            event.type = PAL_WINDOW_EVENT;
             WINDOWPOS* pos = (WINDOWPOS*)msg.lParam;
-            event->window = (pal_window_event){
+            event.window = (pal_window_event){
                 .windowid = window->id,
                 .event_code = msg.message,
                 .x = pos->x,
@@ -606,8 +610,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
         case WM_MOUSEMOVE:
-            event->type = PAL_MOUSE_MOTION;
-            event->motion = (pal_mouse_motion_event){
+            event.type = PAL_MOUSE_MOTION;
+            event.motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .delta_x = 0, // this should be assigned when we get raw input from the mouse.
@@ -617,8 +621,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
         case WM_LBUTTONDOWN: 
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -629,8 +633,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
         case WM_RBUTTONDOWN: 
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -642,8 +646,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 
         case WM_MBUTTONDOWN: 
 
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -655,8 +659,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 
         case WM_XBUTTONDOWN: 
 
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -664,14 +668,14 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
                 .modifiers = msg.wParam
             };
 			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
-				event->button.button = SIDE_MOUSE_BUTTON1;
+				event.button.button = SIDE_MOUSE_BUTTON1;
 			else 
-				event->button.button = SIDE_MOUSE_BUTTON2;
+				event.button.button = SIDE_MOUSE_BUTTON2;
 			break;
 
         case WM_LBUTTONDBLCLK:
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-			event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+			event.button = (pal_mouse_button_event){
 				.x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
 				.y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
 				.pressed = 1, // pressed state of the mouse, might remove.
@@ -681,8 +685,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             };
             break;
 		case WM_RBUTTONDBLCLK:
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -692,8 +696,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             };
             break;
 		case WM_MBUTTONDBLCLK:
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -704,8 +708,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
 		case WM_XBUTTONDBLCLK:
-            event->type = PAL_MOUSE_BUTTON_DOWN;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
                 .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
                 .pressed = 1, // pressed state of the mouse, might remove.
@@ -714,14 +718,14 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             };
 
 			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
-				event->button.button = SIDE_MOUSE_BUTTON1;
+				event.button.button = SIDE_MOUSE_BUTTON1;
 			else 
-				event->button.button = SIDE_MOUSE_BUTTON2;
+				event.button.button = SIDE_MOUSE_BUTTON2;
             break;
 
         case WM_LBUTTONUP:
-            event->type = PAL_MOUSE_BUTTON_UP;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_UP;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
@@ -730,8 +734,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             };
             break;
         case WM_RBUTTONUP:
-            event->type = PAL_MOUSE_BUTTON_UP;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_UP;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
@@ -740,8 +744,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             };
             break;
         case WM_MBUTTONUP:
-            event->type = PAL_MOUSE_BUTTON_UP;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_UP;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
@@ -751,24 +755,24 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
         case WM_XBUTTONUP:
-            event->type = PAL_MOUSE_BUTTON_UP;
-            event->button = (pal_mouse_button_event){
+            event.type = PAL_MOUSE_BUTTON_UP;
+            event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
                 .modifiers = msg.wParam
             };
 			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
-				event->button.button = SIDE_MOUSE_BUTTON1;
+				event.button.button = SIDE_MOUSE_BUTTON1;
 			else 
-				event->button.button = SIDE_MOUSE_BUTTON2;
+				event.button.button = SIDE_MOUSE_BUTTON2;
             break;
 
         case WM_MOUSEWHEEL:
         case WM_MOUSEHWHEEL: {
             int delta = GET_WHEEL_DELTA_WPARAM(msg.wParam);
-            event->type = PAL_MOUSE_WHEEL;
-            event->wheel = (pal_mouse_wheel_event){
+            event.type = PAL_MOUSE_WHEEL;
+            event.wheel = (pal_mouse_wheel_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .delta_x = (msg.message == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
@@ -780,8 +784,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
-            event->type = PAL_KEY_DOWN;
-            event->key = (pal_keyboard_event){
+            event.type = PAL_KEY_DOWN;
+            event.key = (pal_keyboard_event){
                 .virtual_key = win32_key_to_pal_key[(uint32_t)msg.wParam],
                 .scancode = (uint32_t)((msg.lParam >> 16) & 0xFF),
                 .pressed = 1,
@@ -792,8 +796,8 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 
         case WM_KEYUP:
         case WM_SYSKEYUP:
-            event->type = PAL_KEY_UP;
-            event->key = (pal_keyboard_event){
+            event.type = PAL_KEY_UP;
+            event.key = (pal_keyboard_event){
                 .virtual_key = win32_key_to_pal_key[(uint32_t)msg.wParam],
                 .scancode = (uint32_t)((msg.lParam >> 16) & 0xFF),
                 .pressed = 0,
@@ -804,20 +808,20 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
 
         case WM_CHAR:
         case WM_UNICHAR:
-            event->type = PAL_TEXT_INPUT;
-            event->text = (pal_text_input_event){
+            event.type = PAL_TEXT_INPUT;
+            event.text = (pal_text_input_event){
                 .utf8_text = {0}
             };
             {
                 char utf8[8] = {0};
                 int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&msg.wParam, 1, utf8, sizeof(utf8), NULL, NULL);
-                memcpy(event->text.utf8_text, utf8, len);
+                memcpy(event.text.utf8_text, utf8, len);
             }
             break;
 
         case WM_INPUT:
-            event->type = PAL_SENSOR_UPDATE;
-            event->sensor = (pal_sensor_event){
+            event.type = PAL_SENSOR_UPDATE;
+            event.sensor = (pal_sensor_event){
                 .device_id = 0,
                 .x = 0, .y = 0, .z = 0,
                 .sensor_type = 0
@@ -825,7 +829,7 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
             break;
 
         case WM_DROPFILES: {
-            event->type = PAL_DROP_FILE;
+            event.type = PAL_DROP_FILE;
             HDROP hDrop = (HDROP)msg.wParam;
             UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
             const char** paths = malloc(sizeof(char*) * count);
@@ -837,7 +841,7 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
                 WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
                 paths[i] = utf8;
             }
-            event->drop = (pal_drop_event){
+            event.drop = (pal_drop_event){
                 .paths = paths,
                 .count = count
             };
@@ -846,11 +850,19 @@ int platform_translate_message(MSG msg, pal_window* window, pal_event* event) {
         }
 
         default:
-            event->type = PAL_NONE;
+            event.type = PAL_NONE;
             DispatchMessage(&msg);
             break;
     }
 
+    pal_event_queue* queue = &window->queue;
+    if (queue->size == queue->capacity) {
+        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
+        return;
+    }
+    queue->events[queue->back] = event;
+    queue->back = (queue->back + 1) % queue->capacity;
+    queue->size++;
     return 0;
 }
 
@@ -1354,7 +1366,7 @@ static void platform_set_window_hint(int type, int value) {
 		break;
 	}
 }
-pal_event_queue event_queue;
+
 static pal_window* platform_create_window(int width, int height, const char* windowTitle) {
 	pal_window* fakewindow = (pal_window*)malloc(sizeof(pal_window));
     WNDCLASSEXA fakewc = { 0 };
@@ -1503,6 +1515,23 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		WGL_CONTEXT_PROFILE_MASK_ARB, s_glProfile,
 		0
 	};
+    // enough space for 10,000 events.
+    size_t capacity = 10000 * sizeof(pal_event);
+    pal_event* events = (pal_event*)malloc((capacity));
+
+    if(events == NULL) {
+        fprintf(stderr, "ERROR: platform_create_window(): failed to allocate memory for events!\n");
+    }
+
+    pal_event_queue queue = {
+        .size = 0,
+        .capacity = capacity,
+        .front = 0,
+        .back = 0,
+        .events = events
+    };
+
+    window->queue = queue;
 
 	window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
 	if (window->hglrc) {
@@ -1534,7 +1563,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		OutputDebugStringA("INFO: Using old OpenGL Context.");
 		return fakewindow;
 	}
-    event_queue = pal_eventq_create(10,000 * sizeof(pal_event));
+
 }
 
 static int platform_make_context_current(pal_window* window) {
@@ -1547,23 +1576,34 @@ static int platform_make_context_current(pal_window* window) {
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	platform_get_raw_input_buffer();
+
 	MSG msg = {0};
-	if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
-	
-		if (msg.message == WM_DESTROY) {
-			PostQuitMessage(0);
-		}
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
 
 		TranslateMessage(&msg);
 
-        platform_translate_message(msg, window, event);
+        platform_translate_message(msg, window);
 
+    }
+
+    pal_event_queue* queue = &window->queue;
+
+    // if the queue is not empty
+    if (queue->size) {
+
+	// peek
+    *event = queue->events[queue->front];
+    
+	// dequeue
+    queue->front = (queue->front + 1) % queue->capacity;
+    queue->size--;
 		return 1;
-	}
-	else {
-		return 0;
-	}
-
+    }
+    else {
+        return 0;
+    }
+    printf("ERROR: Hit Unreachable part of pal_poll_events()!\n");
+    return 0;
 }
 
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {
