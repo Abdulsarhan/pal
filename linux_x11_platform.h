@@ -21,7 +21,7 @@
 // dlopen/dlsym/dlclose
 #include <dlfcn.h>
 
-pal_window platform_init_window() {
+pal_window platform_create_window() {
 	pal_window window = { 0 };
 	// 1. Connect to X11 and get the XCB connection
 	window.display = XOpenDisplay(NULL);

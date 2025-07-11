@@ -66,14 +66,6 @@ int main() {
     if (register_input_devices(window) != 0)
         return;
 
-	Sound song = { 0 };
-	Sound sine_wave = { 0 };
-	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\goreshit_fine_night.ogg", &song);
-	load_sound("C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\sine_wave.wav", &sine_wave);
-
-	play_sound(&song, 0.1);
-	play_sound(&sine_wave, 0.1);
-
     pal_set_window_icon_legacy(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\icon.ico");
     pal_set_taskbar_icon(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png");
     pal_set_cursor(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png", 16);

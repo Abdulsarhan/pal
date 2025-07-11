@@ -625,19 +625,19 @@ typedef struct iv4 {
 #define PAL_RWIN          0x5C
 #define PAL_APPS          0x5D
 
-#define PAL_NUMPAD_0       0x60
-#define PAL_NUMPAD_1       0x61
-#define PAL_NUMPAD_2       0x62
-#define PAL_NUMPAD_3       0x63
-#define PAL_NUMPAD_4       0x64
-#define PAL_NUMPAD_5       0x65
-#define PAL_NUMPAD_6       0x66
-#define PAL_NUMPAD_7       0x67
-#define PAL_NUMPAD_8       0x68
-#define PAL_NUMPAD_9       0x69
+#define PAL_NUMPAD_0      0x60
+#define PAL_NUMPAD_1      0x61
+#define PAL_NUMPAD_2      0x62
+#define PAL_NUMPAD_3      0x63
+#define PAL_NUMPAD_4      0x64
+#define PAL_NUMPAD_5      0x65
+#define PAL_NUMPAD_6      0x66
+#define PAL_NUMPAD_7      0x67
+#define PAL_NUMPAD_8      0x68
+#define PAL_NUMPAD_9      0x69
 #define PAL_MULTIPLY      0x6A
 #define PAL_ADD           0x6B
-#define PAL_SEPARATOR     0x6C // Most modern PALboards don't have this.
+#define PAL_SEPARATOR     0x6C // Most modern Keyboards don't have this.
 #define PAL_SUBTRACT      0x6D
 #define PAL_DECIMAL       0x6E
 #define PAL_DIVIDE        0x6F

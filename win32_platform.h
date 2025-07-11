@@ -1354,11 +1354,10 @@ static void platform_set_window_hint(int type, int value) {
 		break;
 	}
 }
-
-static pal_window* platform_init_window(int width, int height, const char* windowTitle) {
+pal_event_queue event_queue;
+static pal_window* platform_create_window(int width, int height, const char* windowTitle) {
 	pal_window* fakewindow = (pal_window*)malloc(sizeof(pal_window));
     WNDCLASSEXA fakewc = { 0 };
-
 	fakewc.cbSize = sizeof(WNDCLASSEXA);
 	fakewc.lpfnWndProc = win32_fake_window_proc;
 	fakewc.hInstance = GetModuleHandleA(0);
@@ -1535,7 +1534,7 @@ static pal_window* platform_init_window(int width, int height, const char* windo
 		OutputDebugStringA("INFO: Using old OpenGL Context.");
 		return fakewindow;
 	}
-
+    event_queue = pal_eventq_create(10,000 * sizeof(pal_event));
 }
 
 static int platform_make_context_current(pal_window* window) {
@@ -1548,7 +1547,6 @@ static int platform_make_context_current(pal_window* window) {
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 	platform_get_raw_input_buffer();
-
 	MSG msg = {0};
 	if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
 	
@@ -1791,7 +1789,7 @@ int platform_register_raw_input_devices(pal_window* window) {
 	return 0;
 }
 
-#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 8 KB
+#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 

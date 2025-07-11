@@ -26,7 +26,7 @@ PALAPI void pal_init() {
 */
 
 PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle) {
-	 return platform_init_window(width, height, windowTitle);
+	 return platform_create_window(width, height, windowTitle);
 }
 
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
@@ -563,3 +563,90 @@ PALAPI uint8_t are_strings_equal(int count, char* str1, char* str2) {
 	}
 	return 1;
 }
+
+// capacity and size are in bytes,
+// not events.
+typedef struct pal_event_queue {
+    size_t size;
+    size_t capacity;
+    int front;
+    int back;
+    pal_event* events;
+}pal_event_queue;
+
+// There is only a single event queue, and it should be isntan
+pal_event_queue pal_eventq_create(size_t capacity);
+void pal_eventq_enqueue(pal_event_queue* queue, pal_event event);
+void pal_eventq_dequeue(pal_event_queue* queue);
+size_t pal_eventq_get_size(pal_event_queue* queue);
+pal_event pal_eventq_peek(pal_event_queue* queue);
+pal_bool pal_eventq_is_empty(pal_event_queue* queue);
+pal_bool pal_eventq_free(pal_event_queue* queue);
+
+pal_event_queue pal_eventq_create(size_t capacity) {
+    if(capacity == 0) {
+        fprintf(stderr, "ERROR: pal_eventq_create(): Tried to create a queue of 0 capacity!\n");
+        return (pal_event_queue){0};
+    }
+
+    pal_event* events = (pal_event*)malloc((capacity));
+
+    if(events == NULL) {
+        fprintf(stderr, "ERROR: pal_eventq_create(): failed to allocate memory for events!\n");
+        return (pal_event_queue){0};
+    }
+
+    pal_event_queue queue = {
+        .size = 0,
+        .capacity = capacity,
+        .front = 0,
+        .back = 0,
+        .events = events
+    };
+
+    return queue;
+}
+
+pal_bool pal_eventq_free(pal_event_queue* queue) {
+    if(queue->events) {
+        free(queue->events);
+        return 1;
+    }
+    else {
+        fprintf(stderr, "ERROR: pal_eventq_free(): Tried to free a queue that was already freed!\n");
+        queue->events = NULL;
+        return 0;
+    }
+}
+
+// ---------------> back
+// [0][1][2][3][4]
+// <--------------- front
+
+void pal_eventq_enqueue(pal_event_queue* queue, pal_event event) {
+    if (queue->size == queue->capacity) {
+        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
+        return;
+    }
+    queue->events[queue->back] = event;
+    queue->back = (queue->back + 1) % queue->capacity;
+    queue->size++;
+}
+
+void pal_eventq_dequeue(pal_event_queue* queue) {
+    queue->front = (queue->front + 1) % queue->capacity;
+    queue->size--;
+}
+
+size_t pal_eventq_get_size(pal_event_queue* queue) {
+    return queue->size;
+}
+
+pal_event pal_eventq_peek(pal_event_queue* queue) {
+    return queue->events[queue->front];
+}
+
+pal_bool pal_eventq_is_empty(pal_event_queue* queue) {
+    return queue->size == 0;
+}
+
