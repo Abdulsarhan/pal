@@ -53,6 +53,7 @@ struct pal_window {
     DWORD windowedStyle;
     RECT windowedRect;
     pal_event_queue queue;
+    pal_bool message_pump_drained;
 };
 
 struct pal_monitor {
@@ -75,7 +76,7 @@ typedef struct pal_input {
 	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
 	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
 	v2 mouse_position;
-	v2 mouse;
+	v2 mouse_delta;
 }pal_input;
 pal_input input = { 0 };
 
@@ -614,8 +615,8 @@ int platform_translate_message(MSG msg, pal_window* window) {
             event.motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
-                .delta_x = 0, // this should be assigned when we get raw input from the mouse.
-                .delta_y = 0,
+                .delta_x = input.mouse_delta.x, // this should be assigned when we get raw input from the mouse.
+                .delta_y = input.mouse_delta.y,
                 .buttons = msg.wParam
             };
             break;
@@ -1058,11 +1059,6 @@ typedef struct win32_gamepad_context{
 }win32_gamepad_context;
 win32_gamepad_context win32_gamepad_ctx = {0};
 
-// --- Win32 context ---
-
-
-// --- Your init function ---
-
 static const wchar_t* RuntimeClass_Gamepad = L"Windows.Gaming.Input.Gamepad";
 
 int init_windows_gaming_input(void) {
@@ -1482,18 +1478,18 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	window->hdc = GetDC(window->hwnd);
 
 	const int pixelAttribs[] = {
-	WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-	WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-	WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-	WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-	WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-	WGL_COLOR_BITS_ARB, 32,
-	WGL_ALPHA_BITS_ARB, 8,
-	WGL_DEPTH_BITS_ARB, 24,
-	WGL_STENCIL_BITS_ARB, 8,
-	WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-	WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
-	0
+		WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+		WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+		WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+		WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+		WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
+		WGL_COLOR_BITS_ARB, 32,
+		WGL_ALPHA_BITS_ARB, 8,
+		WGL_DEPTH_BITS_ARB, 24,
+		WGL_STENCIL_BITS_ARB, 8,
+		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
+		WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
+		0
 	};
 
 	int pixelFormatID; UINT numFormats;
@@ -1575,31 +1571,36 @@ static int platform_make_context_current(pal_window* window) {
 }
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
-	platform_get_raw_input_buffer();
 
 	MSG msg = {0};
-    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
+    if (!window->message_pump_drained) {
 
-		TranslateMessage(&msg);
+		platform_get_raw_input_buffer();
+		while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
 
-        platform_translate_message(msg, window);
+			TranslateMessage(&msg);
 
+			platform_translate_message(msg, window);
+
+		}
+        window->message_pump_drained = TRUE;
     }
-
+ 
     pal_event_queue* queue = &window->queue;
 
-    // if the queue is not empty
+    // If the pal_event_queue is not empty.
     if (queue->size) {
 
-	// peek
-    *event = queue->events[queue->front];
-    
-	// dequeue
-    queue->front = (queue->front + 1) % queue->capacity;
-    queue->size--;
+		// peek
+		*event = queue->events[queue->front];
+		
+		// dequeue
+		queue->front = (queue->front + 1) % queue->capacity;
+		queue->size--;
 		return 1;
     }
     else {
+        window->message_pump_drained = FALSE;
         return 0;
     }
     printf("ERROR: Hit Unreachable part of pal_poll_events()!\n");
@@ -1754,7 +1755,7 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
 	USHORT buttons = raw->data.mouse.usButtonFlags;
-	input.mouse = (v2){
+	input.mouse_delta = (v2){
 		(float)dx,
 		(float)dy,
 	};
@@ -1780,9 +1781,15 @@ v2 platform_get_mouse_position(pal_window* window) {
 }
 
 void Win32HandleKeyboard(const RAWINPUT* raw) {
+    /*
+    // we used to save this in the input struct, not anymore.
+
 	USHORT key = raw->data.keyboard.VKey;
 	input.keys[key] = ~(raw->data.keyboard.Flags) & RI_KEY_BREAK; 
-	//printf("Key %u %s\n", key, input.keys[key] ? "up" : "down"); // FOR DEBUGGING NOCHECKIN!
+    printf("Key %u %s\n", key, input.keys[key] ? "up" : "down"); // FOR DEBUGGING NOCHECKIN!
+    
+    
+    */
 
 }
 

@@ -44,7 +44,9 @@ int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
     pal_init();
-    //TODO: @fix Make the API of this better (if possible).
+    // This should be done using the
+    // window flags that we will be adding
+    // to the window creation function.
     pal_window_hint(GL_VERSION_MAJOR, 3);
     pal_window_hint(GL_VERSION_MINOR, 3);
     pal_window_hint(FLOATING, 0);
@@ -52,6 +54,7 @@ int main() {
     pal_window_hint(RESIZABLE, 1);
 
     //TODO: @fix monitor and video mode functions have problems.
+    // They don't return the correct sizes.
     pal_monitor* monitor = pal_get_primary_monitor();
     VideoMode* mode = pal_get_video_mode(monitor);
     pal_window* window = pal_create_window(1280, 720, "Window Title");
@@ -85,9 +88,6 @@ int main() {
             case PAL_MOUSE_BUTTON_UP:
 				printf("Mouse Button UP!\n");
                 break;
-#if 0
-                VK_RETURN
-#endif
             case PAL_KEY_DOWN:
                 if (event.key.virtual_key == PAL_NUMLOCK)
                     printf("ENTER KEY PRESSED!%d\n", event.key.modifiers);
@@ -105,6 +105,9 @@ int main() {
                 break;
             }
 		}
+        // This function could only work
+        // if it's called after
+        // all the events have been polled for the frame.
         if (is_key_down(PAL_W)) {
             printf("PRESSED W!\n");
         }
