@@ -122,7 +122,7 @@ PALAPI v2 get_mouse_position(pal_window* window) {
 
 PALAPI uint8_t is_mouse_pressed(int button) {
 
-	if (is_mouse_down(button) && !is_mouse_pressed(button)) {
+	if (is_mouse_down(button) && !is_mouse_processed(button)) {
 		set_mouse_processed(button);
 		return 1;
 	}

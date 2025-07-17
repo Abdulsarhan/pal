@@ -80,6 +80,33 @@ typedef struct pal_input {
 }pal_input;
 pal_input input = { 0 };
 
+/*
+#define WM_LBUTTONDOWN                  0x0201
+#define WM_LBUTTONUP                    0x0202
+#define WM_LBUTTONDBLCLK                0x0203
+#define WM_RBUTTONDOWN                  0x0204
+#define WM_RBUTTONUP                    0x0205
+#define WM_RBUTTONDBLCLK                0x0206
+#define WM_MBUTTONDOWN                  0x0207
+#define WM_MBUTTONUP                    0x0208
+#define WM_MBUTTONDBLCLK                0x0209
+
+#define WM_XBUTTONDOWN                  0x020B
+#define WM_XBUTTONUP                    0x020C
+#define WM_XBUTTONDBLCLK                0x020D
+*/
+
+// this is supposed to be indexed by subtracting
+// 201  from the event that windows gives us.
+uint32_t win32_button_to_pal_button[] = {
+
+0x0, 0x0, 0x0, // left mouse button
+0x1, 0x1, 0x1, // right mouse button
+0x2, 0x2, 0x2, // middle mouse button
+0x3, // mouse4
+0x4, // mouse5
+};
+
 uint32_t win32_key_to_pal_key[] = {
 // first 7 values are just bullshit.
 0x00, 0x00, 0x00, 0x00, 0x00, // Unassigned
@@ -421,6 +448,9 @@ void platform_set_cursor(pal_window *window, const char *filepath, int size) {
     SetCursor(hCursor);
 }
 
+// older windows versions do not support pngs being embedded in .ico
+// files directly, therefore, we have to decode the .png with stb_image
+// and only then can we use it.
 static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     FILE* file = fopen(image_path, "rb");
     if (!file) return NULL;
@@ -622,152 +652,90 @@ int platform_translate_message(MSG msg, pal_window* window) {
             break;
 
         case WM_LBUTTONDOWN: 
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-                .button = LEFT_MOUSE_BUTTON, // optionally remap to your enum
-				.clicks = 1,
-                .modifiers = msg.wParam
-            };
-            break;
-
         case WM_RBUTTONDOWN: 
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-                .button = RIGHT_MOUSE_BUTTON, // optionally remap to your enum
-				.clicks = 1,
-                .modifiers = msg.wParam
-            };
-            break;
-
         case WM_MBUTTONDOWN: 
-
+        case WM_XBUTTONDOWN: {
             event.type = PAL_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-                .button = MIDDLE_MOUSE_BUTTON, // optionally remap to your enum
-				.clicks = 1,
-                .modifiers = msg.wParam
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
+                .pressed = 1,
+                .clicks = 1,
+                .modifiers = msg.wParam,
+                .button = win32_button_to_pal_button[msg.message - WM_LBUTTONDOWN]
             };
-            break;
 
-        case WM_XBUTTONDOWN: 
-
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-				.clicks = 1,
-                .modifiers = msg.wParam
-            };
-			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
-				event.button.button = SIDE_MOUSE_BUTTON1;
-			else 
-				event.button.button = SIDE_MOUSE_BUTTON2;
-			break;
+            if (msg.message == WM_XBUTTONDOWN) {
+                WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
+                if (xButton == XBUTTON1) {
+                    event.button.button = SIDE_MOUSE_BUTTON1;
+                    input.mouse_buttons[SIDE_MOUSE_BUTTON1] = 1;
+                } else if (xButton == XBUTTON2) {
+                    event.button.button = SIDE_MOUSE_BUTTON2;
+                    input.mouse_buttons[SIDE_MOUSE_BUTTON2] = 1;
+                }
+            } else {
+                input.mouse_buttons[event.button.button] = 1;
+            }
+        } break;
 
         case WM_LBUTTONDBLCLK:
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-			event.button = (pal_mouse_button_event){
-				.x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-				.y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-				.pressed = 1, // pressed state of the mouse, might remove.
-				.button = LEFT_MOUSE_BUTTON, // optionally remap to your enum
-				.clicks = 2,
-                .modifiers = msg.wParam
-            };
-            break;
-		case WM_RBUTTONDBLCLK:
+        case WM_RBUTTONDBLCLK:
+        case WM_MBUTTONDBLCLK:
+        case WM_XBUTTONDBLCLK: {
             event.type = PAL_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-                .button = RIGHT_MOUSE_BUTTON, // optionally remap to your enum
-				.clicks = 2,
-                .modifiers = msg.wParam
-            };
-            break;
-		case WM_MBUTTONDBLCLK:
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-                .button = MIDDLE_MOUSE_BUTTON, // optionally remap to your enum
-				.clicks = 2,
-                .modifiers = msg.wParam
-            };
-            break;
-
-		case WM_XBUTTONDBLCLK:
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam), // xpos of the mouse
-                .y = GET_Y_LPARAM(msg.lParam), // ypos of the mouse.
-                .pressed = 1, // pressed state of the mouse, might remove.
-				.clicks = 2,
-                .modifiers = msg.wParam
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
+                .pressed = 1,
+                .clicks = 2,
+                .modifiers = msg.wParam,
+                .button = win32_button_to_pal_button[msg.message - WM_LBUTTONDOWN]
             };
 
-			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
-				event.button.button = SIDE_MOUSE_BUTTON1;
-			else 
-				event.button.button = SIDE_MOUSE_BUTTON2;
-            break;
+            if (msg.message == WM_XBUTTONDBLCLK) {
+                WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
+                if (xButton == XBUTTON1) {
+                    event.button.button = SIDE_MOUSE_BUTTON1;
+                    input.mouse_buttons[SIDE_MOUSE_BUTTON1] = 1;
+                } else if (xButton == XBUTTON2) {
+                    event.button.button = SIDE_MOUSE_BUTTON2;
+                    input.mouse_buttons[SIDE_MOUSE_BUTTON2] = 1;
+                }
+            } else {
+                input.mouse_buttons[event.button.button] = 1;
+            }
+        } break;
 
         case WM_LBUTTONUP:
-            event.type = PAL_MOUSE_BUTTON_UP;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .pressed = 0,
-                .button = LEFT_MOUSE_BUTTON,
-                .modifiers = msg.wParam
-            };
-            break;
         case WM_RBUTTONUP:
-            event.type = PAL_MOUSE_BUTTON_UP;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .pressed = 0,
-                .button = RIGHT_MOUSE_BUTTON,
-                .modifiers = msg.wParam
-            };
-            break;
         case WM_MBUTTONUP:
+        case WM_XBUTTONUP: {
             event.type = PAL_MOUSE_BUTTON_UP;
             event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
                 .pressed = 0,
-                .button = MIDDLE_MOUSE_BUTTON,
-                .modifiers = msg.wParam
+                .modifiers = msg.wParam,
+                .button = win32_button_to_pal_button[msg.message - WM_LBUTTONDOWN]
             };
-            break;
 
-        case WM_XBUTTONUP:
-            event.type = PAL_MOUSE_BUTTON_UP;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .pressed = 0,
-                .modifiers = msg.wParam
-            };
-			if (GET_XBUTTON_WPARAM(msg.wParam) == MK_XBUTTON1)
-				event.button.button = SIDE_MOUSE_BUTTON1;
-			else 
-				event.button.button = SIDE_MOUSE_BUTTON2;
-            break;
+            if (msg.message == WM_XBUTTONUP) {
+                WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
+                if (xButton == XBUTTON1) {
+                    event.button.button = SIDE_MOUSE_BUTTON1;
+                    input.mouse_buttons[SIDE_MOUSE_BUTTON1] = 0;
+                    input.mouse_buttons_processed[SIDE_MOUSE_BUTTON1] = 0;
+                } else if (xButton == XBUTTON2) {
+                    event.button.button = SIDE_MOUSE_BUTTON2;
+                    input.mouse_buttons[SIDE_MOUSE_BUTTON2] = 0;
+                    input.mouse_buttons_processed[SIDE_MOUSE_BUTTON2] = 0;
+                }
+            } else {
+                input.mouse_buttons[event.button.button] = 0;
+                input.mouse_buttons_processed[event.button.button] = 0;
+            }
+        } break;
 
         case WM_MOUSEWHEEL:
         case WM_MOUSEHWHEEL: {
@@ -793,6 +761,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
                 .repeat = (msg.lParam >> 30) & 1,
                 .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0 // or more bits
             };
+            input.keys[win32_key_to_pal_key[(uint32_t)msg.wParam]] = 1;
             break;
 
         case WM_KEYUP:
@@ -805,6 +774,8 @@ int platform_translate_message(MSG msg, pal_window* window) {
                 .repeat = 0,
                 .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0
             };
+            input.keys[win32_key_to_pal_key[(uint32_t)msg.wParam]] = 0;
+            input.keys_processed[win32_key_to_pal_key[(uint32_t)msg.wParam]] = 0;
             break;
 
         case WM_CHAR:
@@ -1754,12 +1725,13 @@ pal_bool get_device_handle() {
 void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
-	USHORT buttons = raw->data.mouse.usButtonFlags;
 	input.mouse_delta = (v2){
 		(float)dx,
 		(float)dy,
 	};
  
+    /* We don't save mouse buttons
+	USHORT buttons = raw->data.mouse.usButtonFlags;
 	for (int i = 0; i < 16; ++i) {
 		uint16_t down = (buttons >> (i * 2)) & 1;
 		uint16_t up = (buttons >> (i * 2 + 1)) & 1;
@@ -1767,6 +1739,7 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 		// If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
 		input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
 	}
+    */
 }
 
 v2 platform_get_mouse_position(pal_window* window) {

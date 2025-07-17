@@ -105,12 +105,28 @@ int main() {
                 break;
             }
 		}
-        // This function could only work
-        // if it's called after
-        // all the events have been polled for the frame.
-        if (is_key_down(PAL_W)) {
+        // The is_* functions only work after all the events have been polled.
+        // do not call this in the message loop.
+        if (is_key_pressed(PAL_W)) {
             printf("PRESSED W!\n");
         }
+        if (is_mouse_pressed(LEFT_MOUSE_BUTTON)) {
+            printf("Pressed LMB!\n");
+        }
+        if (is_mouse_pressed(RIGHT_MOUSE_BUTTON)) {
+            printf("Pressed LMB!\n");
+        }
+        if (is_mouse_pressed(MIDDLE_MOUSE_BUTTON)) {
+            printf("Pressed LMB!\n");
+        }
+
+        if (is_mouse_pressed(SIDE_MOUSE_BUTTON1)) {
+            printf("Pressed mouse4!\n");
+        }
+        if (is_mouse_pressed(SIDE_MOUSE_BUTTON2)) {
+            printf("Pressed mouse5!\n");
+        }
+
         for (int i = 0; i < pal_get_gamepad_count(); i++) {
             if (pal_get_gamepad_state(i, &state)) {
 /*
@@ -130,21 +146,6 @@ int main() {
                 }
             }
         }
-
-/*
-		if (is_key_down(KEY_SPACE)) {
-			printf("Pressed the A key!");
-		}
-
-		if (is_mouse_down(SIDE_MOUSE_BUTTON1)) {
-			printf("MOUSE PRESSED!\n");
-		}
-
-		if (is_button_down(1, 0x1000)) {
-			printf("INFO GAMEPAD A PRESSED!\n");
-		}
-
-*/
 		begin_drawing();
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
