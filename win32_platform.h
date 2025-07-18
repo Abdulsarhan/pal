@@ -35,12 +35,6 @@
 typedef unsigned __int64 QWORD;
 
 static HDC s_fakeDC = { 0 };
-static int s_glVersionMajor = 3;
-static int s_glVersionMinor = 3;
-static int s_glProfile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
-static int s_resizable = WS_OVERLAPPEDWINDOW;
-static int s_floating = 0;
-static int s_doubleBuffer = PFD_DOUBLEBUFFER;
 
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
@@ -668,11 +662,11 @@ int platform_translate_message(MSG msg, pal_window* window) {
             if (msg.message == WM_XBUTTONDOWN) {
                 WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
                 if (xButton == XBUTTON1) {
-                    event.button.button = SIDE_MOUSE_BUTTON1;
-                    input.mouse_buttons[SIDE_MOUSE_BUTTON1] = 1;
+                    event.button.button = PAL_MOUSE_4;
+                    input.mouse_buttons[PAL_MOUSE_4] = 1;
                 } else if (xButton == XBUTTON2) {
-                    event.button.button = SIDE_MOUSE_BUTTON2;
-                    input.mouse_buttons[SIDE_MOUSE_BUTTON2] = 1;
+                    event.button.button = PAL_MOUSE_5;
+                    input.mouse_buttons[PAL_MOUSE_5] = 1;
                 }
             } else {
                 input.mouse_buttons[event.button.button] = 1;
@@ -696,11 +690,11 @@ int platform_translate_message(MSG msg, pal_window* window) {
             if (msg.message == WM_XBUTTONDBLCLK) {
                 WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
                 if (xButton == XBUTTON1) {
-                    event.button.button = SIDE_MOUSE_BUTTON1;
-                    input.mouse_buttons[SIDE_MOUSE_BUTTON1] = 1;
+                    event.button.button = PAL_MOUSE_4;
+                    input.mouse_buttons[PAL_MOUSE_4] = 1;
                 } else if (xButton == XBUTTON2) {
-                    event.button.button = SIDE_MOUSE_BUTTON2;
-                    input.mouse_buttons[SIDE_MOUSE_BUTTON2] = 1;
+                    event.button.button = PAL_MOUSE_5;
+                    input.mouse_buttons[PAL_MOUSE_5] = 1;
                 }
             } else {
                 input.mouse_buttons[event.button.button] = 1;
@@ -723,13 +717,13 @@ int platform_translate_message(MSG msg, pal_window* window) {
             if (msg.message == WM_XBUTTONUP) {
                 WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
                 if (xButton == XBUTTON1) {
-                    event.button.button = SIDE_MOUSE_BUTTON1;
-                    input.mouse_buttons[SIDE_MOUSE_BUTTON1] = 0;
-                    input.mouse_buttons_processed[SIDE_MOUSE_BUTTON1] = 0;
+                    event.button.button = PAL_MOUSE_4;
+                    input.mouse_buttons[PAL_MOUSE_4] = 0;
+                    input.mouse_buttons_processed[PAL_MOUSE_4] = 0;
                 } else if (xButton == XBUTTON2) {
-                    event.button.button = SIDE_MOUSE_BUTTON2;
-                    input.mouse_buttons[SIDE_MOUSE_BUTTON2] = 0;
-                    input.mouse_buttons_processed[SIDE_MOUSE_BUTTON2] = 0;
+                    event.button.button = PAL_MOUSE_5;
+                    input.mouse_buttons[PAL_MOUSE_5] = 0;
+                    input.mouse_buttons_processed[PAL_MOUSE_5] = 0;
                 }
             } else {
                 input.mouse_buttons[event.button.button] = 0;
@@ -944,7 +938,6 @@ int platform_translate_message(MSG msg, pal_window* window) {
         fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
         return;
     }
-    printf("front: %d back: %d\n",queue->front ,queue->back);
     queue->events[queue->back] = event;
     queue->back = (queue->back + 1) % queue->capacity;
     queue->size++;
@@ -1413,121 +1406,98 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
       return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
-// Window Hints
-static void platform_set_window_hint(int type, int value) {
-    // This is very jank-tastic. There is probably a better way of doing this. 
-    // maybe some of this should become window flags that are passed into the create_window() function?
-	switch (type) {
-    case GL_VERSION_MAJOR: s_glVersionMajor = value; break;
-    case GL_VERSION_MINOR: s_glVersionMinor = value; break;
-	case RESIZABLE:
-		if (value)
-			s_resizable = WS_OVERLAPPEDWINDOW;
-		else
-			s_resizable = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
-		break;
-	case FLOATING:
-		if (value)
-			s_floating = WS_EX_TOPMOST;
-		else
-			s_floating = 0;
-		break;
-	case DOUBLE_BUFFER:
-		if (value)
-			s_doubleBuffer = PFD_DOUBLEBUFFER;
-		else
-			s_doubleBuffer = 0x00000000;
-		break;
-	case GL_PROFILE:
-		if (value == GL_PROFILE_CORE)
-			s_glProfile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
-		if (value == GL_PROFILE_COMPAT)
-			s_glProfile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-		break;
-	}
-}
-
-static pal_window* platform_create_window(int width, int height, const char* windowTitle) {
-	pal_window* fakewindow = (pal_window*)malloc(sizeof(pal_window));
-    WNDCLASSEXA fakewc = { 0 };
-	fakewc.cbSize = sizeof(WNDCLASSEXA);
-	fakewc.lpfnWndProc = win32_fake_window_proc;
-	fakewc.hInstance = GetModuleHandleA(0);
-	fakewc.lpszClassName = "Win32 Fake Window Class";
-	fakewc.hCursor = LoadCursorA(NULL, IDC_ARROW);
-
-	RegisterClassExA(&fakewc);
-
-	fakewindow->hwnd = CreateWindowExA(
-		0,                              // Optional window styles.
-		fakewc.lpszClassName,                     // Window class
-		"Fake Ass Window.",          // Window text
-		WS_OVERLAPPEDWINDOW,            // Window style
-
-		// Size and position
-		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-
-		NULL,       // Parent window    
-		NULL,       // Menu
-		fakewc.hInstance,  // Instance handle
-		NULL        // Additional application data
-	);
-
-	if (fakewindow->hwnd == NULL)
-	{
-		return fakewindow;
-	}
-
-	s_fakeDC = GetDC(fakewindow->hwnd);
-
-	PIXELFORMATDESCRIPTOR fakePFD;
-	ZeroMemory(&fakePFD, sizeof(fakePFD));
-	fakePFD.nSize = sizeof(fakePFD);
-	fakePFD.nVersion = 1;
-	fakePFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-	fakePFD.iPixelType = PFD_TYPE_RGBA;
-	fakePFD.cColorBits = 32;
-	fakePFD.cAlphaBits = 8;
-	fakePFD.cDepthBits = 24;
-
-	int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
-
-	if (fakePFDID == 0) {
-		MessageBoxA(fakewindow->hwnd, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
-	if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
-		MessageBoxA(fakewindow->hwnd, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
-
-	HGLRC fakeRC = wglCreateContext(s_fakeDC);
-	if (fakeRC == 0) {
-		MessageBoxA(fakewindow->hwnd, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
-	if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
-		MessageBoxA(fakewindow->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
+static pal_window* platform_create_window(int width, int height, const char* windowTitle, uint64_t window_flags) {
+    // these variables are only
+    // used when initializing opengl.
+    pal_window* fakewindow = NULL;
+    HGLRC fakeRC = 0;
 	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
-	wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
-	if (wglChoosePixelFormatARB == NULL) {
-		MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
 	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
-	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
-	if (wglCreateContextAttribsARB == NULL) {
-		MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
 	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
-	wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
-	if (wglSwapIntervalEXT == NULL) {
-		MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-		return fakewindow;
-	}
+    // we default to opengl.
+    if (!(window_flags & PAL_WINDOW_OPENGL) || !(window_flags & PAL_WINDOW_VULKAN) || !(window_flags & PAL_WINDOW_METAL)) {
+        window_flags |= PAL_WINDOW_OPENGL;
+    }
+    if (window_flags & PAL_WINDOW_OPENGL) {
+		fakewindow = (pal_window*)malloc(sizeof(pal_window));
+		WNDCLASSEXA fakewc = { 0 };
+		fakewc.cbSize = sizeof(WNDCLASSEXA);
+		fakewc.lpfnWndProc = win32_fake_window_proc;
+		fakewc.hInstance = GetModuleHandleA(0);
+		fakewc.lpszClassName = "Win32 Fake Window Class";
+		fakewc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+
+		RegisterClassExA(&fakewc);
+
+		fakewindow->hwnd = CreateWindowExA(
+			0,                              // Optional window styles.
+			fakewc.lpszClassName,                     // Window class
+			"Fake Ass Window.",          // Window text
+			WS_OVERLAPPEDWINDOW,            // Window style
+
+			// Size and position
+			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+
+			NULL,       // Parent window    
+			NULL,       // Menu
+			fakewc.hInstance,  // Instance handle
+			NULL        // Additional application data
+		);
+
+		if (fakewindow->hwnd == NULL)
+		{
+			return fakewindow;
+		}
+
+		s_fakeDC = GetDC(fakewindow->hwnd);
+
+		PIXELFORMATDESCRIPTOR fakePFD;
+		ZeroMemory(&fakePFD, sizeof(fakePFD));
+		fakePFD.nSize = sizeof(fakePFD);
+		fakePFD.nVersion = 1;
+		fakePFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+		fakePFD.iPixelType = PFD_TYPE_RGBA;
+		fakePFD.cColorBits = 32;
+		fakePFD.cAlphaBits = 8;
+		fakePFD.cDepthBits = 24;
+
+		int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
+
+		if (fakePFDID == 0) {
+			MessageBoxA(fakewindow->hwnd, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+		if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
+			MessageBoxA(fakewindow->hwnd, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+
+		fakeRC = wglCreateContext(s_fakeDC);
+		if (fakeRC == 0) {
+			MessageBoxA(fakewindow->hwnd, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+		if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
+			MessageBoxA(fakewindow->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+		wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
+		if (wglChoosePixelFormatARB == NULL) {
+			MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+		wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
+		if (wglCreateContextAttribsARB == NULL) {
+			MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+		wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+		if (wglSwapIntervalEXT == NULL) {
+			MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+			return fakewindow;
+		}
+
+    }
 
     WNDCLASSEXA wc = {0};
 
@@ -1540,11 +1510,56 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	RegisterClassExA(&wc);
 
 	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    DWORD window_style = 0;
+
+    if(window_flags & PAL_WINDOW_NOT_FOCUSABLE){
+        window_style |= WS_EX_NOACTIVATE;
+    }
+    if (window_flags & PAL_WINDOW_ALWAYS_ON_TOP) {
+        window_style |= WS_EX_TOPMOST;
+    }
+
+    if (window_flags & PAL_WINDOW_UTILITY) {
+
+        window_style |= WS_OVERLAPPED | WS_SYSMENU;
+    }
+    else if (window_flags & PAL_WINDOW_POPUP_MENU) {
+        window_style |= WS_POPUPWINDOW;
+    }
+    else if (window_flags & PAL_WINDOW_TOOLTIP) {
+        window_style |= WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+    }
+    else if (window_flags & PAL_WINDOW_RESIZABLE) {
+        window_style |= WS_OVERLAPPEDWINDOW;
+
+    }
+    else {
+        window_style |= WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    }
+
+    if (window_flags & PAL_WINDOW_FULLSCREEN) {
+		// Desired fullscreen resolution
+
+		DEVMODE dm = {0};
+		dm.dmSize = sizeof(dm);
+		dm.dmPelsWidth = width;
+		dm.dmPelsHeight = height;
+		dm.dmBitsPerPel = 32;
+		dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+
+		LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
+		if (result != DISP_CHANGE_SUCCESSFUL) {
+			MessageBox(NULL, "Failed to change resolution", "Error", MB_OK);
+			return 1;
+		}
+        window_style = WS_POPUP;
+    }
+
 	window->hwnd = CreateWindowExA(
-		s_floating,           // Optional window styles.
+		0,           // Optional window styles.
 		wc.lpszClassName,     // Window class
 		windowTitle,          // Window text
-		s_resizable,          // Window style
+		window_style,          // Window style
 
 		// Size and position
 		CW_USEDEFAULT, CW_USEDEFAULT, width, height,
@@ -1584,15 +1599,18 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	}
 
 	PIXELFORMATDESCRIPTOR PFD;
-	PFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | s_doubleBuffer;
+    if (window_flags & PAL_WINDOW_OPENGL)
+        PFD.dwFlags |= PFD_SUPPORT_OPENGL;
+
+	PFD.dwFlags |= PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
 	DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
 	SetPixelFormat(window->hdc, pixelFormatID, &PFD);
 
 	int contextAttribs[] = {
-		WGL_CONTEXT_MAJOR_VERSION_ARB, s_glVersionMajor,
-		WGL_CONTEXT_MINOR_VERSION_ARB, s_glVersionMinor,
+		WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+		WGL_CONTEXT_MINOR_VERSION_ARB, 3,
 		WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
-		WGL_CONTEXT_PROFILE_MASK_ARB, s_glProfile,
+		WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
 		0
 	};
 
@@ -1621,8 +1639,19 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		wglDeleteContext(fakeRC);
 		ReleaseDC(fakewindow->hwnd, s_fakeDC);
 		DestroyWindow(fakewindow->hwnd);
+        free(fakewindow);
 
-		ShowWindow(window->hwnd, SW_SHOWNORMAL);
+
+		if (window_flags & PAL_WINDOW_FULLSCREEN) {
+			ShowWindow(window->hwnd, SW_SHOW);
+		} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
+			ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
+		} else if (window_flags & PAL_WINDOW_MINIMIZED) {
+			ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
+		} else {
+			ShowWindow(window->hwnd, SW_SHOWNORMAL);
+		}
+
 		SetForegroundWindow(window->hwnd);
 		SetFocus(window->hwnd);
 		OutputDebugStringA("INFO: Using modern OpenGL Context.");
@@ -1632,7 +1661,6 @@ static pal_window* platform_create_window(int width, int height, const char* win
         //, so we have to save it here. - Abdelrahman june 13, 2024
 		window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
 		GetWindowRect(window->hwnd, &window->windowedRect); // size and pos of the window.
-        free(fakewindow);
 		return window;
 	}
 	else {

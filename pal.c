@@ -25,8 +25,8 @@ PALAPI void pal_init() {
 
 */
 
-PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle) {
-	 return platform_create_window(width, height, windowTitle);
+PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags) {
+	 return platform_create_window(width, height, windowTitle, window_flags);
 }
 
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
@@ -67,10 +67,6 @@ PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_p
 
 PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size) {
 	(void)platform_set_cursor(window, image_path, size);
-}
-
-PALAPI void pal_window_hint(int type, int value) {
-	(void)platform_set_window_hint(type, value);
 }
 
 PALAPI VideoMode* pal_get_video_mode(pal_monitor* monitor) {

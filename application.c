@@ -47,17 +47,12 @@ int main() {
     // This should be done using the
     // window flags that we will be adding
     // to the window creation function.
-    pal_window_hint(GL_VERSION_MAJOR, 3);
-    pal_window_hint(GL_VERSION_MINOR, 3);
-    pal_window_hint(FLOATING, 0);
-    pal_window_hint(DOUBLE_BUFFER, 1);
-    pal_window_hint(RESIZABLE, 1);
 
     //TODO: @fix monitor and video mode functions have problems.
     // They don't return the correct sizes.
     pal_monitor* monitor = pal_get_primary_monitor();
     VideoMode* mode = pal_get_video_mode(monitor);
-    pal_window* window = pal_create_window(1280, 720, "Window Title");
+    pal_window* window = pal_create_window(1280, 720, "Window Title", PAL_WINDOW_RESIZABLE);
     make_context_current(window);
 
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
@@ -69,9 +64,9 @@ int main() {
     if (register_input_devices(window) != 0)
         return;
 
-    pal_set_window_icon_legacy(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\icon.ico");
-    pal_set_taskbar_icon(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png");
-    pal_set_cursor(window, "C:\\Users\\abdul.DESKTOP-S9KEIDK\\Desktop\\sal-rewrite\\Project1\\Project1\\png.png", 16);
+    pal_set_window_icon_legacy(window, "icon.ico");
+    pal_set_taskbar_icon(window, "png.png");
+    pal_set_cursor(window, "png.png", 16);
     uint8_t running = 1;
     pal_event event;
     pal_gamepad_state state;
@@ -82,15 +77,15 @@ int main() {
             switch (event.type) {
 
             case PAL_MOUSE_BUTTON_DOWN:
-                if(event.button.button == LEFT_MOUSE_BUTTON)
+                if(event.button.button == PAL_MOUSE_LEFT)
 				printf("Mouse button DOWN!\n");
                 break;
             case PAL_MOUSE_BUTTON_UP:
 				printf("Mouse Button UP!\n");
                 break;
             case PAL_KEY_DOWN:
-                if (event.key.virtual_key == PAL_NUMLOCK)
-                    printf("ENTER KEY PRESSED!%d\n", event.key.modifiers);
+                if (event.key.virtual_key == PAL_ESCAPE)
+                    exit(0);
                 break;
             case PAL_KEY_UP:
 				printf("Keyboard UP!\n");
@@ -111,20 +106,20 @@ int main() {
         if (is_key_pressed(PAL_W)) {
             printf("PRESSED W!\n");
         }
-        if (is_mouse_pressed(LEFT_MOUSE_BUTTON)) {
+        if (is_mouse_pressed(PAL_MOUSE_LEFT)) {
             printf("Pressed LMB!\n");
         }
-        if (is_mouse_pressed(RIGHT_MOUSE_BUTTON)) {
+        if (is_mouse_pressed(PAL_MOUSE_RIGHT)) {
             printf("Pressed LMB!\n");
         }
-        if (is_mouse_pressed(MIDDLE_MOUSE_BUTTON)) {
+        if (is_mouse_pressed(PAL_MOUSE_MIDDLE)) {
             printf("Pressed LMB!\n");
         }
 
-        if (is_mouse_pressed(SIDE_MOUSE_BUTTON1)) {
+        if (is_mouse_pressed(PAL_MOUSE_4)) {
             printf("Pressed mouse4!\n");
         }
-        if (is_mouse_pressed(SIDE_MOUSE_BUTTON2)) {
+        if (is_mouse_pressed(PAL_MOUSE_5)) {
             printf("Pressed mouse5!\n");
         }
 

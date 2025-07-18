@@ -510,7 +510,7 @@ typedef struct iv4 {
 } iv4;
 
 //----------------------------------------------------------------------------------
-// Window Hint Types
+// Window Flags 
 //----------------------------------------------------------------------------------
 #define GL_PROFILE 0x1
 #define GL_VERSION_MAJOR 0x2
@@ -519,6 +519,40 @@ typedef struct iv4 {
 #define DOUBLE_BUFFER 0x5
 #define FLOATING 0x6
 
+// window visibility
+#define PAL_WINDOW_FULLSCREEN 0x1
+#define PAL_WINDOW_BORDERLESS 0x10
+#define PAL_WINDOW_MINIMIZED 0x40
+#define PAL_WINDOW_MAXIMIZED 0x80
+#define PAL_WINDOW_RESIZABLE 0x20
+#define PAL_WINDOW_OCCLUDED 0x4
+#define PAL_WINDOW_HIDDEN 0x8
+#define PAL_WINDOW_TRANSPARENT 0x400000
+#define PAL_WINDOW_ALWAYS_ON_TOP 0x8000
+
+// graphics APIs
+#define PAL_WINDOW_OPENGL 0x2
+#define PAL_WINDOW_VULKAN 0x100000
+#define PAL_WINDOW_METAL 0x200000
+
+// window type
+#define PAL_WINDOW_MODAL 0x1000
+#define PAL_WINDOW_UTILITY 0x10000
+#define PAL_WINDOW_TOOLTIP 0x20000
+#define PAL_WINDOW_POPUP_MENU 0x40000
+
+// keyboard / mouse input
+#define PAL_WINDOW_INPUT_FOCUS 0x200
+#define PAL_WINDOW_MOUSE_FOCUS 0x400
+#define PAL_WINDOW_MOUSE_GRABBED 0x100
+#define PAL_WINDOW_KEYBOARD_GRABBED 0x80000
+#define PAL_WINDOW_NOT_FOCUSABLE 0x800000
+#define PAL_WINDOW_MOUSE_CAPTURE 0x4000
+
+// unreleated stuff.
+#define PAL_WINDOW_EXTERNAL 0x800
+#define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000
+
 //----------------------------------------------------------------------------------
 // Window Hint Values
 //----------------------------------------------------------------------------------
@@ -526,19 +560,13 @@ typedef struct iv4 {
 #define GL_PROFILE_COMPAT 0x8
 
 //----------------------------------------------------------------------------------
-// Input Modes
-//----------------------------------------------------------------------------------
-#define RAW_MOUSE_INPUT 0x1
-#define CURSOR 0x2
-
-//----------------------------------------------------------------------------------
 // Keyboard and Mouse Buttons
 //----------------------------------------------------------------------------------
-#define LEFT_MOUSE_BUTTON 0x0
-#define RIGHT_MOUSE_BUTTON 0x1
-#define MIDDLE_MOUSE_BUTTON 0x2
-#define SIDE_MOUSE_BUTTON1 0x3
-#define SIDE_MOUSE_BUTTON2 0x4
+#define PAL_MOUSE_LEFT 0x0
+#define PAL_MOUSE_RIGHT 0x1
+#define PAL_MOUSE_MIDDLE 0x2
+#define PAL_MOUSE_4 0x3
+#define PAL_MOUSE_5 0x4
 #define EXTRA_MOUSE_BUTTON1 0x05
 #define EXTRA_MOUSE_BUTTON2 0x06
 #define EXTRA_MOUSE_BUTTON3 0x07
@@ -720,7 +748,7 @@ extern "C" {
 #endif
 
 PALAPI void pal_init();
-PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle);
+PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags);
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refreshrate);
@@ -731,7 +759,6 @@ PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_pat
 PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size);
-PALAPI void pal_window_hint(int type, int value);
 PALAPI VideoMode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
