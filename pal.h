@@ -630,7 +630,7 @@ typedef struct iv4 {
 #define PAL_Y             0x59
 #define PAL_Z             0x5A
 
-#define PAL_LWIN          0x5B // This is also known as the super PAL on linux.
+#define PAL_LWIN          0x5B // This is also known as the super key on linux.
 #define PAL_RWIN          0x5C
 #define PAL_APPS          0x5D
 
@@ -666,6 +666,26 @@ typedef struct iv4 {
 
 #define PAL_NUMLOCK       0x90
 #define PAL_SCROLLLOCK    0x91
+
+//---------------------------------------------------------------------------------
+// Modifier Keys
+//---------------------------------------------------------------------------------
+#define PAL_MOD_NONE 0x0
+#define PAL_MOD_LSHIFT 0x1
+#define PAL_MOD_RSHIFT 0x2
+#define PAL_MOD_LEVEL5SHIFT 0x4
+#define PAL_MOD_LCTRL 0x8
+#define PAL_MOD_RCTRL 0x10
+#define PAL_MOD_LALT 0x20
+#define PAL_MOD_RALT 0x40
+#define PAL_MOD_LSUPER 0x80
+#define PAL_MOD_RSUPER 0x100
+#define PAL_MOD_LWINDOWS 0x200
+#define PAL_MOD_RWINDOWS 0x400
+#define PAL_MOD_ALTGR 0x800
+#define PAL_MOD_CAPS 0x1000
+#define PAL_MOD_NUM 0x2000
+#define PAL_MOD_SCROLL 0x4000
 
 //----------------------------------------------------------------------------------
 // Controller Buttons

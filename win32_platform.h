@@ -750,34 +750,146 @@ int platform_translate_message(MSG msg, pal_window* window) {
             };
             break;
         }
+		case WM_KEYDOWN:
+		case WM_SYSKEYDOWN: {
+			uint32_t vk = (uint32_t)msg.wParam;
+			uint8_t scancode = (msg.lParam >> 16) & 0xFF;
+			uint8_t extended = (msg.lParam >> 24) & 1;
 
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
-            event.type = PAL_KEY_DOWN;
-            event.key = (pal_keyboard_event){
-                .virtual_key = win32_key_to_pal_key[(uint32_t)msg.wParam],
-                .scancode = (uint32_t)((msg.lParam >> 16) & 0xFF),
-                .pressed = 1,
-                .repeat = (msg.lParam >> 30) & 1,
-                .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0 // or more bits
-            };
-            input.keys[win32_key_to_pal_key[(uint32_t)msg.wParam]] = 1;
-            break;
+			uint16_t modifiers = 0;
 
-        case WM_KEYUP:
-        case WM_SYSKEYUP:
-            event.type = PAL_KEY_UP;
-            event.key = (pal_keyboard_event){
-                .virtual_key = win32_key_to_pal_key[(uint32_t)msg.wParam],
-                .scancode = (uint32_t)((msg.lParam >> 16) & 0xFF),
-                .pressed = 0,
-                .repeat = 0,
-                .modifiers = GetKeyState(VK_SHIFT) < 0 ? 1 : 0
-            };
-            input.keys[win32_key_to_pal_key[(uint32_t)msg.wParam]] = 0;
-            input.keys_processed[win32_key_to_pal_key[(uint32_t)msg.wParam]] = 0;
-            break;
+			switch (vk) {
+				case VK_SHIFT:
+					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
+						modifiers |= PAL_MOD_LSHIFT;
+					else
+						modifiers |= PAL_MOD_RSHIFT;
+					break;
 
+				case VK_CONTROL:
+					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
+					break;
+
+				case VK_MENU:
+					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
+					break;
+
+				case VK_LWIN:
+					modifiers |= PAL_MOD_LWINDOWS;
+					break;
+
+				case VK_RWIN:
+					modifiers |= PAL_MOD_RWINDOWS;
+					break;
+
+				case VK_NUMLOCK:
+					modifiers |= PAL_MOD_NUM;
+					break;
+
+				case VK_SCROLL:
+					modifiers |= PAL_MOD_SCROLL;
+					break;
+
+				case VK_PROCESSKEY:
+					modifiers |= PAL_MOD_ALTGR;
+					break;
+
+				case VK_SHIFT | 0x100: // Level 5 shift (user-defined)
+					modifiers |= PAL_MOD_LEVEL5SHIFT;
+					break;
+			}
+
+			// Check toggle states:
+			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
+			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
+			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
+
+			// AltGr detection: Right Alt + Ctrl
+			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+				modifiers |= PAL_MOD_ALTGR;
+			}
+
+			event.type = PAL_KEY_DOWN;
+			event.key = (pal_keyboard_event){
+				.virtual_key = win32_key_to_pal_key[vk],
+				.scancode = scancode,
+				.pressed = 1,
+				.repeat = (msg.lParam >> 30) & 1,
+				.modifiers = modifiers
+			};
+			input.keys[win32_key_to_pal_key[vk]] = 1;
+			break;
+		}
+
+		case WM_KEYUP:
+		case WM_SYSKEYUP: {
+			uint32_t vk = (uint32_t)msg.wParam;
+			uint8_t scancode = (msg.lParam >> 16) & 0xFF;
+			uint8_t extended = (msg.lParam >> 24) & 1;
+
+			uint16_t modifiers = 0;
+
+			switch (vk) {
+				case VK_SHIFT:
+					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
+						modifiers |= PAL_MOD_LSHIFT;
+					else
+						modifiers |= PAL_MOD_RSHIFT;
+					break;
+
+				case VK_CONTROL:
+					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
+					break;
+
+				case VK_MENU:
+					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
+					break;
+
+				case VK_LWIN:
+					modifiers |= PAL_MOD_LWINDOWS;
+					break;
+
+				case VK_RWIN:
+					modifiers |= PAL_MOD_RWINDOWS;
+					break;
+
+				case VK_NUMLOCK:
+					modifiers |= PAL_MOD_NUM;
+					break;
+
+				case VK_SCROLL:
+					modifiers |= PAL_MOD_SCROLL;
+					break;
+
+				case VK_PROCESSKEY:
+					modifiers |= PAL_MOD_ALTGR;
+					break;
+
+				case VK_SHIFT | 0x100:
+					modifiers |= PAL_MOD_LEVEL5SHIFT;
+					break;
+			}
+
+			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
+			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
+			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
+
+			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+				modifiers |= PAL_MOD_ALTGR;
+			}
+
+			event.type = PAL_KEY_UP;
+			event.key = (pal_keyboard_event){
+				.virtual_key = win32_key_to_pal_key[vk],
+				.scancode = scancode,
+				.pressed = 0,
+				.repeat = 0,
+				.modifiers = modifiers
+			};
+			input.keys[win32_key_to_pal_key[vk]] = 0;
+			input.keys_processed[win32_key_to_pal_key[vk]] = 0;
+			break;
+		}
         case WM_CHAR:
         case WM_UNICHAR:
             event.type = PAL_TEXT_INPUT;
@@ -1559,8 +1671,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
  
     pal_event_queue* queue = &window->queue;
 
-    // If the pal_event_queue is not empty.
-    if (queue->size) {
+    if (queue->size) { // if queue is not empty,
 
 		// peek
 		*event = queue->events[queue->front];
@@ -1574,7 +1685,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
         window->message_pump_drained = FALSE;
         return 0;
     }
-    printf("ERROR: Hit Unreachable part of pal_poll_events()!\n");
+    assert(0); // UNREACHABLE! Just crash if we get here somehow.
     return 0;
 }
 
