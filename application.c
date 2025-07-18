@@ -44,9 +44,6 @@ int main() {
 //int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
     pal_init();
-    // This should be done using the
-    // window flags that we will be adding
-    // to the window creation function.
 
     //TODO: @fix monitor and video mode functions have problems.
     // They don't return the correct sizes.

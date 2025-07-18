@@ -1430,18 +1430,18 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		RegisterClassExA(&fakewc);
 
 		fakewindow->hwnd = CreateWindowExA(
-			0,                              // Optional window styles.
-			fakewc.lpszClassName,                     // Window class
-			"Fake Ass Window.",          // Window text
-			WS_OVERLAPPEDWINDOW,            // Window style
+			0,                    // Optional window styles.
+			fakewc.lpszClassName, // Window class
+			"Fake Ass Window.",   // Window text
+			WS_OVERLAPPEDWINDOW,  // Window style
 
-			// Size and position
+			                      // Size and position
 			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 
-			NULL,       // Parent window    
-			NULL,       // Menu
-			fakewc.hInstance,  // Instance handle
-			NULL        // Additional application data
+			NULL,                 // Parent window    
+			NULL,                 // Menu
+			fakewc.hInstance,     // Instance handle
+			NULL                  // Additional application data
 		);
 
 		if (fakewindow->hwnd == NULL)
@@ -1510,24 +1510,26 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	RegisterClassExA(&wc);
 
 	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    DWORD ext_window_style = 0;
     DWORD window_style = 0;
 
-    if(window_flags & PAL_WINDOW_NOT_FOCUSABLE){
-        window_style |= WS_EX_NOACTIVATE;
+    if(window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
+        ext_window_style |= WS_EX_NOACTIVATE;
     }
     if (window_flags & PAL_WINDOW_ALWAYS_ON_TOP) {
-        window_style |= WS_EX_TOPMOST;
+        ext_window_style |= WS_EX_TOPMOST;
     }
 
     if (window_flags & PAL_WINDOW_UTILITY) {
 
-        window_style |= WS_OVERLAPPED | WS_SYSMENU;
+        ext_window_style |= WS_EX_TOOLWINDOW;
+        window_style |= WS_SYSMENU;
     }
     else if (window_flags & PAL_WINDOW_POPUP_MENU) {
         window_style |= WS_POPUPWINDOW;
     }
     else if (window_flags & PAL_WINDOW_TOOLTIP) {
-        window_style |= WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+        ext_window_style |= WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
     }
     else if (window_flags & PAL_WINDOW_RESIZABLE) {
         window_style |= WS_OVERLAPPEDWINDOW;
@@ -1535,6 +1537,10 @@ static pal_window* platform_create_window(int width, int height, const char* win
     }
     else {
         window_style |= WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    }
+
+    if (window_flags & PAL_WINDOW_BORDERLESS) {
+        window_style = WS_POPUP;
     }
 
     if (window_flags & PAL_WINDOW_FULLSCREEN) {
@@ -1556,7 +1562,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
     }
 
 	window->hwnd = CreateWindowExA(
-		0,           // Optional window styles.
+		ext_window_style,           // Optional window styles.
 		wc.lpszClassName,     // Window class
 		windowTitle,          // Window text
 		window_style,          // Window style
@@ -1642,6 +1648,8 @@ static pal_window* platform_create_window(int width, int height, const char* win
         free(fakewindow);
 
 
+
+    if (!(window_flags & PAL_WINDOW_HIDDEN)) {
 		if (window_flags & PAL_WINDOW_FULLSCREEN) {
 			ShowWindow(window->hwnd, SW_SHOW);
 		} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
@@ -1651,6 +1659,10 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		} else {
 			ShowWindow(window->hwnd, SW_SHOWNORMAL);
 		}
+    }
+    else {
+        ShowWindow(window->hwnd, SW_HIDE);
+    }
 
 		SetForegroundWindow(window->hwnd);
 		SetFocus(window->hwnd);
