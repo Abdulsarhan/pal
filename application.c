@@ -48,7 +48,7 @@ int main() {
     //TODO: @fix monitor and video mode functions have problems.
     // They don't return the correct sizes.
     pal_monitor* monitor = pal_get_primary_monitor();
-    VideoMode* mode = pal_get_video_mode(monitor);
+    pal_video_mode* mode = pal_get_video_mode(monitor);
     pal_window* window = pal_create_window(1280, 720, "Window Title", PAL_WINDOW_RESIZABLE);
     make_context_current(window);
 

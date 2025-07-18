@@ -5,10 +5,10 @@
 #include <sys/stat.h> // For time_t and stat.
 typedef uint8_t pal_bool;
 
-typedef struct VideoMode {
+typedef struct pal_video_mode {
 	int width;
 	int height;
-}VideoMode;
+}pal_video_mode;
 
 typedef struct {
 	unsigned char* data;   // Raw PCM audio data
@@ -759,7 +759,7 @@ PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_pat
 PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size);
-PALAPI VideoMode* pal_get_video_mode(pal_monitor* monitor);
+PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);

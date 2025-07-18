@@ -69,7 +69,7 @@ PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size)
 	(void)platform_set_cursor(window, image_path, size);
 }
 
-PALAPI VideoMode* pal_get_video_mode(pal_monitor* monitor) {
+PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
 	return platform_get_video_mode(monitor);
 }
 PALAPI pal_monitor* pal_get_primary_monitor(void) {

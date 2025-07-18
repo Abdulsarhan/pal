@@ -1736,10 +1736,10 @@ static uint8_t platform_set_window_title(pal_window* window, const char* string)
 	return SetWindowTextA(window->hwnd, string);
 }
 
-static VideoMode* platform_get_video_mode(pal_monitor* monitor) {
+static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
 
 	MONITORINFO mi = { 0 };
-	VideoMode* videoMode = calloc(1, sizeof(VideoMode));
+	pal_video_mode* videoMode = calloc(1, sizeof(pal_video_mode));
 	
 	if (monitor->handle) {
 		mi.cbSize = sizeof(MONITORINFO);

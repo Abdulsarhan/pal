@@ -8,7 +8,7 @@
 
 static void platform_set_window_hint(int type, int value);
 static pal_window* platform_create_window(int width, int height, const char* windowTitle, uint64_t window_flags);
-static VideoMode* platform_get_video_mode(pal_monitor* monitor);
+static pal_video_mode* platform_get_video_mode(pal_monitor* monitor);
 static pal_monitor* platform_get_primary_monitor(void);
 static uint8_t platform_set_window_title(pal_window* window, const char* string);
 static uint8_t platform_poll_events(pal_event* event, pal_window* window);
