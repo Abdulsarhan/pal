@@ -944,6 +944,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
         fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
         return;
     }
+    printf("front: %d back: %d\n",queue->front ,queue->back);
     queue->events[queue->back] = event;
     queue->back = (queue->back + 1) % queue->capacity;
     queue->size++;
@@ -1594,15 +1595,16 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		WGL_CONTEXT_PROFILE_MASK_ARB, s_glProfile,
 		0
 	};
-    // enough space for 10,000 events.
-    size_t capacity = 10000 * sizeof(pal_event);
-    pal_event* events = (pal_event*)malloc((capacity));
+
+    size_t capacity = 10000;
+    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
 
     if(events == NULL) {
         fprintf(stderr, "ERROR: platform_create_window(): failed to allocate memory for events!\n");
     }
 
     pal_event_queue queue = {
+        // size and capacity are measured in pal_events, not bytes.
         .size = 0,
         .capacity = capacity,
         .front = 0,
@@ -1683,6 +1685,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
     }
     else {
         window->message_pump_drained = FALSE;
+        input.mouse_delta = (v2){.x = 0.0f, .y = 0.0f};
         return 0;
     }
     assert(0); // UNREACHABLE! Just crash if we get here somehow.
@@ -1718,10 +1721,8 @@ static VideoMode* platform_get_video_mode(pal_monitor* monitor) {
 static pal_monitor* platform_get_primary_monitor() {
 	pal_monitor* monitor = malloc(sizeof(pal_monitor));
 
-	// Define a point at the origin (0, 0)
 	POINT ptZero = { 0, 0 };
 
-	// Get the handle to the primary monitor
 	monitor->handle = MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
 	
 	return monitor;
@@ -1745,11 +1746,11 @@ void platform_end_drawing(pal_window* window) {
 
 // Handler function signatures
 typedef void (*RawInputHandler)(const RAWINPUT*);
-// Helper struct to hold reusable buffers
 
 #define MAX_MOUSE_BUTTONS 64
 #define MAX_BUTTON_CAPS 32
 
+// Helper struct to hold reusable buffers
 typedef struct {
     PHIDP_PREPARSED_DATA prep_data;
     HIDP_BUTTON_CAPS button_caps[MAX_BUTTON_CAPS];
@@ -1836,10 +1837,8 @@ pal_bool get_device_handle() {
 void Win32HandleMouse(const RAWINPUT* raw) {
 	LONG dx = raw->data.mouse.lLastX;
 	LONG dy = raw->data.mouse.lLastY;
-	input.mouse_delta = (v2){
-		(float)dx,
-		(float)dy,
-	};
+    input.mouse_delta.x += dx;
+    input.mouse_delta.y += dy;
  
     /* We don't save mouse buttons
 	USHORT buttons = raw->data.mouse.usButtonFlags;

@@ -100,6 +100,7 @@ int main() {
                 running = FALSE;
                 break;
             case PAL_MOUSE_MOTION:
+                break;
             default:
                 //printf("%d\n", event.type);
                 break;
