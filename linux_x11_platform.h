@@ -82,7 +82,7 @@ void platform_swapbuffers(pal_window window) {
 	glXSwapBuffers(window.display, window.window);
 }
 
-void make_context_current(pal_window window) {
+void pal_make_context_current(pal_window window) {
 	platform_makecurrent(window);
 }
 

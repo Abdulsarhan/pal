@@ -4,7 +4,6 @@ Add a system that tracks how many windows are open, and when that number is 0, y
 
 PALAPI void set_mouse_processed(int button); // TODO: @CLEANUP There is probably no reason to give the user access to this, might remove.
 
-Translate Win32 keypresses and modifier keys to our own pal_key and pal_modkey thing. This should be implemented as a lookup table. (A 1D array that maps the windows thing to our own thing, and every os should have a different table.)
 Fully integrate new gamepad system that supports all gamepads.
 
 Implement linux_x11_platform.h.

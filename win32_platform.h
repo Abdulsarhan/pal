@@ -1736,37 +1736,30 @@ static uint8_t platform_set_window_title(pal_window* window, const char* string)
 	return SetWindowTextA(window->hwnd, string);
 }
 
-static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
 
-	MONITORINFO mi = { 0 };
-	pal_video_mode* videoMode = calloc(1, sizeof(pal_video_mode));
-	
-	if (monitor->handle) {
-		mi.cbSize = sizeof(MONITORINFO);
-		if (GetMonitorInfoA(monitor->handle, &mi)) {
-			videoMode->width = mi.rcWork.left;
-			videoMode->height = mi.rcWork.right;
-		}
-		else {
-			printf("ERROR: Couldn't get monitor info!\n");
-		}
-	}
-	else {
-		printf("ERROR: invalid pointer to monitor!\n");
-
-	}
-	return videoMode;
+static pal_monitor* platform_get_primary_monitor(void) {
+    // The point (0, 0) is guaranteed to be on the primary monitor
+	pal_monitor* monitor = malloc(sizeof(pal_monitor));
+    POINT pt = { 0, 0 };
+    monitor->handle = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+    return monitor;
 }
 
-static pal_monitor* platform_get_primary_monitor() {
-	pal_monitor* monitor = malloc(sizeof(pal_monitor));
+static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
+    MONITORINFOEX mi = { .cbSize = sizeof(MONITORINFOEX) };
+    if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
+        return 0;
 
-	POINT ptZero = { 0, 0 };
+    DEVMODE dm = { .dmSize = sizeof(DEVMODE) };
+    if (!EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
+        return 0;
+    pal_video_mode* mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
+    mode->width = dm.dmPelsWidth;
+    mode->height = dm.dmPelsHeight;
+    mode->refresh_rate = dm.dmDisplayFrequency;
+    mode->bits_per_pixel = dm.dmBitsPerPel;
 
-	monitor->handle = MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
-	
-	return monitor;
-
+    return mode;
 }
 
 static void* platform_gl_get_proc_address(const char* proc) {

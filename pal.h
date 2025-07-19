@@ -8,6 +8,8 @@ typedef uint8_t pal_bool;
 typedef struct pal_video_mode {
 	int width;
 	int height;
+    int refresh_rate;
+    int bits_per_pixel;
 }pal_video_mode;
 
 typedef struct {
@@ -763,7 +765,7 @@ PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
-PALAPI int make_context_current(pal_window* window);
+PALAPI int pal_make_context_current(pal_window* window);
 PALAPI int register_input_devices(pal_window* window);
 PALAPI uint8_t is_key_pressed(int key);
 PALAPI uint8_t is_key_down(int key);

@@ -157,7 +157,7 @@ PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window) {
 	return platform_poll_events(event, window);
 }
 
-PALAPI int make_context_current(pal_window* window) {
+PALAPI int pal_make_context_current(pal_window* window) {
 	return platform_make_context_current(window);
 }
 

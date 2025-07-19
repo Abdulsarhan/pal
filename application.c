@@ -45,12 +45,10 @@ int main() {
 
     pal_init();
 
-    //TODO: @fix monitor and video mode functions have problems.
-    // They don't return the correct sizes.
     pal_monitor* monitor = pal_get_primary_monitor();
     pal_video_mode* mode = pal_get_video_mode(monitor);
-    pal_window* window = pal_create_window(1280, 720, "Window Title", PAL_WINDOW_RESIZABLE);
-    make_context_current(window);
+    pal_window* window = pal_create_window(mode->width, mode->height, "Window Title", PAL_WINDOW_RESIZABLE);
+    pal_make_context_current(window);
 
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
@@ -64,7 +62,7 @@ int main() {
     pal_set_window_icon_legacy(window, "icon.ico");
     pal_set_taskbar_icon(window, "png.png");
     pal_set_cursor(window, "png.png", 16);
-    uint8_t running = 1;
+    uint8_t running = TRUE;
     pal_event event;
     pal_gamepad_state state;
     while (running) {
