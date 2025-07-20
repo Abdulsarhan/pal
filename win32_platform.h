@@ -92,7 +92,7 @@ pal_input input = { 0 };
 
 // this is supposed to be indexed by subtracting
 // 201  from the event that windows gives us.
-uint32_t win32_button_to_pal_button[] = {
+static const uint16_t win32_button_to_pal_button[] = {
 
 0x0, 0x0, 0x0, // left mouse button
 0x1, 0x1, 0x1, // right mouse button
@@ -101,7 +101,7 @@ uint32_t win32_button_to_pal_button[] = {
 0x4, // mouse5
 };
 
-uint32_t win32_key_to_pal_key[] = {
+static const uint16_t win32_key_to_pal_key[] = {
 // first 7 values are just bullshit.
 0x00, 0x00, 0x00, 0x00, 0x00, // Unassigned
 0x00, 0x00, 0x00, // Unassigned
@@ -159,7 +159,113 @@ uint32_t win32_key_to_pal_key[] = {
 0x90, 0x91 // Numlock, scroll lock
 
 };
+static const uint16_t win32_scancode_to_pal[256] = {
+	[0x01] = PAL_SCAN_ESCAPE,
+	[0x02] = PAL_SCAN_1,
+	[0x03] = PAL_SCAN_2,
+	[0x04] = PAL_SCAN_3,
+	[0x05] = PAL_SCAN_4,
+	[0x06] = PAL_SCAN_5,
+	[0x07] = PAL_SCAN_6,
+	[0x08] = PAL_SCAN_7,
+	[0x09] = PAL_SCAN_8,
+	[0x0A] = PAL_SCAN_9,
+	[0x0B] = PAL_SCAN_0,
+	[0x0C] = PAL_SCAN_MINUS,
+	[0x0D] = PAL_SCAN_EQUALS,
+	[0x0E] = PAL_SCAN_BACKSPACE,
+	[0x0F] = PAL_SCAN_TAB,
+	[0x10] = PAL_SCAN_Q,
+	[0x11] = PAL_SCAN_W,
+	[0x12] = PAL_SCAN_E,
+	[0x13] = PAL_SCAN_R,
+	[0x14] = PAL_SCAN_T,
+	[0x15] = PAL_SCAN_Y,
+	[0x16] = PAL_SCAN_U,
+	[0x17] = PAL_SCAN_I,
+	[0x18] = PAL_SCAN_O,
+	[0x19] = PAL_SCAN_P,
+	[0x1A] = PAL_SCAN_LEFTBRACKET,
+	[0x1B] = PAL_SCAN_RIGHTBRACKET,
+	[0x1C] = PAL_SCAN_RETURN,
+	[0x1D] = PAL_SCAN_LCTRL,
+	[0x1E] = PAL_SCAN_A,
+	[0x1F] = PAL_SCAN_S,
+	[0x20] = PAL_SCAN_D,
+	[0x21] = PAL_SCAN_F,
+	[0x22] = PAL_SCAN_G,
+	[0x23] = PAL_SCAN_H,
+	[0x24] = PAL_SCAN_J,
+	[0x25] = PAL_SCAN_K,
+	[0x26] = PAL_SCAN_L,
+	[0x27] = PAL_SCAN_SEMICOLON,
+	[0x28] = PAL_SCAN_APOSTROPHE,
+	[0x29] = PAL_SCAN_GRAVE,
+	[0x2A] = PAL_SCAN_LSHIFT,
+	[0x2B] = PAL_SCAN_BACKSLASH,
+	[0x2C] = PAL_SCAN_Z,
+	[0x2D] = PAL_SCAN_X,
+	[0x2E] = PAL_SCAN_C,
+	[0x2F] = PAL_SCAN_V,
+	[0x30] = PAL_SCAN_B,
+	[0x31] = PAL_SCAN_N,
+	[0x32] = PAL_SCAN_M,
+	[0x33] = PAL_SCAN_COMMA,
+	[0x34] = PAL_SCAN_PERIOD,
+	[0x35] = PAL_SCAN_SLASH,
+	[0x36] = PAL_SCAN_RSHIFT,
+	[0x37] = PAL_SCAN_KP_MULTIPLY,
+	[0x38] = PAL_SCAN_LALT,
+	[0x39] = PAL_SCAN_SPACE,
+	[0x3A] = PAL_SCAN_CAPSLOCK,
+	[0x3B] = PAL_SCAN_F1,
+	[0x3C] = PAL_SCAN_F2,
+	[0x3D] = PAL_SCAN_F3,
+	[0x3E] = PAL_SCAN_F4,
+	[0x3F] = PAL_SCAN_F5,
+	[0x40] = PAL_SCAN_F6,
+	[0x41] = PAL_SCAN_F7,
+	[0x42] = PAL_SCAN_F8,
+	[0x43] = PAL_SCAN_F9,
+	[0x44] = PAL_SCAN_F10,
+	[0x45] = PAL_SCAN_NUMCLEAR,
+	[0x46] = PAL_SCAN_SCROLLLOCK,
+	[0x47] = PAL_SCAN_KP_7,
+	[0x48] = PAL_SCAN_KP_8,
+	[0x49] = PAL_SCAN_KP_9,
+	[0x4A] = PAL_SCAN_KP_MINUS,
+	[0x4B] = PAL_SCAN_KP_4,
+	[0x4C] = PAL_SCAN_KP_5,
+	[0x4D] = PAL_SCAN_KP_6,
+	[0x4E] = PAL_SCAN_KP_PLUS,
+	[0x4F] = PAL_SCAN_KP_1,
+	[0x50] = PAL_SCAN_KP_2,
+	[0x51] = PAL_SCAN_KP_3,
+	[0x52] = PAL_SCAN_KP_0,
+	[0x53] = PAL_SCAN_KP_PERIOD,
+	[0x57] = PAL_SCAN_F11,
+	[0x58] = PAL_SCAN_F12,
+};
 
+static const uint16_t win32_scancode_e0_to_pal[256] = {
+	[0x1C] = PAL_SCAN_KP_ENTER,
+	[0x1D] = PAL_SCAN_RCTRL,
+	[0x35] = PAL_SCAN_KP_DIVIDE,
+	[0x38] = PAL_SCAN_RALT,
+	[0x47] = PAL_SCAN_HOME,
+	[0x48] = PAL_SCAN_UP,
+	[0x49] = PAL_SCAN_PAGEUP,
+	[0x4B] = PAL_SCAN_LEFT,
+	[0x4D] = PAL_SCAN_RIGHT,
+	[0x4F] = PAL_SCAN_END,
+	[0x50] = PAL_SCAN_DOWN,
+	[0x51] = PAL_SCAN_PAGEDOWN,
+	[0x52] = PAL_SCAN_INSERT,
+	[0x53] = PAL_SCAN_DELETE,
+	[0x5B] = PAL_SCAN_LGUI,
+	[0x5C] = PAL_SCAN_RGUI,
+	[0x5D] = PAL_SCAN_APPLICATION,
+};
 typedef struct {
     uint8_t usage;
     float value;
@@ -803,10 +909,12 @@ int platform_translate_message(MSG msg, pal_window* window) {
 				modifiers |= PAL_MOD_ALTGR;
 			}
 
+            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
+
 			event.type = PAL_KEY_DOWN;
 			event.key = (pal_keyboard_event){
 				.virtual_key = win32_key_to_pal_key[vk],
-				.scancode = scancode,
+				.scancode = pal_scancode,
 				.pressed = 1,
 				.repeat = (msg.lParam >> 30) & 1,
 				.modifiers = modifiers
@@ -872,10 +980,12 @@ int platform_translate_message(MSG msg, pal_window* window) {
 				modifiers |= PAL_MOD_ALTGR;
 			}
 
+            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
+
 			event.type = PAL_KEY_UP;
 			event.key = (pal_keyboard_event){
 				.virtual_key = win32_key_to_pal_key[vk],
-				.scancode = scancode,
+				.scancode = pal_scancode,
 				.pressed = 0,
 				.repeat = 0,
 				.modifiers = modifiers
@@ -1620,6 +1730,8 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		0
 	};
 
+	window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
+
     size_t capacity = 10000;
     pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
 
@@ -1638,7 +1750,31 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
     window->queue = queue;
 
-	window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
+	RAWINPUTDEVICE rid[3];
+
+	// 1. Keyboard
+	rid[0].usUsagePage = 0x01; // Generic desktop controls
+	rid[0].usUsage = 0x06;     // Keyboard
+	rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
+	rid[0].hwndTarget = window->hwnd;
+
+	// 2. Mouse
+	rid[1].usUsagePage = 0x01; // Generic desktop controls
+	rid[1].usUsage = 0x02;     // Mouse
+	rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+	rid[1].hwndTarget = window->hwnd;
+
+	// 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
+	rid[2].usUsagePage = 0x01; // Generic desktop controls
+	rid[2].usUsage = 0x04;     // Joystick
+	rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+	rid[2].hwndTarget = window->hwnd;
+
+	if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
+		DWORD error = GetLastError();
+		printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
+	}
+
 	if (window->hglrc) {
 
 		wglMakeCurrent(NULL, NULL);
@@ -1649,20 +1785,19 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
 
 
-    if (!(window_flags & PAL_WINDOW_HIDDEN)) {
-		if (window_flags & PAL_WINDOW_FULLSCREEN) {
-			ShowWindow(window->hwnd, SW_SHOW);
-		} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
-			ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
-		} else if (window_flags & PAL_WINDOW_MINIMIZED) {
-			ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
+		if (!(window_flags & PAL_WINDOW_HIDDEN)) {
+			if (window_flags & PAL_WINDOW_FULLSCREEN) {
+				ShowWindow(window->hwnd, SW_SHOW);
+			} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
+				ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
+			} else if (window_flags & PAL_WINDOW_MINIMIZED) {
+				ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
+			} else {
+				ShowWindow(window->hwnd, SW_SHOWNORMAL);
+			}
 		} else {
-			ShowWindow(window->hwnd, SW_SHOWNORMAL);
+			ShowWindow(window->hwnd, SW_HIDE);
 		}
-    }
-    else {
-        ShowWindow(window->hwnd, SW_HIDE);
-    }
 
 		SetForegroundWindow(window->hwnd);
 		SetFocus(window->hwnd);
@@ -1920,37 +2055,6 @@ RawInputHandler Win32InputHandlers[3] = {
 	Win32HandleKeyboard,   // RIM_TYPEKEYBOARD (1)
 	Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
-
-int platform_register_raw_input_devices(pal_window* window) {
-	RAWINPUTDEVICE rid[3];
-
-	// 1. Keyboard
-	rid[0].usUsagePage = 0x01; // Generic desktop controls
-	rid[0].usUsage = 0x06;     // Keyboard
-	rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
-	rid[0].hwndTarget = window->hwnd;
-
-	// 2. Mouse
-	rid[1].usUsagePage = 0x01; // Generic desktop controls
-	rid[1].usUsage = 0x02;     // Mouse
-	rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-	rid[1].hwndTarget = window->hwnd;
-
-	// 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
-	rid[2].usUsagePage = 0x01; // Generic desktop controls
-	rid[2].usUsage = 0x04;     // Joystick
-	rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-	rid[2].hwndTarget = window->hwnd;
-
-	if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
-		DWORD error = GetLastError();
-		printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
-		return -1;
-	}
-
-	printf("Raw input devices registered successfully.\n");
-	return 0;
-}
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 

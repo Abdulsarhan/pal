@@ -1,8 +1,4 @@
-Make releases for the whole library that aresingle-header. You can Probably make a bash script that uses sed to automate this.
-
-Add a system that tracks how many windows are open, and when that number is 0, you can close the program.
-
-PALAPI void set_mouse_processed(int button); // TODO: @CLEANUP There is probably no reason to give the user access to this, might remove.
+Add scancode translation code.
 
 Fully integrate new gamepad system that supports all gamepads.
 

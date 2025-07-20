@@ -562,7 +562,7 @@ typedef struct iv4 {
 #define GL_PROFILE_COMPAT 0x8
 
 //----------------------------------------------------------------------------------
-// Keyboard and Mouse Buttons
+// Mouse Buttons
 //----------------------------------------------------------------------------------
 #define PAL_MOUSE_LEFT 0x0
 #define PAL_MOUSE_RIGHT 0x1
@@ -600,12 +600,18 @@ typedef struct iv4 {
 #define EXTRA_MOUSE_BUTTON29 0x21
 #define EXTRA_MOUSE_BUTTON30 0x22
 
+//----------------------------------------------------------------------------------
+// Keys
+//----------------------------------------------------------------------------------
+
 #define PAL_BACKSPACE     0x08
 #define PAL_TAB           0x09
 #define PAL_ENTER         0x0D
 #define PAL_SHIFT         0x10
 #define PAL_CONTROL       0x11
 #define PAL_ALT           0x12
+#define PAL_META          PAL_ALT
+#define PAL_OPTION        PAL_ALT
 #define PAL_PAUSE         0x13
 #define PAL_CAPSLOCK      0x14
 #define PAL_ESCAPE        0x1B
@@ -660,8 +666,12 @@ typedef struct iv4 {
 #define PAL_Y             0x59
 #define PAL_Z             0x5A
 
-#define PAL_LWIN          0x5B // This is also known as the super key on linux.
+#define PAL_LWIN          0x5B 
 #define PAL_RWIN          0x5C
+#define PAL_LSUPER        PAL_LWIN
+#define PAL_RSUPER        PAL_RWIN
+#define PAL_LCOMMAND      PAL_LWIN
+#define PAL_RCOMMAND      PAL_RWIN
 #define PAL_APPS          0x5D
 
 #define PAL_NUMPAD_0      0x60
@@ -718,6 +728,351 @@ typedef struct iv4 {
 #define PAL_MOD_SCROLL 0x4000
 
 //----------------------------------------------------------------------------------
+// Scancodes
+//----------------------------------------------------------------------------------
+
+#define PAL_SCAN_A 4
+#define PAL_SCAN_B 5
+#define PAL_SCAN_C 6
+#define PAL_SCAN_D 7
+#define PAL_SCAN_E 8
+#define PAL_SCAN_F 9
+#define PAL_SCAN_G 10
+#define PAL_SCAN_H 11
+#define PAL_SCAN_I 12
+#define PAL_SCAN_J 13
+#define PAL_SCAN_K 14
+#define PAL_SCAN_L 15
+#define PAL_SCAN_M 16
+#define PAL_SCAN_N 17
+#define PAL_SCAN_O 18
+#define PAL_SCAN_P 19
+#define PAL_SCAN_Q 20
+#define PAL_SCAN_R 21
+#define PAL_SCAN_S 22
+#define PAL_SCAN_T 23
+#define PAL_SCAN_U 24
+#define PAL_SCAN_V 25
+#define PAL_SCAN_W 26
+#define PAL_SCAN_X 27
+#define PAL_SCAN_Y 28
+#define PAL_SCAN_Z 29
+#define PAL_SCAN_1 30
+#define PAL_SCAN_2 31
+#define PAL_SCAN_3 32
+#define PAL_SCAN_4 33
+#define PAL_SCAN_5 34
+#define PAL_SCAN_6 35
+#define PAL_SCAN_7 36
+#define PAL_SCAN_8 37
+#define PAL_SCAN_9 38
+#define PAL_SCAN_0 39
+#define PAL_SCAN_RETURN 40
+#define PAL_SCAN_ESCAPE 41
+#define PAL_SCAN_BACKSPACE 42
+#define PAL_SCAN_TAB 43
+#define PAL_SCAN_SPACE 44
+#define PAL_SCAN_MINUS 45
+#define PAL_SCAN_EQUALS 46
+#define PAL_SCAN_LEFTBRACKET 47
+#define PAL_SCAN_RIGHTBRACKET 48
+#define PAL_SCAN_BACKSLASH 49 /**< Located at the lower left of the return
+						   *   key on ISO keyboards and at the right end
+						   *   of the QWERTY row on ANSI keyboards.
+						   *   Produces REVERSE SOLIDUS (backslash) and
+						   *   VERTICAL LINE in a US layout REVERSE
+						   *   SOLIDUS and VERTICAL LINE in a UK Mac
+						   *   layout NUMBER SIGN and TILDE in a UK
+						   *   Windows layout DOLLAR SIGN and POUND SIGN
+						   *   in a Swiss German layout NUMBER SIGN and
+						   *   APOSTROPHE in a German layout GRAVE
+						   *   ACCENT and POUND SIGN in a French Mac
+						   *   layout and ASTERISK and MICRO SIGN in a
+						   *   French Windows layout.
+						   */
+#define PAL_SCAN_NONUSHASH 50 /**< ISO USB keyboards actually use this code
+						   *   instead of 49 for the same key but all
+						   *   OSes I've seen treat the two codes
+						   *   identically. So as an implementor unless
+						   *   your keyboard generates both of those
+						   *   codes and your OS treats them differently
+						   *   you should generate PAL_SCAN_BACKSLASH
+						   *   instead of this code. As a user you
+						   *   should not rely on this code because SDL
+						   *   will never generate it with most (all?)
+						   *   keyboards.
+						   */
+#define PAL_SCAN_SEMICOLON 51
+#define PAL_SCAN_APOSTROPHE 52
+#define PAL_SCAN_GRAVE 53 /**< Located in the top left corner (on both ANSI
+					   *   and ISO keyboards). Produces GRAVE ACCENT and
+					   *   TILDE in a US Windows layout and in US and UK
+					   *   Mac layouts on ANSI keyboards GRAVE ACCENT
+					   *   and NOT SIGN in a UK Windows layout SECTION
+					   *   SIGN and PLUS-MINUS SIGN in US and UK Mac
+					   *   layouts on ISO keyboards SECTION SIGN and
+					   *   DEGREE SIGN in a Swiss German layout (Mac:
+					   *   only on ISO keyboards) CIRCUMFLEX ACCENT and
+					   *   DEGREE SIGN in a German layout (Mac: only on
+					   *   ISO keyboards) SUPERSCRIPT TWO and TILDE in a
+					   *   French Windows layout COMMERCIAL AT and
+					   *   NUMBER SIGN in a French Mac layout on ISO
+					   *   keyboards and LESS-THAN SIGN and GREATER-THAN
+					   *   SIGN in a Swiss German German or French Mac
+					   *   layout on ANSI keyboards.
+					   */
+#define PAL_SCAN_COMMA 54
+#define PAL_SCAN_PERIOD 55
+#define PAL_SCAN_SLASH 56
+#define PAL_SCAN_CAPSLOCK 57
+#define PAL_SCAN_F1 58
+#define PAL_SCAN_F2 59
+#define PAL_SCAN_F3 60
+#define PAL_SCAN_F4 61
+#define PAL_SCAN_F5 62
+#define PAL_SCAN_F6 63
+#define PAL_SCAN_F7 64
+#define PAL_SCAN_F8 65
+#define PAL_SCAN_F9 66
+#define PAL_SCAN_F10 67
+#define PAL_SCAN_F11 68
+#define PAL_SCAN_F12 69
+#define PAL_SCAN_PRINTSCREEN 70
+#define PAL_SCAN_SCROLLLOCK 71
+#define PAL_SCAN_PAUSE 72
+#define PAL_SCAN_INSERT 73 /**< insert on PC help on some Mac keyboards (but does send code 73 not 117) */
+#define PAL_SCAN_HOME 74
+#define PAL_SCAN_PAGEUP 75
+#define PAL_SCAN_DELETE 76
+#define PAL_SCAN_END 77
+#define PAL_SCAN_PAGEDOWN 78
+#define PAL_SCAN_RIGHT 79
+#define PAL_SCAN_LEFT 80
+#define PAL_SCAN_DOWN 81
+#define PAL_SCAN_UP 82
+#define PAL_SCAN_NUMCLEAR 83 /**< num lock on PC clear on Mac keyboards */
+#define PAL_SCAN_KP_DIVIDE 84
+#define PAL_SCAN_KP_MULTIPLY 85
+#define PAL_SCAN_KP_MINUS 86
+#define PAL_SCAN_KP_PLUS 87
+#define PAL_SCAN_KP_ENTER 88
+#define PAL_SCAN_KP_1 89
+#define PAL_SCAN_KP_2 90
+#define PAL_SCAN_KP_3 91
+#define PAL_SCAN_KP_4 92
+#define PAL_SCAN_KP_5 93
+#define PAL_SCAN_KP_6 94
+#define PAL_SCAN_KP_7 95
+#define PAL_SCAN_KP_8 96
+#define PAL_SCAN_KP_9 97
+#define PAL_SCAN_KP_0 98
+#define PAL_SCAN_KP_PERIOD 99
+#define PAL_SCAN_NONUSBACKSLASH 100 /**< This is the additional key that ISO
+								#define *   keyboards have over ANSI ones
+								#define *   located between left shift and Y.
+								#define *   Produces GRAVE ACCENT and TILDE in a
+								#define *   US or UK Mac layout REVERSE SOLIDUS
+								#define *   (backslash) and VERTICAL LINE in a
+								#define *   US or UK Windows layout and
+								#define *   LESS-THAN SIGN and GREATER-THAN SIGN
+								#define *   in a Swiss German German or French
+								#define *   layout. */
+#define PAL_SCAN_APPLICATION 101 /**< windows contextual menu compose */
+#define PAL_SCAN_POWER 102 /**< The USB document says this is a status flag
+					   #define *   not a physical key - but some Mac keyboards
+					   #define *   do have a power key. */
+#define PAL_SCAN_KP_EQUALS 103
+#define PAL_SCAN_F13 104
+#define PAL_SCAN_F14 105
+#define PAL_SCAN_F15 106
+#define PAL_SCAN_F16 107
+#define PAL_SCAN_F17 108
+#define PAL_SCAN_F18 109
+#define PAL_SCAN_F19 110
+#define PAL_SCAN_F20 111
+#define PAL_SCAN_F21 112
+#define PAL_SCAN_F22 113
+#define PAL_SCAN_F23 114
+#define PAL_SCAN_F24 115
+#define PAL_SCAN_EXECUTE 116
+#define PAL_SCAN_HELP 117    /**< AL Integrated Help Center */
+#define PAL_SCAN_MENU 118    /**< Menu (show menu) */
+#define PAL_SCAN_SELECT 119
+#define PAL_SCAN_STOP 120    /**< AC Stop */
+#define PAL_SCAN_AGAIN 121   /**< AC Redo/Repeat */
+#define PAL_SCAN_UNDO 122    /**< AC Undo */
+#define PAL_SCAN_CUT 123     /**< AC Cut */
+#define PAL_SCAN_COPY 124    /**< AC Copy */
+#define PAL_SCAN_PASTE 125   /**< AC Paste */
+#define PAL_SCAN_FIND 126    /**< AC Find */
+#define PAL_SCAN_MUTE 127
+#define PAL_SCAN_VOLUMEUP 128
+#define PAL_SCAN_VOLUMEDOWN 129
+#define PAL_SCAN_LOCKINGCAPSLOCK 130  
+#define PAL_SCAN_LOCKINGNUMLOCK 131 
+#define PAL_SCAN_LOCKINGSCROLLLOCK 132
+#define PAL_SCAN_KP_COMMA 133
+#define PAL_SCAN_KP_EQUALSAS400 134
+#define PAL_SCAN_INTERNATIONAL1 135 /**< used on Asian keyboards see */
+#define PAL_SCAN_INTERNATIONAL2 136
+#define PAL_SCAN_INTERNATIONAL3 137 /**< Yen */
+#define PAL_SCAN_INTERNATIONAL4 138
+#define PAL_SCAN_INTERNATIONAL5 139
+#define PAL_SCAN_INTERNATIONAL6 140
+#define PAL_SCAN_INTERNATIONAL7 141
+#define PAL_SCAN_INTERNATIONAL8 142
+#define PAL_SCAN_INTERNATIONAL9 143
+#define PAL_SCAN_LANG1 144 /**< Hangul/English toggle */
+#define PAL_SCAN_LANG2 145 /**< Hanja conversion */
+#define PAL_SCAN_LANG3 146 /**< Katakana */
+#define PAL_SCAN_LANG4 147 /**< Hiragana */
+#define PAL_SCAN_LANG5 148 /**< Zenkaku/Hankaku */
+#define PAL_SCAN_LANG6 149 /**< reserved */
+#define PAL_SCAN_LANG7 150 /**< reserved */
+#define PAL_SCAN_LANG8 151 /**< reserved */
+#define PAL_SCAN_LANG9 152 /**< reserved */
+#define PAL_SCAN_ALTERASE 153    /**< Erase-Eaze */
+#define PAL_SCAN_SYSREQ 154
+#define PAL_SCAN_CANCEL 155      /**< AC Cancel */
+#define PAL_SCAN_CLEAR 156
+#define PAL_SCAN_PRIOR 157
+#define PAL_SCAN_RETURN2 158
+#define PAL_SCAN_SEPARATOR 159
+#define PAL_SCAN_OUT 160
+#define PAL_SCAN_OPER 161
+#define PAL_SCAN_CLEARAGAIN 162
+#define PAL_SCAN_CRSEL 163
+#define PAL_SCAN_EXSEL 164
+#define PAL_SCAN_KP_00 176
+#define PAL_SCAN_KP_000 177
+#define PAL_SCAN_THOUSANDSSEPARATOR 178
+#define PAL_SCAN_DECIMALSEPARATOR 179
+#define PAL_SCAN_CURRENCYUNIT 180
+#define PAL_SCAN_CURRENCYSUBUNIT 181
+#define PAL_SCAN_KP_LEFTPAREN 182
+#define PAL_SCAN_KP_RIGHTPAREN 183
+#define PAL_SCAN_KP_LEFTBRACE 184
+#define PAL_SCAN_KP_RIGHTBRACE 185
+#define PAL_SCAN_KP_TAB 186
+#define PAL_SCAN_KP_BACKSPACE 187
+#define PAL_SCAN_KP_A 188
+#define PAL_SCAN_KP_B 189
+#define PAL_SCAN_KP_C 190
+#define PAL_SCAN_KP_D 191
+#define PAL_SCAN_KP_E 192
+#define PAL_SCAN_KP_F 193
+#define PAL_SCAN_KP_XOR 194
+#define PAL_SCAN_KP_POWER 195
+#define PAL_SCAN_KP_PERCENT 196
+#define PAL_SCAN_KP_LESS 197
+#define PAL_SCAN_KP_GREATER 198
+#define PAL_SCAN_KP_AMPERSAND 199
+#define PAL_SCAN_KP_DBLAMPERSAND 200
+#define PAL_SCAN_KP_VERTICALBAR 201
+#define PAL_SCAN_KP_DBLVERTICALBAR 202
+#define PAL_SCAN_KP_COLON 203
+#define PAL_SCAN_KP_HASH 204
+#define PAL_SCAN_KP_SPACE 205
+#define PAL_SCAN_KP_AT 206
+#define PAL_SCAN_KP_EXCLAM 207
+#define PAL_SCAN_KP_MEMSTORE 208
+#define PAL_SCAN_KP_MEMRECALL 209
+#define PAL_SCAN_KP_MEMCLEAR 210
+#define PAL_SCAN_KP_MEMADD 211
+#define PAL_SCAN_KP_MEMSUBTRACT 212
+#define PAL_SCAN_KP_MEMMULTIPLY 213
+#define PAL_SCAN_KP_MEMDIVIDE 214
+#define PAL_SCAN_KP_PLUSMINUS 215
+#define PAL_SCAN_KP_CLEAR 216
+#define PAL_SCAN_KP_CLEARENTRY 217
+#define PAL_SCAN_KP_BINARY 218
+#define PAL_SCAN_KP_OCTAL 219
+#define PAL_SCAN_KP_DECIMAL 220
+#define PAL_SCAN_KP_HEXADECIMAL 221
+// 222 - 223 reserved
+#define PAL_SCAN_LCTRL 224
+#define PAL_SCAN_LSHIFT 225
+#define PAL_SCAN_LALT 226 /**< alt option */
+#define PAL_SCAN_LGUI 227 /**< windows command (apple) meta */
+#define PAL_SCAN_RCTRL 228
+#define PAL_SCAN_RSHIFT 229
+#define PAL_SCAN_RALT 230 /**< alt gr option */
+#define PAL_SCAN_RGUI 231 /**< windows command (apple) meta */
+#define PAL_SCAN_ALTGR 257    /**< I'm not sure if this is really not covered
+						 *   by any of the above but since there's a
+						  *   special SDL_KMOD_MODE for it I'm adding it here
+						  */
+/* @} *//* Usage page 0x07 */
+/**
+*  \name Usage page 0x0C
+*
+*  These values are mapped from usage page 0x0C (USB consumer page).
+*
+*  There are way more keys in the spec than we can represent in the
+*  current scancode range so pick the ones that commonly come up in
+*  real world usage.
+*/
+/* @{ */
+#define PAL_SCAN_SLEEP 258                   /**< Sleep */
+#define PAL_SCAN_WAKE 259                    /**< Wake */
+#define PAL_SCAN_CHANNEL_INCREMENT 260       /**< Channel Increment */
+#define PAL_SCAN_CHANNEL_DECREMENT 261       /**< Channel Decrement */
+#define PAL_SCAN_MEDIA_PLAY 262          /**< Play */
+#define PAL_SCAN_MEDIA_PAUSE 263         /**< Pause */
+#define PAL_SCAN_MEDIA_RECORD 264        /**< Record */
+#define PAL_SCAN_MEDIA_FAST_FORWARD 265  /**< Fast Forward */
+#define PAL_SCAN_MEDIA_REWIND 266        /**< Rewind */
+#define PAL_SCAN_MEDIA_NEXT_TRACK 267    /**< Next Track */
+#define PAL_SCAN_MEDIA_PREVIOUS_TRACK 268 /**< Previous Track */
+#define PAL_SCAN_MEDIA_STOP 269          /**< Stop */
+#define PAL_SCAN_MEDIA_EJECT 270         /**< Eject */
+#define PAL_SCAN_MEDIA_PLAY_PAUSE 271    /**< Play / Pause */
+#define PAL_SCAN_MEDIA_SELECT 272        /* Media Select */
+#define PAL_SCAN_AC_NEW 273              /**< AC New */
+#define PAL_SCAN_AC_OPEN 274             /**< AC Open */
+#define PAL_SCAN_AC_CLOSE 275            /**< AC Close */
+#define PAL_SCAN_AC_EXIT 276             /**< AC Exit */
+#define PAL_SCAN_AC_SAVE 277             /**< AC Save */
+#define PAL_SCAN_AC_PRINT 278            /**< AC Print */
+#define PAL_SCAN_AC_PROPERTIES 279       /**< AC Properties */
+#define PAL_SCAN_AC_SEARCH 280           /**< AC Search */
+#define PAL_SCAN_AC_HOME 281             /**< AC Home */
+#define PAL_SCAN_AC_BACK 282             /**< AC Back */
+#define PAL_SCAN_AC_FORWARD 283          /**< AC Forward */
+#define PAL_SCAN_AC_STOP 284             /**< AC Stop */
+#define PAL_SCAN_AC_REFRESH 285          /**< AC Refresh */
+#define PAL_SCAN_AC_BOOKMARKS 286        /**< AC Bookmarks */
+
+/* @} *//* Usage page 0x0C */
+
+
+/**
+*  \name Mobile keys
+*
+*  These are values that are often used on mobile phones.
+*/
+/* @{ */
+
+#define PAL_SCAN_SOFTLEFT 287 /**< Usually situated below the display on phones and
+							  used as a multi-function feature key for selecting
+							  a software defined function shown on the bottom left
+							  of the display. */
+#define PAL_SCAN_SOFTRIGHT 288 /**< Usually situated below the display on phones and
+							   used as a multi-function feature key for selecting
+							   a software defined function shown on the bottom right
+							   of the display. */
+#define PAL_SCAN_CALL 289 /**< Used for accepting phone calls. */
+#define PAL_SCAN_ENDCALL 290 /**< Used for rejecting phone calls. */
+
+/* @} *//* Mobile keys */
+
+/* Add any other keys here. */
+
+#define PAL_SCAN_RESERVED 400    /**< 400-500 reserved for dynamic keycodes */
+
+#define PAL_SCAN_COUNT 512 /**< not a key just marks the number of scancodes for array bounds */
+
+//----------------------------------------------------------------------------------
 // Controller Buttons
 //----------------------------------------------------------------------------------
 #define GAMEPAD_DPAD_UP       0x0001
@@ -766,7 +1121,6 @@ PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
 PALAPI int pal_make_context_current(pal_window* window);
-PALAPI int register_input_devices(pal_window* window);
 PALAPI uint8_t is_key_pressed(int key);
 PALAPI uint8_t is_key_down(int key);
 PALAPI uint8_t is_key_processed(int key);

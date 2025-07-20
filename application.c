@@ -49,15 +49,11 @@ int main() {
     pal_video_mode* mode = pal_get_video_mode(monitor);
     pal_window* window = pal_create_window(mode->width, mode->height, "Window Title", PAL_WINDOW_RESIZABLE);
     pal_make_context_current(window);
-
     if (!gladLoadGLLoader((GLADloadproc)gl_get_proc_address)) {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
 
     OpenglInfo openglInfo = get_opengl_info();
-
-    if (register_input_devices(window) != 0)
-        return;
 
     pal_set_window_icon_legacy(window, "icon.ico");
     pal_set_taskbar_icon(window, "png.png");
@@ -79,8 +75,11 @@ int main() {
 				printf("Mouse Button UP!\n");
                 break;
             case PAL_KEY_DOWN:
-                if (event.key.virtual_key == PAL_ESCAPE)
+                if (event.key.scancode == PAL_SCAN_ESCAPE) {
+                    printf("Exited!\n");
+                    printf("scancode: %d", event.key.scancode);
                     exit(0);
+                }
                 break;
             case PAL_KEY_UP:
 				printf("Keyboard UP!\n");

@@ -80,10 +80,6 @@ PALAPI void* gl_get_proc_address(const unsigned char* proc) {
 	return platform_gl_get_proc_address(proc);
 }
 
-PALAPI int register_input_devices(pal_window* window) {
-	return platform_register_raw_input_devices(window);
-}
-
 // Keyboard input
 PALAPI uint8_t is_key_pressed(int key) {
 
