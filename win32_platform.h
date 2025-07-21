@@ -90,7 +90,6 @@ static const uint8_t win32_button_to_pal_button[] = {
     [9]  = PAL_MOUSE_4,
     [10] = PAL_MOUSE_5,
 };
-
 static const uint16_t win32_key_to_pal_key[] = {
     // unassigned.
     [0x00] = 0x00, [0x01] = 0x00, [0x02] = 0x00, [0x03] = 0x00, [0x04] = 0x00,
@@ -135,7 +134,7 @@ static const uint16_t win32_key_to_pal_key[] = {
     [0x54] = 0x54, [0x55] = 0x55, [0x56] = 0x56, [0x57] = 0x57,
     [0x58] = 0x58, [0x59] = 0x59, [0x5A] = 0x5A,
 
-    // LWin, RWin, Apps
+    // LWin, RWin, Apps (The Apps key is supposed to open up a context menu. Most keyboards don't have this.)
     [0x5B] = 0x5B, [0x5C] = 0x5C, [0x5D] = 0x5D, 
 
     [0x5E] = 0x5E, // Unassigned
