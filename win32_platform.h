@@ -75,20 +75,20 @@ typedef struct pal_input {
 pal_input input = { 0 };
 
 static const uint8_t win32_button_to_pal_button[] = {
-    [0] = PAL_MOUSE_LEFT, // left mouse button
+    [0] = PAL_MOUSE_LEFT,
     [1] = PAL_MOUSE_LEFT,
     [2] = PAL_MOUSE_LEFT,
 
-    [3] = PAL_MOUSE_RIGHT, // right mouse button
+    [3] = PAL_MOUSE_RIGHT,
     [4] = PAL_MOUSE_RIGHT,
     [5] = PAL_MOUSE_RIGHT,
 
-    [6] = PAL_MOUSE_MIDDLE, // middle mouse button
+    [6] = PAL_MOUSE_MIDDLE,
     [7] = PAL_MOUSE_MIDDLE,
     [8] = PAL_MOUSE_MIDDLE,
 
-    [9]  = PAL_MOUSE_4, // mouse4
-    [10] = PAL_MOUSE_5, // mouse5
+    [9]  = PAL_MOUSE_4,
+    [10] = PAL_MOUSE_5,
 };
 
 static const uint16_t win32_key_to_pal_key[] = {
