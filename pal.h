@@ -12,17 +12,7 @@ typedef struct pal_video_mode {
     int bits_per_pixel;
 }pal_video_mode;
 
-typedef struct {
-	unsigned char* data;   // Raw PCM audio data
-	uint32_t dataSize;       // Size in bytes
-
-	int sampleRate;        // Samples per second (e.g., 44100)
-	int channels;          // Number of audio channels (e.g., 2 for stereo)
-	int bitsPerSample;     // Usually 16 or 32
-    int isFloat; // 0 = PCM, 1 = IEEE float
-
-}Sound;
-
+typedef struct pal_sound pal_sound;
 #define PAL_MAX_TOUCHES 2
 typedef struct {
     // Standard gamepad controls
@@ -1144,8 +1134,10 @@ PALAPI void DrawTriangle(void);
 PALAPI void end_drawing(pal_window* window);
 
 // Sound
-PALAPI int load_sound(const char* filename, Sound* out);
-PALAPI int play_sound(Sound* sound, float volume);
+PALAPI pal_sound* pal_load_sound(const char* filename);
+PALAPI int pal_play_sound(pal_sound* sound, float volume);
+PALAPI int pal_stop_sound(pal_sound* sound);
+PALAPI void pal_free_sound(pal_sound* sound);
 
 PALAPI uint8_t does_file_exist(const char* file_path);
 PALAPI time_t get_file_timestamp(const char* file);

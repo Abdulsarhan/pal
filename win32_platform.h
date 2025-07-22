@@ -24,7 +24,6 @@
 #include <roapi.h>
 #include <winstring.h>
 
-// Project headers (always last)
 #include "pal_platform.h"
 
 #define KEY_DOWN_BIT 0x80
@@ -52,6 +51,17 @@ struct pal_window {
 
 struct pal_monitor {
 	HMONITOR handle;
+};
+
+struct pal_sound{
+	unsigned char* data;   // Raw PCM audio data
+	uint32_t data_size;    // Size in bytes
+
+	int sample_rate;       // Samples per second (e.g., 44100)
+	int channels;          // Number of audio channels (e.g., 2 for stereo)
+	int bits_per_sample;   // Usually 16 or 32
+    int is_float;          // 0 = PCM, 1 = IEEE float
+    IXAudio2SourceVoice* source_voice;
 };
 
 // Keyboard & Mouse Input
@@ -90,6 +100,7 @@ static const uint8_t win32_button_to_pal_button[] = {
     [9]  = PAL_MOUSE_4,
     [10] = PAL_MOUSE_5,
 };
+
 static const uint16_t win32_key_to_pal_key[] = {
     // unassigned.
     [0x00] = 0x00, [0x01] = 0x00, [0x02] = 0x00, [0x03] = 0x00, [0x04] = 0x00,
@@ -2115,14 +2126,43 @@ int platform_init_sound() {
 	return hr;
 }
 
-// Helper function to compare GUIDs
-static int is_equal_guid(const GUID* a, const GUID* b) {
-	return memcmp(a, b, sizeof(GUID)) == 0;
-}
+pal_sound* platform_load_sound(const char* filename) {
+	FILE* file = fopen(filename, "rb");
+	if (!file) return NULL;
 
-static int platform_play_sound(const Sound* sound, float volume) {
-	if (!g_xaudio2 || !g_mastering_voice) {
-		return E_FAIL;
+	char header[12];
+	if (fread(header, 1, sizeof(header), file) < 12) {
+		fclose(file);
+		return NULL;
+	}
+
+	pal_sound* sound = (pal_sound*)malloc(sizeof(pal_sound));
+	if (!sound) {
+		fclose(file);
+		printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
+		return NULL;
+	}
+
+	int result = 0;
+
+	if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
+		rewind(file);
+		result = load_wav(file, sound);
+	}
+	else if (memcmp(header, "OggS", 4) == 0) {
+		result = load_ogg(filename, sound);
+	}
+	else {
+		fclose(file);
+		free(sound);
+		return NULL; // unsupported format
+	}
+
+	fclose(file);
+
+	if (result != 1) {
+		free(sound);
+		return NULL;
 	}
 
 	static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
@@ -2135,54 +2175,119 @@ static int platform_play_sound(const Sound* sound, float volume) {
 		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
 	};
 
-	IXAudio2SourceVoice* source_voice = NULL;
-
 	WAVEFORMATEXTENSIBLE wfex = { 0 };
-
 	wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
 	wfex.Format.nChannels = sound->channels;
-	wfex.Format.nSamplesPerSec = sound->sampleRate;
-	wfex.Format.wBitsPerSample = sound->bitsPerSample;
+	wfex.Format.nSamplesPerSec = sound->sample_rate;
+	wfex.Format.wBitsPerSample = sound->bits_per_sample;
 	wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
 	wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
-	wfex.Format.cbSize = sizeof(wfex);
+	wfex.Format.cbSize = 22; // sizeof(dwChannelMask) + sizeof(SubFormat)
+	wfex.Samples.wValidBitsPerSample = (uint16_t)sound->bits_per_sample;
 
-	wfex.Samples.wValidBitsPerSample = sound->bitsPerSample;
-	wfex.dwChannelMask = (sound->channels == 2) ? SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT : 0;
-	wfex.SubFormat = (sound->bitsPerSample == 32)
+	wfex.SubFormat = (sound->is_float)
 		? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
 		: KSDATAFORMAT_SUBTYPE_PCM;
 
+	switch (sound->channels) {
+		case 1: wfex.dwChannelMask = SPEAKER_FRONT_CENTER; break;
+
+		case 2: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT; break;
+
+		case 4: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
+
+		case 6: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+			      					 SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
+
+		case 8: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+								     SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+								     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT |
+                                     SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT; break;
+
+		default: wfex.dwChannelMask = 0; break;
+	}
+
+	sound->source_voice = NULL;
 	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
-		g_xaudio2, &source_voice, (const WAVEFORMATEX*)&wfex,
+		g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex,
 		0, XAUDIO2_DEFAULT_FREQ_RATIO,
 		NULL, NULL, NULL);
+
 	if (FAILED(hr)) {
-		return hr;
+		free(sound);
+		return NULL;
+	}
+
+	return sound;
+}
+
+static int platform_play_sound(pal_sound* sound, float volume) {
+	if (!g_xaudio2 || !g_mastering_voice) {
+		return E_FAIL;
 	}
 
 	// Set the volume
-	source_voice->lpVtbl->SetVolume(source_voice, volume, 0);
+	sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
 
 	XAUDIO2_BUFFER buffer = {
-		.AudioBytes = (UINT32)sound->dataSize,
+		.AudioBytes = (UINT32)sound->data_size,
 		.pAudioData = sound->data,
 		.Flags = XAUDIO2_END_OF_STREAM
 	};
 
-	hr = source_voice->lpVtbl->SubmitSourceBuffer(source_voice, &buffer, NULL);
+    HRESULT hr;
+
+	hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
 	if (FAILED(hr)) {
-		source_voice->lpVtbl->DestroyVoice(source_voice);
+		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
 		return hr;
 	}
 
-	hr = source_voice->lpVtbl->Start(source_voice, 0, 0);
+	hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
 	if (FAILED(hr)) {
-		source_voice->lpVtbl->DestroyVoice(source_voice);
+		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
 		return hr;
 	}
 
 	return S_OK;
+}
+
+void platform_free_sound(pal_sound* sound) {
+    if (sound) {
+        if (sound->source_voice) {
+            sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+            printf("ERROR: %s(): Source voice was not initialized. Was the sound played before? If not, you have to play it before destroying!\n", __func__);
+        }
+        if (sound->data) {
+            free(sound->data);
+            sound->data = NULL;
+        } else {
+            printf("ERROR: %s(): Pointer to data in pal_sound was null. Not going to free. Was the sound loaded?\n", __func__);
+        }
+        free(sound);
+    } else {
+        printf("ERROR: %s(): Pointer to pal_sound was null. Not going to free. Was it allocated to begin with?\n", __func__);
+    }
+}
+
+int platform_stop_sound(pal_sound* sound) {
+    HRESULT hr = 0;
+    hr = sound->source_voice->lpVtbl->Stop(sound->source_voice, 0, XAUDIO2_COMMIT_NOW);
+
+	if (FAILED(hr)) {
+		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+		return hr;
+	}
+
+    hr = sound->source_voice->lpVtbl->FlushSourceBuffers(sound->source_voice);
+
+	if (FAILED(hr)) {
+		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+		return hr;
+	}
+    return hr;
 }
 
 void* platform_load_dynamic_library(char* dll) {

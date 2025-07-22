@@ -185,18 +185,22 @@ PALAPI void end_drawing(pal_window* window) {
 
 */
 
-PALAPI int play_sound(Sound* sound, float volume) {
+PALAPI int pal_play_sound(pal_sound* sound, float volume) {
 	return platform_play_sound(sound, volume);
 }
 
+PALAPI int pal_stop_sound(pal_sound* sound) {
+	return platform_stop_sound(sound);
+}
+
 // TODO: @fix This loads uncompressed .wav files only!
-static int load_wav(FILE* file, Sound* out) {
+static int load_wav(FILE* file, pal_sound* out) {
 	static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
 
 	static const uint8_t SUBFORMAT_PCM[16] = {
-	0x01, 0x00, 0x00, 0x00, 0x10, 0x00,
-	0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
-	0x9B, 0x71, 0x00, 0x00
+		0x01, 0x00, 0x00, 0x00, 0x10, 0x00,
+		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
+		0x9B, 0x71, 0x00, 0x00
 	};
 
 	static const uint8_t SUBFORMAT_IEEE_FLOAT[16] = {
@@ -209,22 +213,24 @@ static int load_wav(FILE* file, Sound* out) {
 	uint32_t riffSize;
 	char waveID[4];
 
-	if (fread(riffHeader, 1, 4, file) != 4 || fread(&riffSize, 4, 1, file) != 1 || fread(waveID, 1, 4, file) != 4) {
-		return 0;
+	if (fread(riffHeader, 1, 4, file) != 4 ||
+		fread(&riffSize, 4, 1, file) != 1 ||
+		fread(waveID, 1, 4, file) != 4) {
+		return -1;
 	}
 
 	if (memcmp(riffHeader, "RIFF", 4) != 0 || memcmp(waveID, "WAVE", 4) != 0) {
-		return 0;
+		return -1;
 	}
 
 	int audioFormat = 0;
 	int numChannels = 0;
-	int sampleRate = 0;
-	int bitsPerSample = 0;
-	int isFloat = 0;
+	int sample_rate = 0;
+	int bits_per_sample = 0;
+	int is_float = 0;
 
 	unsigned char* audioData = NULL;
-	uint32_t dataSize = 0;
+	uint32_t data_size = 0;
 
 	while (!feof(file)) {
 		char chunkID[4];
@@ -234,28 +240,29 @@ static int load_wav(FILE* file, Sound* out) {
 
 		if (memcmp(chunkID, "fmt ", 4) == 0) {
 			uint16_t formatTag;
-			fread(&formatTag, sizeof(uint16_t), 1, file);
-			fread(&numChannels, sizeof(uint16_t), 1, file);
-			fread(&sampleRate, sizeof(uint32_t), 1, file);
-			fseek(file, 6, SEEK_CUR); // skip byte rate + block align
-			fread(&bitsPerSample, sizeof(uint16_t), 1, file);
+			if (fread(&formatTag, sizeof(uint16_t), 1, file) != 1) return -1;
+			if (fread(&numChannels, sizeof(uint16_t), 1, file) != 1) return -1;
+			if (fread(&sample_rate, sizeof(uint32_t), 1, file) != 1) return -1;
+			if (fseek(file, 6, SEEK_CUR) != 0) return -1; // skip byte rate + block align
+			if (fread(&bits_per_sample, sizeof(uint16_t), 1, file) != 1) return -1;
 
 			if (formatTag == WAV_FMT_EXTENSIBLE && chunkSize >= 40) {
 				uint16_t cbSize;
-				fread(&cbSize, sizeof(uint16_t), 1, file);
-				if (cbSize < 22) return 0;
+				if (fread(&cbSize, sizeof(uint16_t), 1, file) != 1) return -1;
+				if (cbSize < 22) return -1;
 
-				fseek(file, 6, SEEK_CUR); // skip validBitsPerSample, channelMask
+				if (fseek(file, 6, SEEK_CUR) != 0) return -1; // skip validBitsPerSample + channelMask
+
 				uint8_t subFormat[16];
-				if (fread(subFormat, 1, 16, file) != 16) return 0;
+				if (fread(subFormat, 1, 16, file) != 16) return -1;
 
 				if (memcmp(subFormat, SUBFORMAT_PCM, 16) == 0) {
 					audioFormat = WAV_FMT_PCM;
-					isFloat = 0;
+					is_float = 0;
 				}
 				else if (memcmp(subFormat, SUBFORMAT_IEEE_FLOAT, 16) == 0) {
 					audioFormat = WAV_FMT_IEEE_FLOAT;
-					isFloat = 1;
+					is_float = 1;
 				}
 				else {
 					return -1;
@@ -264,50 +271,55 @@ static int load_wav(FILE* file, Sound* out) {
 			else {
 				audioFormat = formatTag;
 				if (audioFormat == WAV_FMT_PCM) {
-					isFloat = 0;
+					is_float = 0;
 				}
 				else if (audioFormat == WAV_FMT_IEEE_FLOAT) {
-					isFloat = 1;
+					is_float = 1;
 				}
 				else {
 					return -1;
 				}
 
 				if (chunkSize > 16) {
-					fseek(file, chunkSize - 16, SEEK_CUR);
+					if (fseek(file, chunkSize - 16, SEEK_CUR) != 0) return -1;
 				}
 			}
 		}
 		else if (memcmp(chunkID, "data", 4) == 0) {
 			audioData = (unsigned char*)malloc(chunkSize);
-			if (!audioData || fread(audioData, 1, chunkSize, file) != chunkSize) {
+			if (!audioData) return -1;
+
+			if (fread(audioData, 1, chunkSize, file) != chunkSize) {
 				free(audioData);
 				return -1;
 			}
-			dataSize = chunkSize;
+
+			data_size = chunkSize;
 		}
 		else {
-			fseek(file, chunkSize, SEEK_CUR); // skip unknown chunk
+			// Skip unknown chunk (with padding if size is odd)
+			if (fseek(file, (chunkSize + 1) & ~1, SEEK_CUR) != 0) return -1;
 		}
 	}
 
-	if (!audioData || (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
+	if (!audioData || data_size == 0 ||
+		(audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
 		free(audioData);
 		return -1;
 	}
 
 	out->data = audioData;
-	out->dataSize = dataSize;
-	out->sampleRate = sampleRate;
+	out->data_size = data_size;
+	out->sample_rate = sample_rate;
 	out->channels = numChannels;
-	out->bitsPerSample = bitsPerSample;
-	out->isFloat = isFloat;
+	out->bits_per_sample = bits_per_sample;
+	out->is_float = is_float;
 
-	return 0;
+	return 1;
 }
 
 // --- Ogg Loader ---
-static int load_ogg(const char* filename, Sound* out) {
+static int load_ogg(const char* filename, pal_sound* out) {
 	int channels, sample_rate;
 	short* pcm_data;
 
@@ -320,48 +332,24 @@ static int load_ogg(const char* filename, Sound* out) {
 		printf("Failed to decode Ogg file.\n");
 	}
 
-	// Fill the Sound struct
+	// Fill the pal_sound struct
 	out->data = (unsigned char*)pcm_data;
-	out->dataSize = samples * channels * sizeof(short);
+	out->data_size = samples * channels * sizeof(short);
 	out->channels = channels;
-	out->sampleRate = sample_rate;
-	out->bitsPerSample = 16; // Ogg decodes to 16-bit PCM by default
-	out->isFloat = 0;
+	out->sample_rate = sample_rate;
+	out->bits_per_sample = 16; // Ogg decodes to 16-bit PCM by default
+	out->is_float = 0;
 	return 0;
 }
 
 // loader for uncompressed .wav and ogg vorbis files.
-int load_sound(const char* filename, Sound* out) {
-	FILE* file = fopen(filename, "rb");
-	if (!file) return 0;
-
-	char header[12];
-	size_t read = fread(header, 1, sizeof(header), file);
-	if (read < 12) {
-		fclose(file);
-		return 0;
-	}
-
-	rewind(file);
-
-	if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
-		int result = load_wav(file, out);
-		fclose(file);
-		return result;
-	}
-
-	if (memcmp(header, "OggS", 4) == 0) {
-		fclose(file);
-		return load_ogg(filename, out);
-	}
-
-	fclose(file);
-	return 0;
+pal_sound* pal_load_sound(const char* filename) {
+	return platform_load_sound(filename);
 }
 
-void free_sound(Sound* sound) {
-	if (sound->data) free(sound->data);
-	sound->data = NULL;
+
+void pal_free_sound(pal_sound* sound) {
+	platform_free_sound(sound);
 }
 
 /*
