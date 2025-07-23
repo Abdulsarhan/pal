@@ -222,11 +222,6 @@ void pal_free_music(pal_sound* sound) {
 }
 
 // TODO: @fix This loads uncompressed .wav files only!
-
-// despite wav being an uncompressed format, and you're supposed to load
-// bytes, and not samples, we specify how much to preload using samples
-// so that it's in line with the .ogg implementation. We need this so that
-// our audio streaming logic doesn't get fucked up - Abdelrahman Sarhan 2025-07-22
 static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     FILE* file = fopen(filename, "rb");
     static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
@@ -329,16 +324,23 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     out->bits_per_sample = bits_per_sample;
     out->is_float = is_float;
     out->data_offset = data_offset;
-    if (seconds) { // we keep the handle to the file if we need to stream it.
+    
+    if (*seconds > 0.0f) { // Streaming mode - keep file open and set up streaming metadata
         out->source_file = file;
+        out->total_data_size = data_size;           // Total size of audio data in file
+        out->bytes_streamed = out->data_size;      // How many bytes already loaded into initial buffer
+        
+        printf("WAV streaming setup: total=%u bytes, preloaded=%u bytes, data_offset=%u\n",
+               out->total_data_size, out->data_size, out->data_offset);
     }
-    else {
+    else { // Non-streaming mode - close file
         fclose(file);
-        out->source_file = 0;
+        out->source_file = NULL;
+        out->total_data_size = 0;
+        out->bytes_streamed = 0;
     }
     return 1;
 }
-
 static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
     int channels, sample_rate;
     int error;
@@ -389,7 +391,6 @@ static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
 
     // Store decoder and preload state for streaming later
     out->decoder = vorbis;
-    out->samples_decoded = (uint32_t)total_decoded;
 
     return 1;
 }
