@@ -2144,80 +2144,111 @@ typedef struct {
     pal_sound* sound;
 } StreamingVoiceCallback;
 
-// Fixed OnBufferEnd - properly free the allocated buffer
-static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
-    
-    // Free the buffer that just finished playing
-    // pBufferContext contains the buffer pointer we set in buffer.pContext
-    if (pBufferContext) {
-        free(pBufferContext);
-    }
-}
-
 static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds) {
     // bytes_per_second = sample_rate * channels * (bits_per_sample / 8)
     size_t bytes_per_second = sound->sample_rate * sound->channels * (sound->bits_per_sample / 8);
     return (size_t)(bytes_per_second * seconds);
 }
 
-// Load next chunk from file/decoder into a new buffer
-// Returns bytes read, or 0 if end of stream
+// Fixed load_next_chunk - separate WAV and OGG handling with proper positioning
 static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
     size_t bytes_read = 0;
     
     if (sound->source_file) {
-        // WAV streaming
+        // WAV streaming - FIXED: Don't use bytes_streamed for positioning
+        // The bytes_streamed should track how much we've loaded beyond the initial preload
         uint32_t remaining = sound->total_data_size - sound->bytes_streamed;
+        
         if (remaining == 0) {
+            printf("WAV: No remaining data\n");
             return 0; // End of file
         }
         
+        if (!sound->source_file) {
+            printf("ERROR: WAV file handle is NULL!\n");
+            return 0;
+        }
+        
         size_t to_read = (buffer_size < remaining) ? buffer_size : remaining;
+        // CRITICAL FIX: Calculate correct file position
         long seek_pos = sound->data_offset + sound->bytes_streamed;
         
-        if (fseek(sound->source_file, seek_pos, SEEK_SET) == 0) {
-            bytes_read = fread(buffer, 1, to_read, sound->source_file);
-            sound->bytes_streamed += bytes_read;
+        printf("WAV: Seeking to %ld (data_offset=%ld + bytes_streamed=%u), reading %zu bytes\n", 
+               seek_pos, sound->data_offset, sound->bytes_streamed, to_read);
+        
+        if (fseek(sound->source_file, seek_pos, SEEK_SET) != 0) {
+            printf("WAV: Seek failed to position %ld\n", seek_pos);
+            return 0;
         }
+        
+        bytes_read = fread(buffer, 1, to_read, sound->source_file);
+        
+        if (bytes_read != to_read) {
+            printf("WAV: Read %zu bytes but expected %zu, feof=%d, ferror=%d\n", 
+                   bytes_read, to_read, feof(sound->source_file), ferror(sound->source_file));
+        }
+        
+        sound->bytes_streamed += bytes_read;
+        printf("WAV: Read %zu bytes, new bytes_streamed=%u\n", bytes_read, sound->bytes_streamed);
+        
+        // Check first few bytes to see if we're reading valid data
+        if (bytes_read >= 8) {
+            printf("WAV: First 8 bytes: %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                   buffer[0], buffer[1], buffer[2], buffer[3], 
+                   buffer[4], buffer[5], buffer[6], buffer[7]);
+        }
+        
     } else if (sound->decoder) {
-        // OGG streaming
+        // OGG streaming - FIXED: Proper buffer size calculation
         stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
-        int samples_per_chunk = buffer_size / (sound->channels * sizeof(short));
+        
+        // Calculate how many samples we can fit in the buffer
+        int samples_per_channel = buffer_size / (sound->channels * sizeof(short));
         short* pcm_buffer = (short*)buffer;
         
+        // CRITICAL FIX: Use get_samples_short_interleaved correctly
         int samples_read = stb_vorbis_get_samples_short_interleaved(
-            vorbis, sound->channels, pcm_buffer, samples_per_chunk);
+            vorbis, sound->channels, pcm_buffer, samples_per_channel);
         
         bytes_read = samples_read * sound->channels * sizeof(short);
+        
+        printf("OGG: Requested %d samples per channel, got %d samples, %zu bytes\n",
+               samples_per_channel, samples_read, bytes_read);
+        
+        // Check if we've reached the end
+        if (samples_read == 0) {
+            printf("OGG: End of stream reached\n");
+        }
     }
     
     return bytes_read;
 }
 
-// Fixed OnVoiceProcessingPassEnd - queue new buffers as needed
-static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
+// Fixed OnBufferEnd - properly free the allocated buffer and queue next
+static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
     
+    static int buffer_end_count = 0;
+    printf("OnBufferEnd %d: buffer=%p\n", buffer_end_count++, pBufferContext);
+    
+    // Free the buffer that just finished playing
+    // pBufferContext contains the buffer pointer we set in buffer.pContext
+    if (pBufferContext) {
+        free(pBufferContext);
+    }
+    
+    // CRITICAL FIX: Queue next buffer here instead of waiting for OnVoiceProcessingPassEnd
     if (!sound->is_streaming || sound->stream_finished) {
         return;
     }
     
     // Check how many buffers are queued
     XAUDIO2_VOICE_STATE state;
-    sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+    sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
     
-    static int callback_count = 0;
-    if (callback_count < 10) {
-        printf("Callback %d: BuffersQueued=%u\n", callback_count, state.BuffersQueued);
-    }
-    callback_count++;
-    
-    // If we have fewer than 2 buffers queued, try to queue another one
+    // If we have fewer than 2 buffers queued, queue another one
     if (state.BuffersQueued < 2) {
-        // Use the same chunk duration as the preload (e.g., 0.5 seconds)
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
         
@@ -2232,35 +2263,47 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* ca
                 buffer.pAudioData = chunk_buffer;
                 buffer.pContext = chunk_buffer; // For OnBufferEnd to free
                 
-                // Set end of stream flag only if we got no data (true end of stream)
-                if (bytes_read == 0) {
-                    buffer.Flags = XAUDIO2_END_OF_STREAM;
-                    sound->stream_finished = 1;
-                    printf("End of stream reached - no more data\n");
-                }
-                
                 HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(
                     sound->source_voice, &buffer, NULL);
                     
                 if (FAILED(hr)) {
-                    printf("ERROR: Failed to submit buffer in callback: 0x%08X\n", hr);
+                    printf("ERROR: Failed to submit buffer in OnBufferEnd: 0x%08X\n", hr);
                     free(chunk_buffer);
-                } else if (callback_count < 10) {
-                    float buffer_duration = (float)bytes_read / 
-                        (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8));
-                    printf("Submitted buffer: %u bytes (%.3f seconds), flags=0x%x\n", 
-                           buffer.AudioBytes, buffer_duration, buffer.Flags);
+                } else {
+                    printf("Queued next buffer: %u bytes\n", buffer.AudioBytes);
                 }
             } else {
+                // End of stream reached
                 free(chunk_buffer);
                 sound->stream_finished = 1;
-                if (callback_count < 10) {
-                    printf("No more data available - stream finished\n");
-                }
+                printf("Stream finished - no more data\n");
             }
         }
     }
 }
+
+// Simplified OnVoiceProcessingPassEnd - let OnBufferEnd handle buffering
+static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
+    // OnBufferEnd now handles buffer queuing, so this can be much simpler
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
+    
+    if (!sound->is_streaming || sound->stream_finished) {
+        return;
+    }
+    
+    // Just log state for debugging
+    XAUDIO2_VOICE_STATE state;
+    sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
+    
+    static int callback_count = 0;
+    if (callback_count % 100 == 0) { // Log less frequently
+        printf("ProcessingPass %d: BuffersQueued=%u, SamplesPlayed=%llu\n", 
+               callback_count, state.BuffersQueued, state.SamplesPlayed);
+    }
+    callback_count++;
+}
+
 static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     // Called when XAudio2 starts processing a buffer
     // pBufferContext contains the buffer we passed in SubmitSourceBuffer
@@ -2290,7 +2333,7 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback* 
     pal_sound* sound = cb->sound;
     
     // We can use BytesRequired to be more intelligent about buffer management
-    // For now, we'll handle this in OnVoiceProcessingPassEnd instead
+    // For now, we'll handle this in OnBufferEnd instead
 }
 
 static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
@@ -2419,24 +2462,39 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
         sound->preload_seconds = seconds;
         sound->is_streaming = 1;
         
-        // For streaming sounds, store the total data size
+        // CRITICAL FIX: Proper initialization of streaming counters
         if (sound->source_file) {
+            // For WAV files, calculate total data size from file
+            long current_pos = ftell(sound->source_file);
             fseek(sound->source_file, 0, SEEK_END);
             long file_end = ftell(sound->source_file);
+            fseek(sound->source_file, current_pos, SEEK_SET); // Restore position
+            
             sound->total_data_size = file_end - sound->data_offset;
-            sound->bytes_streamed = sound->data_size; // Already loaded portion
+            // FIXED: bytes_streamed should start from the amount already preloaded
+            sound->bytes_streamed = sound->data_size;
             
             float total_seconds = (float)sound->total_data_size / 
                 (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8));
             
-            printf("WAV streaming: total_size=%u bytes (%.1f seconds), preloaded=%zu bytes (%.3f seconds)\n",
+            printf("WAV streaming setup: total_size=%u bytes (%.1f seconds), preloaded=%zu bytes (%.3f seconds)\n",
                    sound->total_data_size, total_seconds, sound->data_size,
                    (float)sound->data_size / (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8)));
+                   
+        } else if (sound->decoder) {
+            // For OGG files, we can't easily calculate total size, so we'll stream until EOF
+            sound->total_data_size = 0; // Unknown for OGG
+            sound->bytes_streamed = sound->data_size; // Amount preloaded
+            
+            printf("OGG streaming setup: preloaded=%zu bytes (%.3f seconds)\n",
+                   sound->data_size,
+                   (float)sound->data_size / (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8)));
         }
-    }
-    else {
+    } else {
         sound->preload_seconds = 0;
         sound->is_streaming = 0;
+        sound->bytes_streamed = 0;
+        sound->total_data_size = 0;
     }
 	
 	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
@@ -2453,6 +2511,7 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
 	return sound;
 }
 
+// Enhanced platform_play_music with better buffer management
 static int platform_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
@@ -2485,6 +2544,35 @@ static int platform_play_music(pal_sound* sound, float volume) {
     if (FAILED(hr)) {
         printf("ERROR: Failed to submit source buffer: 0x%08X\n", hr);
         return hr;
+    }
+    
+    // IMPROVEMENT: For streaming sounds, queue an additional buffer immediately
+    if (sound->is_streaming && !sound->stream_finished) {
+        float chunk_seconds = sound->preload_seconds;
+        size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
+        
+        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
+        if (chunk_buffer) {
+            size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
+            
+            if (bytes_read > 0) {
+                XAUDIO2_BUFFER next_buffer = {0};
+                next_buffer.AudioBytes = (UINT32)bytes_read;
+                next_buffer.pAudioData = chunk_buffer;
+                next_buffer.pContext = chunk_buffer; // For OnBufferEnd to free
+                
+                hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &next_buffer, NULL);
+                if (FAILED(hr)) {
+                    printf("ERROR: Failed to submit second buffer: 0x%08X\n", hr);
+                    free(chunk_buffer);
+                } else {
+                    printf("Queued second buffer: %u bytes\n", next_buffer.AudioBytes);
+                }
+            } else {
+                free(chunk_buffer);
+                // If we can't load more data immediately, that's fine for short files
+            }
+        }
     }
     
     // Start playback

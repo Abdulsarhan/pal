@@ -54,7 +54,7 @@ int main() {
     }
 
     OpenglInfo openglInfo = get_opengl_info();
-    pal_sound* music = pal_load_music("sine_wave.wav");
+    pal_sound* music = pal_load_music("fine_night.ogg");
     pal_play_music(music, 1.0);
     pal_set_window_icon_legacy(window, "icon.ico");
     pal_set_taskbar_icon(window, "png.png");

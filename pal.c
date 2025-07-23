@@ -309,6 +309,14 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
             }
             out->data = audioData;
             out->data_size = preload_bytes;
+            
+            // Debug: Show first 8 bytes of initial buffer
+            if (preload_bytes >= 8) {
+                unsigned char* debug_data = (unsigned char*)audioData;
+                printf("Initial buffer first 8 bytes: %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                       debug_data[0], debug_data[1], debug_data[2], debug_data[3],
+                       debug_data[4], debug_data[5], debug_data[6], debug_data[7]);
+            }
         }
         else {
             if (fseek(file, (chunkSize + 1) & ~1, SEEK_CUR) != 0) return -1;
@@ -324,6 +332,10 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     out->bits_per_sample = bits_per_sample;
     out->is_float = is_float;
     out->data_offset = data_offset;
+    
+    // Debug: Show the audio format information
+    printf("WAV format: audioFormat=%d, channels=%d, sample_rate=%d, bits_per_sample=%d, is_float=%d\n",
+           audioFormat, numChannels, sample_rate, bits_per_sample, is_float);
     
     if (*seconds > 0.0f) { // Streaming mode - keep file open and set up streaming metadata
         out->source_file = file;
@@ -341,6 +353,7 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     }
     return 1;
 }
+
 static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
     int channels, sample_rate;
     int error;
