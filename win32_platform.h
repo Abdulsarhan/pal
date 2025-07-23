@@ -57,13 +57,27 @@ struct pal_sound{
 	int bits_per_sample;   // Usually 16 or 32
     int is_float;          // 0 = PCM, 1 = IEEE float
     IXAudio2SourceVoice* source_voice;
-    // wav streaming shit
-    uint32_t data_offset;
-    FILE* source_file;
-    // ogg streaming shit
+    // ogg streaming
     stb_vorbis* decoder;
     int samples_decoded;
+    // WAV streaming
+    FILE* source_file;
+    uint32_t total_data_size;
+    uint32_t bytes_streamed;
+    uint32_t data_offset;
 
+    // streaming
+    unsigned char* ring_buffer;
+    size_t ring_buffer_size;
+    size_t ring_write_pos;
+    size_t ring_read_pos;
+    size_t bytes_available;
+    int is_streaming;
+    int stream_finished;
+    HANDLE stream_thread;
+    CRITICAL_SECTION buffer_lock;
+    HANDLE buffer_event;
+    IXAudio2VoiceCallback* voice_callback;
 };
 
 // Keyboard & Mouse Input
@@ -2127,6 +2141,144 @@ int platform_init_sound() {
 
 	return hr;
 }
+// XAudio2 callback for streaming
+typedef struct {
+    IXAudio2VoiceCallbackVtbl* lpVtbl;
+    pal_sound* sound;
+} StreamingVoiceCallback;
+
+
+static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
+    
+    // Free the buffer that just finished playing
+    if (pBufferContext) {
+        free(pBufferContext);
+    }
+    
+    // Buffer management is now handled in OnVoiceProcessingPassEnd
+    // This prevents duplicate buffer submissions and race conditions
+}
+
+static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback* callback, void* pBufferContext) {
+    // Called when XAudio2 starts processing a buffer
+    // pBufferContext contains the buffer we passed in SubmitSourceBuffer
+    // For streaming, we don't need to do anything special here
+}
+
+static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
+    // Called when a buffer with XAUDIO2_LOOP_INFINITE completes a loop
+    // We don't use looping buffers in streaming, so this stays empty
+}
+
+static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void* pBufferContext, HRESULT Error) {
+    // Called when XAudio2 encounters an error
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
+    
+    printf("XAudio2 Voice Error: 0x%08X\n", Error);
+    
+    // Stop streaming on error
+    sound->stream_finished = 1;
+}
+static size_t win32_ring_buffer_read(pal_sound* sound, unsigned char* data, size_t size) {
+    EnterCriticalSection(&sound->buffer_lock);
+    
+    size_t to_read = (size < sound->bytes_available) ? size : sound->bytes_available;
+    
+    if (to_read > 0) {
+        // Handle wrap-around
+        size_t to_end = sound->ring_buffer_size - sound->ring_read_pos;
+        if (to_read <= to_end) {
+            memcpy(data, sound->ring_buffer + sound->ring_read_pos, to_read);
+        } else {
+            memcpy(data, sound->ring_buffer + sound->ring_read_pos, to_end);
+            memcpy(data + to_end, sound->ring_buffer, to_read - to_end);
+        }
+        
+        sound->ring_read_pos = (sound->ring_read_pos + to_read) % sound->ring_buffer_size;
+        sound->bytes_available -= to_read;
+    }
+    
+    LeaveCriticalSection(&sound->buffer_lock);
+    return to_read;
+}
+
+static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
+    // Called when XAudio2 finishes processing audio for this voice in the current pass
+    // We can use this to check if we need to queue more buffers
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
+    
+    if (!sound->is_streaming || sound->stream_finished) {
+        return;
+    }
+    
+    // Check how many buffers are queued
+    XAUDIO2_VOICE_STATE state;
+    sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+    
+    // If we have fewer than 2 buffers queued, try to queue another one
+    if (state.BuffersQueued < 2) {
+        const size_t buffer_chunk_size = 8192;
+        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
+        
+        if (chunk_buffer) {
+            size_t bytes_read = win32_ring_buffer_read(sound, chunk_buffer, buffer_chunk_size);
+            
+            if (bytes_read > 0) {
+                XAUDIO2_BUFFER buffer = {
+                    .AudioBytes = (UINT32)bytes_read,
+                    .pAudioData = chunk_buffer,
+                    .Flags = (sound->stream_finished && sound->bytes_available == 0) ? XAUDIO2_END_OF_STREAM : 0
+                };
+                
+                HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, chunk_buffer);
+                if (FAILED(hr)) {
+                    free(chunk_buffer);
+                }
+            } else {
+                free(chunk_buffer);
+            }
+        }
+    }
+}
+
+static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback* callback, UINT32 BytesRequired) {
+    // Called when XAudio2 starts processing audio for this voice
+    // BytesRequired tells us how much data XAudio2 needs
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
+    
+    // We can use BytesRequired to be more intelligent about buffer management
+    // For now, we'll handle this in OnVoiceProcessingPassEnd instead
+}
+
+static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
+    // Called when the last buffer with XAUDIO2_END_OF_STREAM finishes playing
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
+    
+    printf("Audio stream ended\n");
+    
+    // Mark stream as finished
+    sound->stream_finished = 1;
+    
+    // You could trigger a callback here to notify your game that the music finished
+    // or automatically start the next track in a playlist
+}
+
+
+static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
+    OnVoiceProcessingPassStart,
+    OnVoiceProcessingPassEnd,
+    OnBufferStart,
+    OnBufferEnd,
+    OnLoopEnd,
+    OnVoiceError,
+    OnStreamEnd
+};
 
 // it would be cleaner if we did fopen just to check the file format
 // and then used a separate fopen call to actually parse the formats.
@@ -2217,12 +2369,24 @@ int platform_init_sound() {
 	}
 
 	sound->source_voice = NULL;
+
+	// Create streaming callback if this is a streaming sound
+	if (seconds > 0.0f) { // This is a streaming sound
+		StreamingVoiceCallback* callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
+		if (callback) {
+			callback->lpVtbl = &StreamingCallbackVtbl;
+			callback->sound = sound;
+			sound->voice_callback = (IXAudio2VoiceCallback*)callback;
+		}
+	}
+	
 	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
 		g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex,
 		0, XAUDIO2_DEFAULT_FREQ_RATIO,
-		NULL, NULL, NULL);
+		sound->voice_callback, NULL, NULL);
 
 	if (FAILED(hr)) {
+		if (sound->voice_callback) free(sound->voice_callback);
 		free(sound);
 		return NULL;
 	}
@@ -2230,8 +2394,190 @@ int platform_init_sound() {
 	return sound;
 }
 
+
+static size_t win32_ring_buffer_write(pal_sound* sound, const unsigned char* data, size_t size) {
+    EnterCriticalSection(&sound->buffer_lock);
+    
+    size_t space_available = sound->ring_buffer_size - sound->bytes_available;
+    size_t to_write = (size < space_available) ? size : space_available;
+    
+    if (to_write > 0) {
+        // Handle wrap-around
+        size_t to_end = sound->ring_buffer_size - sound->ring_write_pos;
+        if (to_write <= to_end) {
+            memcpy(sound->ring_buffer + sound->ring_write_pos, data, to_write);
+        } else {
+            memcpy(sound->ring_buffer + sound->ring_write_pos, data, to_end);
+            memcpy(sound->ring_buffer, data + to_end, to_write - to_end);
+        }
+        
+        sound->ring_write_pos = (sound->ring_write_pos + to_write) % sound->ring_buffer_size;
+        sound->bytes_available += to_write;
+        
+        SetEvent(sound->buffer_event);
+    }
+    
+    LeaveCriticalSection(&sound->buffer_lock);
+    return to_write;
+}
+
+
+// Streaming thread function
+static DWORD WINAPI win32_stream_audio_thread(LPVOID param) {
+    pal_sound* sound = (pal_sound*)param;
+    const size_t chunk_size = 4096; // Read in 4KB chunks
+    unsigned char* temp_buffer = (unsigned char*)malloc(chunk_size);
+    
+    if (!temp_buffer) {
+        sound->stream_finished = 1;
+        return 1;
+    }
+    
+    while (!sound->stream_finished) {
+        size_t bytes_read = 0;
+        
+        if (sound->source_file) {
+            // WAV streaming
+            uint32_t remaining = sound->total_data_size - sound->bytes_streamed;
+            size_t to_read = (chunk_size < remaining) ? chunk_size : remaining;
+            
+            if (to_read > 0) {
+                fseek(sound->source_file, sound->data_offset + sound->bytes_streamed, SEEK_SET);
+                bytes_read = fread(temp_buffer, 1, to_read, sound->source_file);
+                sound->bytes_streamed += bytes_read;
+            }
+        } else if (sound->decoder) {
+            // OGG streaming
+            stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
+            int samples_per_chunk = chunk_size / (sound->channels * sizeof(short));
+            short* pcm_buffer = (short*)temp_buffer;
+            
+            int samples_read = stb_vorbis_get_samples_short_interleaved(
+                vorbis, sound->channels, pcm_buffer, samples_per_chunk);
+            
+            bytes_read = samples_read * sound->channels * sizeof(short);
+        }
+        
+        if (bytes_read == 0) {
+            sound->stream_finished = 1;
+            break;
+        }
+        
+        // Write to ring buffer (this may block if buffer is full)
+        size_t written = 0;
+        while (written < bytes_read && !sound->stream_finished) {
+            size_t chunk_written = win32_ring_buffer_write(sound, temp_buffer + written, bytes_read - written);
+            written += chunk_written;
+            
+            if (chunk_written == 0) {
+                // Buffer is full, wait a bit
+                Sleep(1);
+            }
+        }
+    }
+    
+    free(temp_buffer);
+    return 0;
+}
+
+// Ring buffer helper functions
+static void win32_ring_buffer_init(pal_sound* sound, size_t buffer_size) {
+    sound->ring_buffer = (unsigned char*)malloc(buffer_size);
+    sound->ring_buffer_size = buffer_size;
+    sound->ring_write_pos = 0;
+    sound->ring_read_pos = 0;
+    sound->bytes_available = 0;
+    sound->is_streaming = 1;
+    sound->stream_finished = 0;
+    
+    InitializeCriticalSection(&sound->buffer_lock);
+    sound->buffer_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+}
+
+// Modified platform_play_music for streaming
 static int platform_play_music(pal_sound* sound, float volume) {
-    // TODO
+    if (!g_xaudio2 || !g_mastering_voice) {
+        return E_FAIL;
+    }
+    
+    // Initialize streaming if not already done and this is a streaming sound
+    if (sound->voice_callback && !sound->is_streaming) {
+        const size_t ring_buffer_size = 64 * 1024; // 64KB ring buffer
+        win32_ring_buffer_init(sound, ring_buffer_size);
+        
+        // Store total data size for WAV files
+        if (sound->source_file) {
+            fseek(sound->source_file, 0, SEEK_END);
+            sound->total_data_size = ftell(sound->source_file) - sound->data_offset;
+            sound->bytes_streamed = sound->data_size; // Already loaded portion
+        }
+        
+        // Start streaming thread
+        sound->stream_thread = CreateThread(NULL, 0, win32_stream_audio_thread, sound, 0, NULL);
+    }
+    
+    // Set volume
+    sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
+    
+    // Submit initial buffer (the preloaded data)
+    XAUDIO2_BUFFER buffer = {
+        .AudioBytes = (UINT32)sound->data_size,
+        .pAudioData = sound->data,
+        .Flags = sound->voice_callback ? 0 : XAUDIO2_END_OF_STREAM // End of stream only for non-streaming
+    };
+    
+    HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    
+    // Start playback
+    hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    
+    return S_OK;
+}
+
+// Cleanup function
+static void platform_free_music(pal_sound* sound) {
+    if (sound->is_streaming) {
+        sound->stream_finished = 1;
+        
+        if (sound->stream_thread) {
+            WaitForSingleObject(sound->stream_thread, INFINITE);
+            CloseHandle(sound->stream_thread);
+        }
+        
+        if (sound->buffer_event) {
+            CloseHandle(sound->buffer_event);
+        }
+        
+        DeleteCriticalSection(&sound->buffer_lock);
+        
+        free(sound->ring_buffer);
+    }
+    
+    if (sound->source_file) {
+        fclose(sound->source_file);
+    }
+    
+    if (sound->decoder) {
+        stb_vorbis_close((stb_vorbis*)sound->decoder);
+    }
+    
+    if (sound->source_voice) {
+        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+    }
+    
+    // Free the callback we allocated
+    if (sound->voice_callback) {
+        free(sound->voice_callback);
+    }
+    
+    free(sound->data);
+    free(sound);
 }
 
 static int platform_play_sound(pal_sound* sound, float volume) {

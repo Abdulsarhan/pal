@@ -206,19 +206,20 @@ void pal_free_sound(pal_sound* sound) {
 pal_sound* pal_load_music(const char* filename) {
 	return platform_load_sound(filename, 2.0f);
 }
-/*
+
 PALAPI int pal_play_music(pal_sound* sound, float volume) {
 	return platform_play_music(sound, volume);
 }
 
+/*
 PALAPI int pal_stop_music(pal_sound* sound) {
 	return platform_stop_music(sound);
 }
 
+*/
 void pal_free_music(pal_sound* sound) {
 	platform_free_music(sound);
 }
-*/
 
 // TODO: @fix This loads uncompressed .wav files only!
 
@@ -337,9 +338,6 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     }
     return 1;
 }
-
-// since ogg is sample-based we have to specify preloaded
-// samples instead of bytes.
 
 static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
     int channels, sample_rate;
