@@ -10,8 +10,8 @@
 #include <hidsdi.h>   // Link with hid.lib
 
 // C Standard Library
-#include <stdint.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <assert.h>
 
 // OpenGL
@@ -25,11 +25,6 @@
 #include <winstring.h>
 
 #include "pal_platform.h"
-
-#define KEY_DOWN_BIT 0x80
-#define KEY_REPEAT_BIT 0b1
-
-#define MB(x)((size_t)(x) * 1024 * 1024)
 
 typedef unsigned __int64 QWORD;
 
@@ -62,6 +57,13 @@ struct pal_sound{
 	int bits_per_sample;   // Usually 16 or 32
     int is_float;          // 0 = PCM, 1 = IEEE float
     IXAudio2SourceVoice* source_voice;
+    // wav streaming shit
+    uint32_t data_offset;
+    FILE* source_file;
+    // ogg streaming shit
+    stb_vorbis* decoder;
+    int samples_decoded;
+
 };
 
 // Keyboard & Mouse Input
@@ -2126,9 +2128,14 @@ int platform_init_sound() {
 	return hr;
 }
 
-pal_sound* platform_load_sound(const char* filename) {
+// it would be cleaner if we did fopen just to check the file format
+// and then used a separate fopen call to actually parse the formats.
+ pal_sound* platform_load_sound(const char* filename, float seconds) {
+    volatile float secs = seconds;
 	FILE* file = fopen(filename, "rb");
-	if (!file) return NULL;
+
+	if (!file)
+        return NULL;
 
 	char header[12];
 	if (fread(header, 1, sizeof(header), file) < 12) {
@@ -2142,15 +2149,16 @@ pal_sound* platform_load_sound(const char* filename) {
 		printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
 		return NULL;
 	}
-
+    *sound = (pal_sound){0};
 	int result = 0;
 
 	if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
-		rewind(file);
-		result = load_wav(file, sound);
+        fclose(file);
+		result = load_wav(filename, sound, &secs);
 	}
 	else if (memcmp(header, "OggS", 4) == 0) {
-		result = load_ogg(filename, sound);
+        fclose(file);
+		result = load_ogg(filename, sound, &secs);
 	}
 	else {
 		fclose(file);
@@ -2158,8 +2166,7 @@ pal_sound* platform_load_sound(const char* filename) {
 		return NULL; // unsupported format
 	}
 
-	fclose(file);
-
+    // we expect load_wav and load_ogg to return 1 for success.
 	if (result != 1) {
 		free(sound);
 		return NULL;
@@ -2182,7 +2189,7 @@ pal_sound* platform_load_sound(const char* filename) {
 	wfex.Format.wBitsPerSample = sound->bits_per_sample;
 	wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
 	wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
-	wfex.Format.cbSize = 22; // sizeof(dwChannelMask) + sizeof(SubFormat)
+	wfex.Format.cbSize = 22; // Yes, this is correct according to the docs.
 	wfex.Samples.wValidBitsPerSample = (uint16_t)sound->bits_per_sample;
 
 	wfex.SubFormat = (sound->is_float)
@@ -2223,6 +2230,10 @@ pal_sound* platform_load_sound(const char* filename) {
 	return sound;
 }
 
+static int platform_play_music(pal_sound* sound, float volume) {
+    // TODO
+}
+
 static int platform_play_sound(pal_sound* sound, float volume) {
 	if (!g_xaudio2 || !g_mastering_voice) {
 		return E_FAIL;
@@ -2234,7 +2245,7 @@ static int platform_play_sound(pal_sound* sound, float volume) {
 	XAUDIO2_BUFFER buffer = {
 		.AudioBytes = (UINT32)sound->data_size,
 		.pAudioData = sound->data,
-		.Flags = XAUDIO2_END_OF_STREAM
+		.Flags = XAUDIO2_END_OF_STREAM 
 	};
 
     HRESULT hr;

@@ -185,6 +185,11 @@ PALAPI void end_drawing(pal_window* window) {
 
 */
 
+// loader for uncompressed .wav and ogg vorbis files.
+pal_sound* pal_load_sound(const char* filename) {
+	return platform_load_sound(filename, 0.0f);
+}
+
 PALAPI int pal_play_sound(pal_sound* sound, float volume) {
 	return platform_play_sound(sound, volume);
 }
@@ -193,163 +198,202 @@ PALAPI int pal_stop_sound(pal_sound* sound) {
 	return platform_stop_sound(sound);
 }
 
-// TODO: @fix This loads uncompressed .wav files only!
-static int load_wav(FILE* file, pal_sound* out) {
-	static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
-
-	static const uint8_t SUBFORMAT_PCM[16] = {
-		0x01, 0x00, 0x00, 0x00, 0x10, 0x00,
-		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
-		0x9B, 0x71, 0x00, 0x00
-	};
-
-	static const uint8_t SUBFORMAT_IEEE_FLOAT[16] = {
-		0x03, 0x00, 0x00, 0x00, 0x10, 0x00,
-		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
-		0x9B, 0x71, 0x00, 0x00
-	};
-
-	char riffHeader[4];
-	uint32_t riffSize;
-	char waveID[4];
-
-	if (fread(riffHeader, 1, 4, file) != 4 ||
-		fread(&riffSize, 4, 1, file) != 1 ||
-		fread(waveID, 1, 4, file) != 4) {
-		return -1;
-	}
-
-	if (memcmp(riffHeader, "RIFF", 4) != 0 || memcmp(waveID, "WAVE", 4) != 0) {
-		return -1;
-	}
-
-	int audioFormat = 0;
-	int numChannels = 0;
-	int sample_rate = 0;
-	int bits_per_sample = 0;
-	int is_float = 0;
-
-	unsigned char* audioData = NULL;
-	uint32_t data_size = 0;
-
-	while (!feof(file)) {
-		char chunkID[4];
-		uint32_t chunkSize;
-		if (fread(chunkID, 1, 4, file) != 4) break;
-		if (fread(&chunkSize, 4, 1, file) != 1) break;
-
-		if (memcmp(chunkID, "fmt ", 4) == 0) {
-			uint16_t formatTag;
-			if (fread(&formatTag, sizeof(uint16_t), 1, file) != 1) return -1;
-			if (fread(&numChannels, sizeof(uint16_t), 1, file) != 1) return -1;
-			if (fread(&sample_rate, sizeof(uint32_t), 1, file) != 1) return -1;
-			if (fseek(file, 6, SEEK_CUR) != 0) return -1; // skip byte rate + block align
-			if (fread(&bits_per_sample, sizeof(uint16_t), 1, file) != 1) return -1;
-
-			if (formatTag == WAV_FMT_EXTENSIBLE && chunkSize >= 40) {
-				uint16_t cbSize;
-				if (fread(&cbSize, sizeof(uint16_t), 1, file) != 1) return -1;
-				if (cbSize < 22) return -1;
-
-				if (fseek(file, 6, SEEK_CUR) != 0) return -1; // skip validBitsPerSample + channelMask
-
-				uint8_t subFormat[16];
-				if (fread(subFormat, 1, 16, file) != 16) return -1;
-
-				if (memcmp(subFormat, SUBFORMAT_PCM, 16) == 0) {
-					audioFormat = WAV_FMT_PCM;
-					is_float = 0;
-				}
-				else if (memcmp(subFormat, SUBFORMAT_IEEE_FLOAT, 16) == 0) {
-					audioFormat = WAV_FMT_IEEE_FLOAT;
-					is_float = 1;
-				}
-				else {
-					return -1;
-				}
-			}
-			else {
-				audioFormat = formatTag;
-				if (audioFormat == WAV_FMT_PCM) {
-					is_float = 0;
-				}
-				else if (audioFormat == WAV_FMT_IEEE_FLOAT) {
-					is_float = 1;
-				}
-				else {
-					return -1;
-				}
-
-				if (chunkSize > 16) {
-					if (fseek(file, chunkSize - 16, SEEK_CUR) != 0) return -1;
-				}
-			}
-		}
-		else if (memcmp(chunkID, "data", 4) == 0) {
-			audioData = (unsigned char*)malloc(chunkSize);
-			if (!audioData) return -1;
-
-			if (fread(audioData, 1, chunkSize, file) != chunkSize) {
-				free(audioData);
-				return -1;
-			}
-
-			data_size = chunkSize;
-		}
-		else {
-			// Skip unknown chunk (with padding if size is odd)
-			if (fseek(file, (chunkSize + 1) & ~1, SEEK_CUR) != 0) return -1;
-		}
-	}
-
-	if (!audioData || data_size == 0 ||
-		(audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
-		free(audioData);
-		return -1;
-	}
-
-	out->data = audioData;
-	out->data_size = data_size;
-	out->sample_rate = sample_rate;
-	out->channels = numChannels;
-	out->bits_per_sample = bits_per_sample;
-	out->is_float = is_float;
-
-	return 1;
-}
-
-// --- Ogg Loader ---
-static int load_ogg(const char* filename, pal_sound* out) {
-	int channels, sample_rate;
-	short* pcm_data;
-
-	// Decode the entire .ogg file into PCM
-	int samples = stb_vorbis_decode_filename(
-		filename, &channels, &sample_rate, &pcm_data
-	);
-
-	if (samples <= 0) {
-		printf("Failed to decode Ogg file.\n");
-	}
-
-	// Fill the pal_sound struct
-	out->data = (unsigned char*)pcm_data;
-	out->data_size = samples * channels * sizeof(short);
-	out->channels = channels;
-	out->sample_rate = sample_rate;
-	out->bits_per_sample = 16; // Ogg decodes to 16-bit PCM by default
-	out->is_float = 0;
-	return 0;
+void pal_free_sound(pal_sound* sound) {
+	platform_free_sound(sound);
 }
 
 // loader for uncompressed .wav and ogg vorbis files.
-pal_sound* pal_load_sound(const char* filename) {
-	return platform_load_sound(filename);
+pal_sound* pal_load_music(const char* filename) {
+	return platform_load_sound(filename, 2.0f);
+}
+/*
+PALAPI int pal_play_music(pal_sound* sound, float volume) {
+	return platform_play_music(sound, volume);
 }
 
+PALAPI int pal_stop_music(pal_sound* sound) {
+	return platform_stop_music(sound);
+}
 
-void pal_free_sound(pal_sound* sound) {
-	platform_free_sound(sound);
+void pal_free_music(pal_sound* sound) {
+	platform_free_music(sound);
+}
+*/
+
+// TODO: @fix This loads uncompressed .wav files only!
+
+// despite wav being an uncompressed format, and you're supposed to load
+// bytes, and not samples, we specify how much to preload using samples
+// so that it's in line with the .ogg implementation. We need this so that
+// our audio streaming logic doesn't get fucked up - Abdelrahman Sarhan 2025-07-22
+static int load_wav(const char* filename, pal_sound* out, float* seconds) {
+    FILE* file = fopen(filename, "rb");
+    static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
+    static const uint8_t SUBFORMAT_PCM[16] = {
+        0x01, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00,
+        0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71, 0x00, 0x00
+    };
+    static const uint8_t SUBFORMAT_IEEE_FLOAT[16] = {
+        0x03, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00,
+        0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71, 0x00, 0x00
+    };
+    char riffHeader[4];
+    uint32_t riffSize;
+    char waveID[4];
+    if (fread(riffHeader, 1, 4, file) != 4 ||
+        fread(&riffSize, 4, 1, file) != 1 ||
+        fread(waveID, 1, 4, file) != 4) {
+        return -1;
+    }
+    if (memcmp(riffHeader, "RIFF", 4) != 0 || memcmp(waveID, "WAVE", 4) != 0) {
+        return -1;
+    }
+    int audioFormat = 0;
+    int numChannels = 0;
+    int sample_rate = 0;
+    int bits_per_sample = 0;
+    int is_float = 0;
+    uint32_t data_size = 0;
+    uint32_t data_offset = 0;
+    while (!feof(file)) {
+        char chunkID[4];
+        uint32_t chunkSize;
+        if (fread(chunkID, 1, 4, file) != 4) break;
+        if (fread(&chunkSize, 4, 1, file) != 1) break;
+        if (memcmp(chunkID, "fmt ", 4) == 0) {
+            uint16_t formatTag;
+            if (fread(&formatTag, 2, 1, file) != 1) return -1;
+            if (fread(&numChannels, 2, 1, file) != 1) return -1;
+            if (fread(&sample_rate, 4, 1, file) != 1) return -1;
+            if (fseek(file, 6, SEEK_CUR) != 0) return -1;
+            if (fread(&bits_per_sample, 2, 1, file) != 1) return -1;
+            if (formatTag == WAV_FMT_EXTENSIBLE && chunkSize >= 40) {
+                uint16_t cbSize;
+                if (fread(&cbSize, sizeof(cbSize), 1, file) != 1) return -1;
+                if (cbSize < 22) return -1;
+                if (fseek(file, 6, SEEK_CUR) != 0) return -1;
+                uint8_t subFormat[16];
+                if (fread(subFormat, 1, 16, file) != 16) return -1;
+                if (memcmp(subFormat, SUBFORMAT_PCM, 16) == 0) {
+                    audioFormat = WAV_FMT_PCM;
+                    is_float = 0;
+                } else if (memcmp(subFormat, SUBFORMAT_IEEE_FLOAT, 16) == 0) {
+                    audioFormat = WAV_FMT_IEEE_FLOAT;
+                    is_float = 1;
+                } else {
+                    return -1;
+                }
+            } else {
+                audioFormat = formatTag;
+                is_float = (audioFormat == WAV_FMT_IEEE_FLOAT) ? 1 : 0;
+                if (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT) return -1;
+                if (chunkSize > 16) {
+                    if (fseek(file, chunkSize - 16, SEEK_CUR) != 0) return -1;
+                }
+            }
+        }
+        else if (memcmp(chunkID, "data", 4) == 0) {
+            data_size = chunkSize;
+            data_offset = (uint32_t)ftell(file);
+            uint32_t bytes_per_sample = (bits_per_sample / 8) * numChannels;
+            uint32_t preload_bytes;
+            if (*seconds == 0.0f) {
+                preload_bytes = chunkSize;
+            } else {
+                preload_bytes = (uint32_t)(*seconds * sample_rate * bytes_per_sample);
+                if (preload_bytes > chunkSize) {
+                    preload_bytes = chunkSize;
+                }
+            }
+            void* audioData = malloc(preload_bytes);
+            if (!audioData) return -1;
+            if (fread(audioData, 1, preload_bytes, file) != preload_bytes) {
+                free(audioData);
+                return -1;
+            }
+            out->data = audioData;
+            out->data_size = preload_bytes;
+        }
+        else {
+            if (fseek(file, (chunkSize + 1) & ~1, SEEK_CUR) != 0) return -1;
+        }
+    }
+    if (out->data == NULL || data_size == 0 ||
+        (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
+        free(out->data);
+        return -1;
+    }
+    out->sample_rate = sample_rate;
+    out->channels = numChannels;
+    out->bits_per_sample = bits_per_sample;
+    out->is_float = is_float;
+    out->data_offset = data_offset;
+    if (seconds) { // we keep the handle to the file if we need to stream it.
+        out->source_file = file;
+    }
+    else {
+        fclose(file);
+        out->source_file = 0;
+    }
+    return 1;
+}
+
+// since ogg is sample-based we have to specify preloaded
+// samples instead of bytes.
+
+static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
+    int channels, sample_rate;
+    int error;
+    stb_vorbis* vorbis = stb_vorbis_open_filename(filename, &error, NULL);
+    if (!vorbis) {
+        printf("Failed to open Ogg file (error code %d).\n", error);
+        return -1;
+    }
+
+    stb_vorbis_info info = stb_vorbis_get_info(vorbis);
+    channels = info.channels;
+    sample_rate = info.sample_rate;
+
+    // Calculate how many samples to preload based on seconds
+    int64_t total_samples = stb_vorbis_stream_length_in_samples(vorbis);
+    int64_t target_samples = (int64_t)(sample_rate * *seconds);
+    if (*seconds <= 0.0f || target_samples > total_samples) {
+        target_samples = total_samples;
+    }
+
+    // Allocate buffer for preload samples (16-bit signed shorts)
+    short* pcm_data = (short*)malloc((size_t)(target_samples * channels * sizeof(short)));
+    if (!pcm_data) {
+        stb_vorbis_close(vorbis);
+        return -1;
+    }
+
+    int64_t total_decoded = 0;
+    while (total_decoded < target_samples) {
+        int samples_to_read = (int)(target_samples - total_decoded);
+        int samples_read = stb_vorbis_get_samples_short_interleaved(
+            vorbis,
+            channels,
+            pcm_data + total_decoded * channels,
+            samples_to_read
+        );
+
+        if (samples_read <= 0) break;
+        total_decoded += samples_read;
+    }
+
+    out->data = (unsigned char*)pcm_data;
+    out->data_size = (size_t)(total_decoded * channels * sizeof(short));
+    out->channels = channels;
+    out->sample_rate = sample_rate;
+    out->bits_per_sample = 16;
+    out->is_float = 0;
+
+    // Store decoder and preload state for streaming later
+    out->decoder = vorbis;
+    out->samples_decoded = (uint32_t)total_decoded;
+
+    return 1;
 }
 
 /*

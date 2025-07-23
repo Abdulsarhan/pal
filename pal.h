@@ -13,6 +13,7 @@ typedef struct pal_video_mode {
 }pal_video_mode;
 
 typedef struct pal_sound pal_sound;
+typedef struct pal_music pal_music;
 #define PAL_MAX_TOUCHES 2
 typedef struct {
     // Standard gamepad controls
@@ -1138,6 +1139,11 @@ PALAPI pal_sound* pal_load_sound(const char* filename);
 PALAPI int pal_play_sound(pal_sound* sound, float volume);
 PALAPI int pal_stop_sound(pal_sound* sound);
 PALAPI void pal_free_sound(pal_sound* sound);
+
+pal_sound* pal_load_music(const char* filename);
+PALAPI int pal_play_music(pal_sound* sound, float volume);
+PALAPI int pal_stop_music(pal_sound* sound);
+void pal_free_music(pal_sound* sound);
 
 PALAPI uint8_t does_file_exist(const char* file_path);
 PALAPI time_t get_file_timestamp(const char* file);
