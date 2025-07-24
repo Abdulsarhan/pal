@@ -2154,7 +2154,6 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
     size_t bytes_read = 0;
     
     if (sound->source_file) {
-        // WAV streaming - your existing code looks correct
         uint32_t remaining = sound->total_data_size - sound->bytes_streamed;
         
         if (remaining == 0) {
@@ -2189,7 +2188,6 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         printf("WAV: Read %zu bytes, new bytes_streamed=%u\n", bytes_read, sound->bytes_streamed);
         
     } else if (sound->decoder) {
-        // NEW APPROACH: Stream from decoder position, skipping already-played audio
         stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
         
         // Calculate how many sample frames we can fit in the buffer
@@ -2273,7 +2271,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
     
     return bytes_read;
 }
-// Fixed OnBufferEnd - properly free the allocated buffer and queue next
+
 static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
@@ -2287,7 +2285,6 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void*
         free(pBufferContext);
     }
     
-    // CRITICAL FIX: Queue next buffer here instead of waiting for OnVoiceProcessingPassEnd
     if (!sound->is_streaming || sound->stream_finished) {
         return;
     }
@@ -2331,7 +2328,6 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void*
     }
 }
 
-// Simplified OnVoiceProcessingPassEnd - let OnBufferEnd handle buffering
 static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
     // OnBufferEnd now handles buffer queuing, so this can be much simpler
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
@@ -2409,7 +2405,6 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnStreamEnd
 };
 
-// Enhanced platform_play_music with better buffer management
 static int platform_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
@@ -2483,7 +2478,6 @@ static int platform_play_music(pal_sound* sound, float volume) {
     printf("Playback started successfully\n");
     return S_OK;
 }
-// Simplified load_next_chunk - avoid decoder reset complexity
 
 static int load_wav(const char* filename, pal_sound* out, float seconds);
 static int load_ogg(const char* filename, pal_sound* out, float seconds);
@@ -2595,7 +2589,6 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
                    sound->total_data_size, sound->data_size);
                    
         } else if (sound->decoder) {
-            // NEW APPROACH: Reset decoder to start and stream from beginning
             stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
             
             unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
@@ -2605,7 +2598,6 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
             printf("  - Total sample frames: %u\n", total_sample_frames);
             printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
             
-            // CRITICAL: Reset decoder to beginning
             printf("  - Resetting decoder to start...\n");
             stb_vorbis_seek_start(vorbis);
             

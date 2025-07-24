@@ -34,7 +34,7 @@ static OpenglInfo get_opengl_info(void) {
         }
     }
     else {
-        info.extensions[0] = (const char*)glGetString(GL_EXTENSIONS);
+        info.extensions[0] = (char*)glGetString(GL_EXTENSIONS);
     }
 
     return info;
