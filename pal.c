@@ -204,7 +204,9 @@ void pal_free_sound(pal_sound* sound) {
 
 // loader for uncompressed .wav and ogg vorbis files.
 pal_sound* pal_load_music(const char* filename) {
-	return platform_load_sound(filename, 2.0f);
+    // every loaded buffer will be this long.
+    float buffer_length_in_seconds = 2.0f;
+	return platform_load_sound(filename, buffer_length_in_seconds);
 }
 
 PALAPI int pal_play_music(pal_sound* sound, float volume) {
@@ -353,7 +355,6 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     }
     return 1;
 }
-
 static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
     int channels, sample_rate;
     int error;
@@ -362,49 +363,101 @@ static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
         printf("Failed to open Ogg file (error code %d).\n", error);
         return -1;
     }
-
+    
     stb_vorbis_info info = stb_vorbis_get_info(vorbis);
     channels = info.channels;
     sample_rate = info.sample_rate;
-
-    // Calculate how many samples to preload based on seconds
-    int64_t total_samples = stb_vorbis_stream_length_in_samples(vorbis);
-    int64_t target_samples = (int64_t)(sample_rate * *seconds);
-    if (*seconds <= 0.0f || target_samples > total_samples) {
-        target_samples = total_samples;
+    
+    // Calculate how many sample frames to preload based on seconds
+    int64_t total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
+    int64_t target_sample_frames = (int64_t)(sample_rate * (*seconds));
+    
+    if (*seconds <= 0.0f || target_sample_frames > total_sample_frames) {
+        target_sample_frames = total_sample_frames;
     }
-
-    // Allocate buffer for preload samples (16-bit signed shorts)
-    short* pcm_data = (short*)malloc((size_t)(target_samples * channels * sizeof(short)));
+    
+    printf("OGG Load: Requesting %lld sample frames (%.3f seconds) from %lld total\n",
+           target_sample_frames, (float)target_sample_frames / sample_rate, total_sample_frames);
+    
+    // Allocate buffer for preload samples (16-bit signed shorts, interleaved)
+    short* pcm_data = (short*)malloc((size_t)(target_sample_frames * channels * sizeof(short)));
     if (!pcm_data) {
         stb_vorbis_close(vorbis);
         return -1;
     }
-
-    int64_t total_decoded = 0;
-    while (total_decoded < target_samples) {
-        int samples_to_read = (int)(target_samples - total_decoded);
-        int samples_read = stb_vorbis_get_samples_short_interleaved(
-            vorbis,
-            channels,
-            pcm_data + total_decoded * channels,
-            samples_to_read
-        );
-
-        if (samples_read <= 0) break;
-        total_decoded += samples_read;
+    
+    // Use the non-interleaved API which is more predictable
+    float** channel_buffers = (float**)malloc(channels * sizeof(float*));
+    for (int i = 0; i < channels; i++) {
+        channel_buffers[i] = (float*)malloc(target_sample_frames * sizeof(float));
     }
-
+    
+    int64_t total_decoded = 0;
+    unsigned int start_position = stb_vorbis_get_sample_offset(vorbis);
+    
+    while (total_decoded < target_sample_frames) {
+        int samples_to_read = (int)(target_sample_frames - total_decoded);
+        
+        // Use non-interleaved API
+        int samples_read = stb_vorbis_get_samples_float(
+            vorbis, channels, channel_buffers, samples_to_read);
+        
+        if (samples_read <= 0) {
+            printf("OGG Load: Decoder returned %d sample frames, stopping\n", samples_read);
+            break;
+        }
+        
+        // Convert float samples to interleaved 16-bit shorts
+        for (int sample = 0; sample < samples_read; sample++) {
+            for (int ch = 0; ch < channels; ch++) {
+                float f_sample = channel_buffers[ch][sample];
+                // Clamp and convert to 16-bit
+                if (f_sample > 1.0f) f_sample = 1.0f;
+                if (f_sample < -1.0f) f_sample = -1.0f;
+                short s_sample = (short)(f_sample * 32767.0f);
+                pcm_data[(total_decoded + sample) * channels + ch] = s_sample;
+            }
+        }
+        
+        total_decoded += samples_read;
+        
+        unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
+        printf("OGG Load: Read %d sample frames, total: %lld/%lld, decoder: %u\n", 
+               samples_read, total_decoded, target_sample_frames, current_position);
+    }
+    
+    // Clean up temporary buffers
+    for (int i = 0; i < channels; i++) {
+        free(channel_buffers[i]);
+    }
+    free(channel_buffers);
+    
+    // Verify final decoder position
+    unsigned int final_position = stb_vorbis_get_sample_offset(vorbis);
+    unsigned int expected_position = start_position + total_decoded;
+    
+    printf("OGG Load: Finished - loaded %lld sample frames\n", total_decoded);
+    printf("OGG Load: Decoder position: %u -> %u (expected %u)\n", 
+           start_position, final_position, expected_position);
+    
+    if (final_position != expected_position) {
+        printf("WARNING: Decoder position mismatch! Expected %u, got %u\n", 
+               expected_position, final_position);
+    }
+    
     out->data = (unsigned char*)pcm_data;
     out->data_size = (size_t)(total_decoded * channels * sizeof(short));
     out->channels = channels;
     out->sample_rate = sample_rate;
     out->bits_per_sample = 16;
     out->is_float = 0;
-
-    // Store decoder and preload state for streaming later
+    
+    // Store decoder for streaming later
     out->decoder = vorbis;
-
+    
+    printf("OGG Load: Final data_size = %zu bytes (%lld sample frames)\n", 
+           out->data_size, total_decoded);
+    
     return 1;
 }
 

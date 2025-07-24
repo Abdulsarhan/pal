@@ -74,8 +74,10 @@ struct pal_sound {
     float preload_seconds;     // How many seconds were preloaded
     int is_streaming;          // 1 if this is a streaming sound
     int stream_finished;       // 1 when streaming is complete
+    
+    // ADD THIS NEW FIELD:
+    char* filename;            // Filename for reopening OGG decoder
 };
-
 // Keyboard & Mouse Input
 
 #define MAX_KEYS 256
@@ -2149,19 +2151,16 @@ static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds)
     size_t bytes_per_second = sound->sample_rate * sound->channels * (sound->bits_per_sample / 8);
     return (size_t)(bytes_per_second * seconds);
 }
-
-// Fixed load_next_chunk - separate WAV and OGG handling with proper positioning
 static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
     size_t bytes_read = 0;
     
     if (sound->source_file) {
-        // WAV streaming - FIXED: Don't use bytes_streamed for positioning
-        // The bytes_streamed should track how much we've loaded beyond the initial preload
+        // WAV streaming - your existing code looks correct
         uint32_t remaining = sound->total_data_size - sound->bytes_streamed;
         
         if (remaining == 0) {
             printf("WAV: No remaining data\n");
-            return 0; // End of file
+            return 0;
         }
         
         if (!sound->source_file) {
@@ -2170,7 +2169,6 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         }
         
         size_t to_read = (buffer_size < remaining) ? buffer_size : remaining;
-        // CRITICAL FIX: Calculate correct file position
         long seek_pos = sound->data_offset + sound->bytes_streamed;
         
         printf("WAV: Seeking to %ld (data_offset=%ld + bytes_streamed=%u), reading %zu bytes\n", 
@@ -2191,39 +2189,91 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         sound->bytes_streamed += bytes_read;
         printf("WAV: Read %zu bytes, new bytes_streamed=%u\n", bytes_read, sound->bytes_streamed);
         
-        // Check first few bytes to see if we're reading valid data
-        if (bytes_read >= 8) {
-            printf("WAV: First 8 bytes: %02X %02X %02X %02X %02X %02X %02X %02X\n",
-                   buffer[0], buffer[1], buffer[2], buffer[3], 
-                   buffer[4], buffer[5], buffer[6], buffer[7]);
-        }
-        
     } else if (sound->decoder) {
-        // OGG streaming - FIXED: Proper buffer size calculation
+        // NEW APPROACH: Stream from decoder position, skipping already-played audio
         stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
         
-        // Calculate how many samples we can fit in the buffer
-        int samples_per_channel = buffer_size / (sound->channels * sizeof(short));
-        short* pcm_buffer = (short*)buffer;
+        // Calculate how many sample frames we can fit in the buffer
+        int bytes_per_sample_frame = sound->channels * sizeof(short);
+        int max_sample_frames = buffer_size / bytes_per_sample_frame;
         
-        // CRITICAL FIX: Use get_samples_short_interleaved correctly
-        int samples_read = stb_vorbis_get_samples_short_interleaved(
-            vorbis, sound->channels, pcm_buffer, samples_per_channel);
+        if (max_sample_frames <= 0) {
+            printf("OGG: Buffer too small for samples\n");
+            return 0;
+        }
         
-        bytes_read = samples_read * sound->channels * sizeof(short);
+        // Calculate how many sample frames we should skip
+        size_t sample_frames_streamed = sound->bytes_streamed / bytes_per_sample_frame;
+        unsigned int current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
         
-        printf("OGG: Requested %d samples per channel, got %d samples, %zu bytes\n",
-               samples_per_channel, samples_read, bytes_read);
+        printf("OGG: Loading chunk - streamed %zu sample frames, decoder at %u\n", 
+               sample_frames_streamed, current_decoder_pos);
         
-        // Check if we've reached the end
-        if (samples_read == 0) {
-            printf("OGG: End of stream reached\n");
+        // If decoder is behind our streaming position, seek forward
+        if (current_decoder_pos < sample_frames_streamed) {
+            printf("OGG: Seeking decoder from %u to %zu\n", current_decoder_pos, sample_frames_streamed);
+            if (stb_vorbis_seek(vorbis, (unsigned int)sample_frames_streamed)) {
+                current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
+                printf("OGG: Seek successful, decoder now at %u\n", current_decoder_pos);
+            } else {
+                printf("OGG: Seek failed!\n");
+                return 0;
+            }
+        }
+        
+        // Allocate temporary float buffers for non-interleaved data
+        float** channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
+        for (int i = 0; i < sound->channels; i++) {
+            channel_buffers[i] = (float*)malloc(max_sample_frames * sizeof(float));
+        }
+        
+        // Read using non-interleaved API
+        int total_sample_frames_read = stb_vorbis_get_samples_float(
+            vorbis, sound->channels, channel_buffers, max_sample_frames);
+        
+        if (total_sample_frames_read > 0) {
+            // Convert float samples to interleaved 16-bit shorts
+            short* output_ptr = (short*)buffer;
+            
+            for (int sample = 0; sample < total_sample_frames_read; sample++) {
+                for (int ch = 0; ch < sound->channels; ch++) {
+                    float f_sample = channel_buffers[ch][sample];
+                    // Clamp and convert to 16-bit
+                    if (f_sample > 1.0f) f_sample = 1.0f;
+                    if (f_sample < -1.0f) f_sample = -1.0f;
+                    short s_sample = (short)(f_sample * 32767.0f);
+                    output_ptr[sample * sound->channels + ch] = s_sample;
+                }
+            }
+        }
+        
+        // Clean up temporary buffers
+        for (int i = 0; i < sound->channels; i++) {
+            free(channel_buffers[i]);
+        }
+        free(channel_buffers);
+        
+        bytes_read = total_sample_frames_read * bytes_per_sample_frame;
+        
+        // Update bytes_streamed to track total bytes processed
+        sound->bytes_streamed += bytes_read;
+        
+        unsigned int after_sample = stb_vorbis_get_sample_offset(vorbis);
+        
+        printf("OGG: Read %d sample frames (%zu bytes)\n", total_sample_frames_read, bytes_read);
+        printf("OGG: Decoder position: %u -> %u (advanced %u samples)\n", 
+               current_decoder_pos, after_sample, after_sample - current_decoder_pos);
+        printf("OGG: Total bytes streamed: %u\n", sound->bytes_streamed);
+        
+        // Check if we're at the end
+        if (total_sample_frames_read == 0) {
+            unsigned int total_samples = stb_vorbis_stream_length_in_samples(vorbis);
+            printf("OGG: End of stream - position %u of %u total samples\n", after_sample, total_samples);
         }
     }
     
     return bytes_read;
 }
-
 // Fixed OnBufferEnd - properly free the allocated buffer and queue next
 static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
@@ -2360,157 +2410,6 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnStreamEnd
 };
 
-// it would be cleaner if we did fopen just to check the file format
-// and then used a separate fopen call to actually parse the formats.
-
-pal_sound* platform_load_sound(const char* filename, float seconds) {
-    volatile float secs = seconds;
-	FILE* file = fopen(filename, "rb");
-
-	if (!file)
-        return NULL;
-
-	char header[12];
-	if (fread(header, 1, sizeof(header), file) < 12) {
-		fclose(file);
-		return NULL;
-	}
-
-	pal_sound* sound = (pal_sound*)malloc(sizeof(pal_sound));
-	if (!sound) {
-		fclose(file);
-		printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
-		return NULL;
-	}
-    *sound = (pal_sound){0};
-	int result = 0;
-
-	if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
-        fclose(file);
-		result = load_wav(filename, sound, &secs);
-	}
-	else if (memcmp(header, "OggS", 4) == 0) {
-        fclose(file);
-		result = load_ogg(filename, sound, &secs);
-	}
-	else {
-		fclose(file);
-		free(sound);
-		return NULL; // unsupported format
-	}
-
-    // we expect load_wav and load_ogg to return 1 for success.
-	if (result != 1) {
-		free(sound);
-		return NULL;
-	}
-
-	static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
-		0x00000001, 0x0000, 0x0010,
-		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
-	};
-
-	static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
-		0x00000003, 0x0000, 0x0010,
-		{ 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
-	};
-
-	WAVEFORMATEXTENSIBLE wfex = { 0 };
-	wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-	wfex.Format.nChannels = sound->channels;
-	wfex.Format.nSamplesPerSec = sound->sample_rate;
-	wfex.Format.wBitsPerSample = sound->bits_per_sample;
-	wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
-	wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
-	wfex.Format.cbSize = 22; // Yes, this is correct according to the docs.
-	wfex.Samples.wValidBitsPerSample = (uint16_t)sound->bits_per_sample;
-
-	wfex.SubFormat = (sound->is_float)
-		? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-		: KSDATAFORMAT_SUBTYPE_PCM;
-
-	switch (sound->channels) {
-		case 1: wfex.dwChannelMask = SPEAKER_FRONT_CENTER; break;
-
-		case 2: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT; break;
-
-		case 4: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
-
-		case 6: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-			      					 SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
-                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
-
-		case 8: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-								     SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
-								     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT |
-                                     SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT; break;
-
-		default: wfex.dwChannelMask = 0; break;
-	}
-
-	sound->source_voice = NULL;
-
-	// Create streaming callback if this is a streaming sound
-	if (seconds > 0.0f) { // This is a streaming sound
-		StreamingVoiceCallback* callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
-		if (callback) {
-			callback->lpVtbl = &StreamingCallbackVtbl;
-			callback->sound = sound;
-			sound->voice_callback = (IXAudio2VoiceCallback*)callback;
-		}
-        sound->preload_seconds = seconds;
-        sound->is_streaming = 1;
-        
-        // CRITICAL FIX: Proper initialization of streaming counters
-        if (sound->source_file) {
-            // For WAV files, calculate total data size from file
-            long current_pos = ftell(sound->source_file);
-            fseek(sound->source_file, 0, SEEK_END);
-            long file_end = ftell(sound->source_file);
-            fseek(sound->source_file, current_pos, SEEK_SET); // Restore position
-            
-            sound->total_data_size = file_end - sound->data_offset;
-            // FIXED: bytes_streamed should start from the amount already preloaded
-            sound->bytes_streamed = sound->data_size;
-            
-            float total_seconds = (float)sound->total_data_size / 
-                (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8));
-            
-            printf("WAV streaming setup: total_size=%u bytes (%.1f seconds), preloaded=%zu bytes (%.3f seconds)\n",
-                   sound->total_data_size, total_seconds, sound->data_size,
-                   (float)sound->data_size / (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8)));
-                   
-        } else if (sound->decoder) {
-            // For OGG files, we can't easily calculate total size, so we'll stream until EOF
-            sound->total_data_size = 0; // Unknown for OGG
-            sound->bytes_streamed = sound->data_size; // Amount preloaded
-            
-            printf("OGG streaming setup: preloaded=%zu bytes (%.3f seconds)\n",
-                   sound->data_size,
-                   (float)sound->data_size / (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8)));
-        }
-    } else {
-        sound->preload_seconds = 0;
-        sound->is_streaming = 0;
-        sound->bytes_streamed = 0;
-        sound->total_data_size = 0;
-    }
-	
-	HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
-		g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex,
-		0, XAUDIO2_DEFAULT_FREQ_RATIO,
-		sound->voice_callback, NULL, NULL);
-
-	if (FAILED(hr)) {
-		if (sound->voice_callback) free(sound->voice_callback);
-		free(sound);
-		return NULL;
-	}
-
-	return sound;
-}
-
 // Enhanced platform_play_music with better buffer management
 static int platform_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
@@ -2585,6 +2484,168 @@ static int platform_play_music(pal_sound* sound, float volume) {
     printf("Playback started successfully\n");
     return S_OK;
 }
+// Simplified load_next_chunk - avoid decoder reset complexity
+
+pal_sound* platform_load_sound(const char* filename, float seconds) {
+    volatile float secs = seconds;
+    FILE* file = fopen(filename, "rb");
+
+    if (!file)
+        return NULL;
+
+    char header[12];
+    if (fread(header, 1, sizeof(header), file) < 12) {
+        fclose(file);
+        return NULL;
+    }
+
+    pal_sound* sound = (pal_sound*)malloc(sizeof(pal_sound));
+    if (!sound) {
+        fclose(file);
+        printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
+        return NULL;
+    }
+    *sound = (pal_sound){0};
+    
+    int result = 0;
+
+    if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
+        fclose(file);
+        result = load_wav(filename, sound, &secs);
+    }
+    else if (memcmp(header, "OggS", 4) == 0) {
+        fclose(file);
+        result = load_ogg(filename, sound, &secs);
+    }
+    else {
+        fclose(file);
+        free(sound);
+        return NULL; // unsupported format
+    }
+
+    // we expect load_wav and load_ogg to return 1 for success.
+    if (result != 1) {
+        free(sound);
+        return NULL;
+    }
+
+    static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
+        0x00000001, 0x0000, 0x0010,
+        { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
+    };
+
+    static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
+        0x00000003, 0x0000, 0x0010,
+        { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
+    };
+
+    WAVEFORMATEXTENSIBLE wfex = { 0 };
+    wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    wfex.Format.nChannels = sound->channels;
+    wfex.Format.nSamplesPerSec = sound->sample_rate;
+    wfex.Format.wBitsPerSample = sound->bits_per_sample;
+    wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
+    wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
+    wfex.Format.cbSize = 22;
+    wfex.Samples.wValidBitsPerSample = (uint16_t)sound->bits_per_sample;
+
+    wfex.SubFormat = (sound->is_float)
+        ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+        : KSDATAFORMAT_SUBTYPE_PCM;
+
+    switch (sound->channels) {
+        case 1: wfex.dwChannelMask = SPEAKER_FRONT_CENTER; break;
+        case 2: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT; break;
+        case 4: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
+        case 6: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                     SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
+        case 8: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                     SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT |
+                                     SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT; break;
+        default: wfex.dwChannelMask = 0; break;
+    }
+
+    sound->source_voice = NULL;
+
+    // Create streaming callback if this is a streaming sound
+    if (seconds > 0.0f) {
+        StreamingVoiceCallback* callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
+        if (callback) {
+            callback->lpVtbl = &StreamingCallbackVtbl;
+            callback->sound = sound;
+            sound->voice_callback = (IXAudio2VoiceCallback*)callback;
+        }
+        sound->preload_seconds = seconds;
+        sound->is_streaming = 1;
+        
+        if (sound->source_file) {
+            // WAV streaming setup
+            long current_pos = ftell(sound->source_file);
+            fseek(sound->source_file, 0, SEEK_END);
+            long file_end = ftell(sound->source_file);
+            fseek(sound->source_file, current_pos, SEEK_SET);
+            
+            sound->total_data_size = file_end - sound->data_offset;
+            sound->bytes_streamed = sound->data_size;
+            
+            printf("WAV streaming setup: total_size=%u bytes, preloaded=%zu bytes\n",
+                   sound->total_data_size, sound->data_size);
+                   
+        } else if (sound->decoder) {
+            // NEW APPROACH: Reset decoder to start and stream from beginning
+            stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
+            
+            unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
+            size_t bytes_per_sample_frame = sound->channels * sizeof(short);
+            
+            printf("OGG streaming setup - RESET APPROACH:\n");
+            printf("  - Total sample frames: %u\n", total_sample_frames);
+            printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
+            
+            // CRITICAL: Reset decoder to beginning
+            printf("  - Resetting decoder to start...\n");
+            stb_vorbis_seek_start(vorbis);
+            
+            unsigned int reset_position = stb_vorbis_get_sample_offset(vorbis);
+            printf("  - Decoder reset to position: %u\n", reset_position);
+            
+            // Calculate total size
+            sound->total_data_size = total_sample_frames * bytes_per_sample_frame;
+            
+            // Start streaming from position 0
+            sound->bytes_streamed = 0;
+            
+            printf("  - Total estimated size: %u bytes\n", sound->total_data_size);
+            printf("  - Starting streaming from position 0\n");
+            
+            // Store filename for reopening decoder if needed
+            size_t filename_len = strlen(filename);
+            sound->filename = (char*)malloc(filename_len + 1);
+            strcpy(sound->filename, filename);
+        }
+    } else {
+        sound->preload_seconds = 0;
+        sound->is_streaming = 0;
+        sound->bytes_streamed = 0;
+        sound->total_data_size = 0;
+    }
+    
+    HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
+        g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex,
+        0, XAUDIO2_DEFAULT_FREQ_RATIO,
+        sound->voice_callback, NULL, NULL);
+
+    if (FAILED(hr)) {
+        if (sound->voice_callback) free(sound->voice_callback);
+        free(sound);
+        return NULL;
+    }
+
+    return sound;
+}
 
 static void platform_free_music(pal_sound* sound) {
     if (sound->is_streaming) {
@@ -2603,11 +2664,13 @@ static void platform_free_music(pal_sound* sound) {
         sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
     }
     
-    // Free the callback we allocated
     if (sound->voice_callback) {
         free(sound->voice_callback);
     }
     
+    if (sound->filename) {
+        free(sound->filename);
+    }
     free(sound->data);
     free(sound);
 }
