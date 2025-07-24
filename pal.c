@@ -205,7 +205,7 @@ void pal_free_sound(pal_sound* sound) {
 // loader for uncompressed .wav and ogg vorbis files.
 pal_sound* pal_load_music(const char* filename) {
     // every loaded buffer will be this long.
-    float buffer_length_in_seconds = 2.0f;
+    const float buffer_length_in_seconds = 2.0f;
 	return platform_load_sound(filename, buffer_length_in_seconds);
 }
 
@@ -224,7 +224,7 @@ void pal_free_music(pal_sound* sound) {
 }
 
 // TODO: @fix This loads uncompressed .wav files only!
-static int load_wav(const char* filename, pal_sound* out, float* seconds) {
+static int load_wav(const char* filename, pal_sound* out, float seconds) {
     FILE* file = fopen(filename, "rb");
     static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
     static const uint8_t SUBFORMAT_PCM[16] = {
@@ -295,10 +295,10 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
             data_offset = (uint32_t)ftell(file);
             uint32_t bytes_per_sample = (bits_per_sample / 8) * numChannels;
             uint32_t preload_bytes;
-            if (*seconds == 0.0f) {
+            if (seconds == 0.0f) {
                 preload_bytes = chunkSize;
             } else {
-                preload_bytes = (uint32_t)(*seconds * sample_rate * bytes_per_sample);
+                preload_bytes = (uint32_t)(seconds * sample_rate * bytes_per_sample);
                 if (preload_bytes > chunkSize) {
                     preload_bytes = chunkSize;
                 }
@@ -339,7 +339,7 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     printf("WAV format: audioFormat=%d, channels=%d, sample_rate=%d, bits_per_sample=%d, is_float=%d\n",
            audioFormat, numChannels, sample_rate, bits_per_sample, is_float);
     
-    if (*seconds > 0.0f) { // Streaming mode - keep file open and set up streaming metadata
+    if (seconds > 0.0f) { // Streaming mode - keep file open and set up streaming metadata
         out->source_file = file;
         out->total_data_size = data_size;           // Total size of audio data in file
         out->bytes_streamed = out->data_size;      // How many bytes already loaded into initial buffer
@@ -355,7 +355,7 @@ static int load_wav(const char* filename, pal_sound* out, float* seconds) {
     }
     return 1;
 }
-static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
+static int load_ogg(const char* filename, pal_sound* out, float seconds) {
     int channels, sample_rate;
     int error;
     stb_vorbis* vorbis = stb_vorbis_open_filename(filename, &error, NULL);
@@ -370,9 +370,9 @@ static int load_ogg(const char* filename, pal_sound* out, float* seconds) {
     
     // Calculate how many sample frames to preload based on seconds
     int64_t total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
-    int64_t target_sample_frames = (int64_t)(sample_rate * (*seconds));
+    int64_t target_sample_frames = (int64_t)(sample_rate * (seconds));
     
-    if (*seconds <= 0.0f || target_sample_frames > total_sample_frames) {
+    if (seconds <= 0.0f || target_sample_frames > total_sample_frames) {
         target_sample_frames = total_sample_frames;
     }
     

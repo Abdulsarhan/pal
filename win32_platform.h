@@ -1700,8 +1700,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
 		LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
 		if (result != DISP_CHANGE_SUCCESSFUL) {
-			MessageBox(NULL, "Failed to change resolution", "Error", MB_OK);
-			return 1;
+			MessageBox(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
 		}
         window_style = WS_POPUP;
     }
@@ -2486,8 +2485,9 @@ static int platform_play_music(pal_sound* sound, float volume) {
 }
 // Simplified load_next_chunk - avoid decoder reset complexity
 
+static int load_wav(const char* filename, pal_sound* out, float seconds);
+static int load_ogg(const char* filename, pal_sound* out, float seconds);
 pal_sound* platform_load_sound(const char* filename, float seconds) {
-    volatile float secs = seconds;
     FILE* file = fopen(filename, "rb");
 
     if (!file)
@@ -2511,11 +2511,11 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
 
     if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
         fclose(file);
-        result = load_wav(filename, sound, &secs);
+        result = load_wav(filename, sound, seconds);
     }
     else if (memcmp(header, "OggS", 4) == 0) {
         fclose(file);
-        result = load_ogg(filename, sound, &secs);
+        result = load_ogg(filename, sound, seconds);
     }
     else {
         fclose(file);
