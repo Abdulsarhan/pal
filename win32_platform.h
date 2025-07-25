@@ -2565,7 +2565,6 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
     
     return bytes_read;
 }
-
 static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
@@ -2654,12 +2653,12 @@ static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback* callback, void* p
     // We don't use looping buffers in streaming, so this stays empty
 }
 
-static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void* pBufferContext, HRESULT Error) {
+static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void* pBufferContext, HRESULT error) {
     // Called when XAudio2 encounters an error
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
     
-    printf("XAudio2 Voice Error: 0x%08X\n", Error);
+    printf("XAudio2 Voice Error: 0x%08X\n", error);
     
     // Stop streaming on error
     sound->stream_finished = 1;
@@ -2692,13 +2691,12 @@ static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
 static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnVoiceProcessingPassStart,
     OnVoiceProcessingPassEnd,
+    OnStreamEnd,
     OnBufferStart,
     OnBufferEnd,
     OnLoopEnd,
     OnVoiceError,
-    OnStreamEnd
 };
-
 static int platform_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
@@ -2888,24 +2886,22 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
             unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
             size_t bytes_per_sample_frame = sound->channels * sizeof(short);
             
-            printf("OGG streaming setup - RESET APPROACH:\n");
+            printf("OGG streaming setup - CONTINUOUS APPROACH:\n");
             printf("  - Total sample frames: %u\n", total_sample_frames);
             printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
             
-            printf("  - Resetting decoder to start...\n");
-            stb_vorbis_seek_start(vorbis);
-            
-            unsigned int reset_position = stb_vorbis_get_sample_offset(vorbis);
-            printf("  - Decoder reset to position: %u\n", reset_position);
+            // DON'T reset the decoder - it's already positioned after the preloaded data
+            unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
+            printf("  - Decoder position after preload: %u\n", current_position);
             
             // Calculate total size
             sound->total_data_size = total_sample_frames * bytes_per_sample_frame;
             
-            // Start streaming from position 0
-            sound->bytes_streamed = 0;
+            // Set bytes_streamed to match what we've already preloaded
+            sound->bytes_streamed = sound->data_size;
             
             printf("  - Total estimated size: %zu bytes\n", sound->total_data_size);
-            printf("  - Starting streaming from position 0\n");
+            printf("  - Bytes already streamed (preloaded): %zu\n", sound->bytes_streamed);
             
             // Store filename for reopening decoder if needed
             size_t filename_len = strlen(filename);
@@ -2932,7 +2928,6 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
 
     return sound;
 }
-
 static void platform_free_music(pal_sound* sound) {
     if (sound->is_streaming) {
         sound->stream_finished = 1;

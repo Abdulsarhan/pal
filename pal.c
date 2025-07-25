@@ -507,11 +507,11 @@ size_t pal_get_file_size(const char* file_path) {
 }
 
 uint32_t pal_get_file_permissions(const char* file_path) {
-    platform_get_file_permissions(file_path);
+    return platform_get_file_permissions(file_path);
 }
 
 uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
-    platform_change_file_permissions(file_path, permission_flags);
+    return platform_change_file_permissions(file_path, permission_flags);
 }
 
 uint8_t pal_read_file(const char* file_path, char* buffer) {
