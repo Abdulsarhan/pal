@@ -17,7 +17,7 @@ static int platform_make_context_current(pal_window* window);
 static int platform_play_sound(pal_sound* sound, float volume);
 static int platform_stop_sound(pal_sound* sound);
 static int platform_get_raw_input_buffer();
-v2 platform_get_mouse_position(pal_window* window);
+pal_vec2 platform_get_mouse_position(pal_window* window);
 static void platform_begin_drawing();
 static void platform_end_drawing(pal_window* window);
 static void* platform_load_dynamic_library(char* dll);

@@ -58,8 +58,6 @@ typedef struct {
     } touchpad;
 } pal_gamepad_state;
 
-
-
 // Window stuff.
 typedef struct pal_window pal_window;
 typedef struct pal_monitor pal_monitor;
@@ -460,47 +458,41 @@ typedef struct pal_event_queue {
 #define RAD2DEG (180.0f/PI)
 #endif
 
-// v2, 2 components
-typedef struct v2 {
-    float x;                // Vector x component
-    float y;                // Vector y component
-} v2;
+typedef struct pal_vec2 {
+    union { float x, r, u, s; };
+    union { float y, g, v, t; };
+} pal_vec2;
 
-// v3, 3 components
-typedef struct v3 {
-    float x;                // Vector x component
-    float y;                // Vector y component
-    float z;                // Vector z component
-} v3;
+typedef struct pal_vec3 {
+    union { float x, r, u, s; };
+    union { float y, g, v, t; };
+    union { float z, b; };
+} pal_vec3;
 
-// v4, 4 components
-typedef struct v4 {
-    float x;                // Vector x component
-    float y;                // Vector y component
-    float z;                // Vector z component
-    float w;                // Vector w component
-} v4;
+typedef struct pal_vec4 {
+    union { float x, r, u, s; };
+    union { float y, g, v, t; };
+    union { float z, b; };
+    union { float w, a; };
+} pal_vec4;
 
-// v2, 2 components
-typedef struct iv2 {
-	int32_t x;                // Vector x component
-	int32_t y;                // Vector y component
-} iv2;
+typedef struct pal_ivec2 {
+    union { int32_t x, r, u, s; };
+    union { int32_t y, g, v, t; };
+} pal_ivec2;
 
-// v3, 3 components
-typedef struct iv3 {
-	int32_t x;                // Vector x component
-	int32_t y;                // Vector y component
-	int32_t z;                // Vector z component
-} iv3;
+typedef struct pal_ivec3 {
+    union { int32_t x, r, u, s; };
+    union { int32_t y, g, v, t; };
+    union { int32_t z, b; };
+} pal_ivec3;
 
-// v4, 4 components
-typedef struct iv4 {
-	int32_t x;                // Vector x component
-	int32_t y;                // Vector y component
-	int32_t z;                // Vector z component
-	int32_t w;                // Vector w component
-} iv4;
+typedef struct pal_ivec4 {
+    union { int32_t x, r, u, s; };
+    union { int32_t y, g, v, t; };
+    union { int32_t z, b; };
+    union { int32_t w, a; };
+} pal_ivec4;
 
 //----------------------------------------------------------------------------------
 // Window Flags 
@@ -1122,7 +1114,7 @@ PALAPI uint8_t is_mouse_pressed(int button);
 PALAPI uint8_t is_mouse_down(int button);
 PALAPI uint8_t is_mouse_processed(int button);
 PALAPI void set_mouse_processed(int button);
-PALAPI v2 get_mouse_position(pal_window* window);
+PALAPI pal_vec2 get_mouse_position(pal_window* window);
 
 // Gamepad Input
 PALAPI int pal_get_gamepad_count();
@@ -1152,17 +1144,17 @@ PALAPI char* read_file(const char* filePath, int* fileSize, char* buffer);
 PALAPI void write_file(const char* filePath, char* buffer, int size);
 PALAPI uint8_t copy_file(const char* fileName, const char* outputName, char* buffer);
 
-PALAPI uint8_t is_upper_case(char ch);
-PALAPI uint8_t is_lower_case(char ch);
-PALAPI uint8_t is_letter(char ch);
-PALAPI uint8_t is_end_of_line(char ch);
-PALAPI uint8_t is_whitespace(char ch);
-PALAPI uint8_t is_number(char ch);
-PALAPI uint8_t is_underscore(char ch);
-PALAPI uint8_t is_hyphen(char ch);
-PALAPI uint8_t is_dot(char ch);
-PALAPI uint8_t are_chars_equal(char ch1, char ch2);
-PALAPI uint8_t are_strings_equal(int count, char* str1, char* str2);
+PALAPI uint8_t pal_is_uppercase(char ch);
+PALAPI uint8_t pal_is_lowercase(char ch);
+PALAPI uint8_t pal_is_letter(char ch);
+PALAPI uint8_t pal_is_end_of_line(char ch);
+PALAPI uint8_t pal_is_whitespace(char ch);
+PALAPI uint8_t pal_is_number(char ch);
+PALAPI uint8_t pal_is_underscore(char ch);
+PALAPI uint8_t pal_is_hyphen(char ch);
+PALAPI uint8_t pal_is_dot(char ch);
+PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
+PALAPI uint8_t pal_are_strings_equal(int count, char* str1, char* str2);
 
 void* load_dynamic_library(char* dll);
 void* load_dynamic_function(void* dll, char* func_name);

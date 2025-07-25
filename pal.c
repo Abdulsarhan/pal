@@ -107,7 +107,7 @@ PALAPI void set_key_processed(int key) {
 }
 
 // Mouse input
-PALAPI v2 get_mouse_position(pal_window* window) {
+PALAPI pal_vec2 get_mouse_position(pal_window* window) {
 	return platform_get_mouse_position(window);
 
 }
@@ -599,58 +599,136 @@ uint8_t copy_file(const char* fileName, const char* outputName, char* buffer) {
 ###########################################
 
 */
+enum {
+    PAL_UPPER_BIT    = (1 << 0),  // A-Z
+    PAL_LOWER_BIT    = (1 << 1),  // a-z
+    PAL_DIGIT_BIT    = (1 << 2),  // 0-9
+    PAL_UNDER_BIT    = (1 << 3),  // _
+    PAL_HYPHEN_BIT   = (1 << 4),  // -
+    PAL_DOT_BIT      = (1 << 5),  // .
+    PAL_EOL_BIT      = (1 << 6),  // \r, \n (included in whitespace)
+    PAL_WHITESPACE_BIT = (1 << 7) // All whitespace chars
+};
 
-PALAPI uint8_t is_upper_case(char ch) {
-	return ((ch >= 'A') && (ch <= 'Z'));
+static const uint8_t pal_char_masks[128] = {
+    // Control characters (0-31)
+    [0] = 0, [1] = 0, [2] = 0, [3] = 0, [4] = 0, [5] = 0, [6] = 0, [7] = 0,
+    [8] = 0, 
+    ['\t'] = PAL_WHITESPACE_BIT,    // tab
+    ['\n'] = PAL_WHITESPACE_BIT,    // new line
+    ['\v'] = PAL_WHITESPACE_BIT,    // vertical tab (not used anymore)
+    ['\f'] = PAL_WHITESPACE_BIT,    // form feed (not used anymore)
+    ['\r'] = PAL_WHITESPACE_BIT,    // carriage return
+    [14] = 0, [15] = 0, [16] = 0, [17] = 0, [18] = 0, [19] = 0, [20] = 0, [21] = 0,
+    [22] = 0, [23] = 0, [24] = 0, [25] = 0, [26] = 0, [27] = 0, [28] = 0, [29] = 0,
+    [30] = 0, [31] = 0,
+    
+    // Printable characters (32-127)
+    [' '] = PAL_WHITESPACE_BIT,   // Space
+    
+    ['!'] = 0, ['"'] = 0, ['#'] = 0, ['$'] = 0, ['%'] = 0, ['&'] = 0, ['\''] = 0,
+    ['('] = 0, [')'] = 0, ['*'] = 0, ['+'] = 0, [','] = 0,
+    ['-'] = PAL_HYPHEN_BIT,
+    ['.'] = PAL_DOT_BIT,
+    ['/'] = 0,
+    
+    // Numbers (0-9)
+    ['0'] = PAL_DIGIT_BIT,
+    ['1'] = PAL_DIGIT_BIT,
+    ['2'] = PAL_DIGIT_BIT,
+    ['3'] = PAL_DIGIT_BIT,
+    ['4'] = PAL_DIGIT_BIT,
+    ['5'] = PAL_DIGIT_BIT,
+    ['6'] = PAL_DIGIT_BIT,
+    ['7'] = PAL_DIGIT_BIT,
+    ['8'] = PAL_DIGIT_BIT,
+    ['9'] = PAL_DIGIT_BIT,
+    
+    [':'] = 0, [';'] = 0, ['<'] = 0, ['='] = 0, ['>'] = 0, ['?'] = 0, ['@'] = 0,
+    
+    // Uppercase (A-Z)
+    ['A'] = PAL_UPPER_BIT, ['B'] = PAL_UPPER_BIT, ['C'] = PAL_UPPER_BIT,
+    ['D'] = PAL_UPPER_BIT, ['E'] = PAL_UPPER_BIT, ['F'] = PAL_UPPER_BIT,
+    ['G'] = PAL_UPPER_BIT, ['H'] = PAL_UPPER_BIT, ['I'] = PAL_UPPER_BIT,
+    ['J'] = PAL_UPPER_BIT, ['K'] = PAL_UPPER_BIT, ['L'] = PAL_UPPER_BIT,
+    ['M'] = PAL_UPPER_BIT, ['N'] = PAL_UPPER_BIT, ['O'] = PAL_UPPER_BIT,
+    ['P'] = PAL_UPPER_BIT, ['Q'] = PAL_UPPER_BIT, ['R'] = PAL_UPPER_BIT,
+    ['S'] = PAL_UPPER_BIT, ['T'] = PAL_UPPER_BIT, ['U'] = PAL_UPPER_BIT,
+    ['V'] = PAL_UPPER_BIT, ['W'] = PAL_UPPER_BIT, ['X'] = PAL_UPPER_BIT,
+    ['Y'] = PAL_UPPER_BIT, ['Z'] = PAL_UPPER_BIT,
+    
+    ['['] = 0, ['\\'] = 0, [']'] = 0, ['^'] = 0,
+    ['_'] = PAL_UNDER_BIT,
+    ['`'] = 0,
+    
+    // Lowercase (a-z)
+    ['a'] = PAL_LOWER_BIT, ['b'] = PAL_LOWER_BIT, ['c'] = PAL_LOWER_BIT,
+    ['d'] = PAL_LOWER_BIT, ['e'] = PAL_LOWER_BIT, ['f'] = PAL_LOWER_BIT,
+    ['g'] = PAL_LOWER_BIT, ['h'] = PAL_LOWER_BIT, ['i'] = PAL_LOWER_BIT,
+    ['j'] = PAL_LOWER_BIT, ['k'] = PAL_LOWER_BIT, ['l'] = PAL_LOWER_BIT,
+    ['m'] = PAL_LOWER_BIT, ['n'] = PAL_LOWER_BIT, ['o'] = PAL_LOWER_BIT,
+    ['p'] = PAL_LOWER_BIT, ['q'] = PAL_LOWER_BIT, ['r'] = PAL_LOWER_BIT,
+    ['s'] = PAL_LOWER_BIT, ['t'] = PAL_LOWER_BIT, ['u'] = PAL_LOWER_BIT,
+    ['v'] = PAL_LOWER_BIT, ['w'] = PAL_LOWER_BIT, ['x'] = PAL_LOWER_BIT,
+    ['y'] = PAL_LOWER_BIT, ['z'] = PAL_LOWER_BIT,
+    
+    ['{'] = 0, ['|'] = 0, ['}'] = 0, ['~'] = 0,
+    [127] = 0  // DEL
+};
+
+// Character classification functions
+PALAPI uint8_t pal_is_uppercase(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_UPPER_BIT;
 }
 
-PALAPI uint8_t is_lower_case(char ch) {
-	return ((ch >= 'a') && (ch <= 'z'));
+PALAPI uint8_t pal_is_lowercase(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_LOWER_BIT;
 }
 
-PALAPI uint8_t is_letter(char ch) {
-	return (is_upper_case(ch) || is_lower_case(ch));
+PALAPI uint8_t pal_is_letter(char ch) {
+    return pal_char_masks[(uint8_t)ch] & (PAL_UPPER_BIT | PAL_LOWER_BIT);
 }
 
-PALAPI uint8_t is_end_of_line(char ch) {
-	return ((ch == '\r') || (ch == '\n'));
+PALAPI uint8_t pal_is_number(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_DIGIT_BIT;
 }
 
-PALAPI uint8_t is_whitespace(char ch) {
-	return ((ch == ' ') || (ch == '\t') || (ch == '\v') || (ch == '\f'));
+PALAPI uint8_t pal_is_end_of_line(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_EOL_BIT;
 }
 
-PALAPI uint8_t is_number(char ch) {
-	return ((ch >= '0') && (ch <= '9'));
+PALAPI uint8_t pal_is_underscore(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_UNDER_BIT;
 }
 
-PALAPI uint8_t is_underscore(char ch) {
-	return (ch == '_');
+PALAPI uint8_t pal_is_hyphen(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_HYPHEN_BIT;
 }
 
-PALAPI uint8_t is_hyphen(char ch) {
-	return (ch == '-');
+PALAPI uint8_t pal_is_dot(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_DOT_BIT;
+}
+PALAPI uint8_t pal_is_whitespace(char ch) {
+    return pal_char_masks[(uint8_t)ch] & PAL_WHITESPACE_BIT;
 }
 
-PALAPI uint8_t is_dot(char ch) {
-	return (ch == '.');
+// Character comparison
+PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2) {
+    return (uint8_t)ch1 == (uint8_t)ch2;
 }
 
-PALAPI uint8_t are_chars_equal(char ch1, char ch2) {
-	return (ch1 == ch2);
-}
-
-PALAPI uint8_t are_strings_equal(int count, char* str1, char* str2) {
-	for (int i = 0; i < count; i++) {
-		if (str1 == NULL || str2 == NULL)
-			return 0;
-		if (*str1 != *str2) {
-			return 0;
-		}
-		str1++;
-		str2++;
-	}
-	return 1;
+// String comparison
+PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2) {
+    if (str1 == NULL || str2 == NULL) {
+        return 0;
+    }
+    
+    for (int i = 0; i < count; i++) {
+        if (!pal_are_chars_equal(str1[i], str2[i])) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 pal_bool pal_eventq_free(pal_event_queue* queue);

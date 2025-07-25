@@ -93,8 +93,8 @@ typedef struct pal_input {
 	uint8_t keys_processed[MAX_KEYS];
 	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
 	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
-	v2 mouse_position;
-	iv2 mouse_delta;
+	pal_vec2 mouse_position;
+	pal_ivec2 mouse_delta;
 }pal_input;
 pal_input input = { 0 };
 
@@ -1893,7 +1893,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
     }
     else {
         window->message_pump_drained = FALSE;
-        input.mouse_delta = (iv2){.x = 0, .y = 0};
+        input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
         return 0;
     }
     assert(0); // UNREACHABLE! Just crash if we get here somehow.
@@ -2053,12 +2053,12 @@ void Win32HandleMouse(const RAWINPUT* raw) {
     */
 }
 
-v2 platform_get_mouse_position(pal_window* window) {
+pal_vec2 platform_get_mouse_position(pal_window* window) {
 	POINT cursor_pos = { 0 };
 	GetCursorPos(&cursor_pos);
 
 	ScreenToClient(window->hwnd, &cursor_pos);     // Convert to client-area coordinates
-	return (v2) {
+	return (pal_vec2) {
 		(float)cursor_pos.x,
 		(float)cursor_pos.y
 	};
