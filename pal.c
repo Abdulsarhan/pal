@@ -653,11 +653,6 @@ PALAPI uint8_t are_strings_equal(int count, char* str1, char* str2) {
 	return 1;
 }
 
-// capacity and size are in bytes,
-// not events.
-
-// There is only a single event queue, and it should be isntan
-size_t pal_eventq_get_size(pal_event_queue* queue);
 pal_bool pal_eventq_free(pal_event_queue* queue);
 
 pal_bool pal_eventq_free(pal_event_queue* queue) {
@@ -671,14 +666,3 @@ pal_bool pal_eventq_free(pal_event_queue* queue) {
         return 0;
     }
 }
-
-// ---------------> back
-// [0][1][2][3][4]
-// <--------------- front
-
-
-size_t pal_eventq_get_size(pal_event_queue* queue) {
-    return queue->size;
-}
-
-
