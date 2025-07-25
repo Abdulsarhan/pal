@@ -492,104 +492,36 @@ uint8_t free_dynamic_library(void* dll) {
 
 */
 
-uint8_t does_file_exist(const char* file_path) {
-
-	assert(file_path != NULL);
-	FILE* file = fopen(file_path, "rb");
-	if (!file)
-	{
-		return 0;
-	}
-	fclose(file);
-
-	return 1;
+uint8_t pal_does_file_exist(const char* file_path) {
+    return platform_does_file_exist(file_path);
 }
 
-time_t get_file_timestamp(const char* file) {
-	struct stat file_stat = { 0 };
-	stat(file, &file_stat);
-	return file_stat.st_mtime;
+pal_file* pal_open_file(const char* file_path) {
+    return platform_open_file(file_path);
 }
 
-long get_file_size(const char* file_path) {
-	assert(file_path != NULL);
-	long fileSize = 0;
-	FILE* file = fopen(file_path, "rb");
-	if (!file)
-	{
-		fprintf(stderr, "ERROR: Failed to open file!\n");
-		return 0;
-	}
-
-	fseek(file, 0, SEEK_END);
-	fileSize = ftell(file);
-	fseek(file, 0, SEEK_SET);
-	fclose(file);
-
-	return fileSize;
+size_t pal_get_last_read_time(const char* file_path) {
+    return platform_get_last_read_time(file_path);
 }
 
-char* read_file(const char* filePath, int* fileSize, char* buffer) {
-	assert(filePath != NULL);
-	assert(fileSize != NULL);
-	assert(buffer != NULL);
-
-	*fileSize = 0;
-	FILE* file = fopen(filePath, "rb");
-	if (!file)
-	{
-		fprintf(stderr, "ERROR: Failed to open file!\n");
-		return NULL;
-	}
-
-	fseek(file, 0, SEEK_END);
-	*fileSize = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	memset(buffer, 0, *fileSize + 1);
-	fread(buffer, sizeof(char), *fileSize, file);
-
-	fclose(file);
-
-	return buffer;
+size_t pal_get_last_write_time(const char* file_path) {
+    return platform_get_last_write_time(file_path);
 }
 
-void write_file(const char* filePath, char* buffer, int size) {
-	assert(filePath != NULL);
-	assert(buffer != NULL);
-
-	FILE* file = fopen(filePath, "wb");
-	if (!file)
-	{
-		fprintf(stderr, "ERROR: Failed to open file!\n");
-		return;
-	}
-
-	fwrite(buffer, sizeof(char), size, file);
-	fclose(file);
+size_t pal_get_file_size(const char* file_path) {
+    return platform_get_file_size(file_path);
 }
 
-uint8_t copy_file(const char* fileName, const char* outputName, char* buffer) {
-	int fileSize = 0;
-	char* data = read_file(fileName, &fileSize, buffer);
+uint8_t pal_read_file(const char* file_path, char* buffer) {
+    return platform_read_file(file_path, buffer);
+}
 
-	FILE* outputFile = fopen(outputName, "wb");
-	if (!outputFile)
-	{
-		fprintf(stderr, "ERROR: Failed to open file!\n");
-		return 0;
-	}
+uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer) {
+    return platform_write_file(file_path, file_size, buffer);
+}
 
-	size_t result = fwrite(data, sizeof(char), fileSize, outputFile);
-	if (!result)
-	{
-		fprintf(stderr, "ERROR: Failed to open file!\n");
-		return 0;
-	}
-
-	fclose(outputFile);
-
-	return 1;
+uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
+    return platform_copy_file(original_path, copy_path);
 }
 
 /*

@@ -78,6 +78,7 @@ struct pal_sound {
     // ADD THIS NEW FIELD:
     char* filename;            // Filename for reopening OGG decoder
 };
+
 // Keyboard & Mouse Input
 
 #define MAX_KEYS 256
@@ -2023,12 +2024,12 @@ pal_bool get_device_handle() {
         if (GetRawInputDeviceInfo(device_list[i].hDevice, RIDI_DEVICEINFO, &info, &size) == (UINT)-1)
             continue;
 
-        if (info.dwType == RIM_TYPEHID && info.hid.usUsagePage == 0x01 && info.hid.usUsage == 0x02) {
-            if (InitMouseHIDBuffers(device_list[i].hDevice)) {
-                initialized = TRUE;
-                break;
-            }
-        }
+if (info.dwType == RIM_TYPEHID && info.hid.usUsagePage == 0x01 && info.hid.usUsage == 0x02) {
+    if (InitMouseHIDBuffers(device_list[i].hDevice)) {
+        initialized = TRUE;
+        break;
+    }
+}
     }
 
     free(device_list);
@@ -2036,57 +2037,57 @@ pal_bool get_device_handle() {
 }
 
 void Win32HandleMouse(const RAWINPUT* raw) {
-	int32_t dx = raw->data.mouse.lLastX;
-	int32_t dy = raw->data.mouse.lLastY;
+    int32_t dx = raw->data.mouse.lLastX;
+    int32_t dy = raw->data.mouse.lLastY;
     input.mouse_delta.x += dx;
     input.mouse_delta.y += dy;
- 
+
     /* We don't save mouse buttons
-	USHORT buttons = raw->data.mouse.usButtonFlags;
-	for (int i = 0; i < 16; ++i) {
-		uint16_t down = (buttons >> (i * 2)) & 1;
-		uint16_t up = (buttons >> (i * 2 + 1)) & 1;
- 
-		// If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
-		input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
-	}
+    USHORT buttons = raw->data.mouse.usButtonFlags;
+    for (int i = 0; i < 16; ++i) {
+        uint16_t down = (buttons >> (i * 2)) & 1;
+        uint16_t up = (buttons >> (i * 2 + 1)) & 1;
+
+        // If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
+        input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
+    }
     */
 }
 
 pal_vec2 platform_get_mouse_position(pal_window* window) {
-	POINT cursor_pos = { 0 };
-	GetCursorPos(&cursor_pos);
+    POINT cursor_pos = { 0 };
+    GetCursorPos(&cursor_pos);
 
-	ScreenToClient(window->hwnd, &cursor_pos);     // Convert to client-area coordinates
-	return (pal_vec2) {
-		(float)cursor_pos.x,
-		(float)cursor_pos.y
-	};
+    ScreenToClient(window->hwnd, &cursor_pos);     // Convert to client-area coordinates
+    return (pal_vec2) {
+        (float)cursor_pos.x,
+            (float)cursor_pos.y
+    };
 }
 
 void Win32HandleKeyboard(const RAWINPUT* raw) {
     /*
     // we used to save this in the input struct, not anymore.
 
-	USHORT key = raw->data.keyboard.VKey;
-	input.keys[key] = ~(raw->data.keyboard.Flags) & RI_KEY_BREAK; 
+    USHORT key = raw->data.keyboard.VKey;
+    input.keys[key] = ~(raw->data.keyboard.Flags) & RI_KEY_BREAK;
     printf("Key %u %s\n", key, input.keys[key] ? "up" : "down"); // FOR DEBUGGING NOCHECKIN!
-    
-    
+
+
     */
 
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
 void Win32HandleHID(const RAWINPUT* raw) {
-	printf("%d", raw->data.hid.dwCount);
+    printf("%d", raw->data.hid.dwCount);
 }
 
 // Handler function table indexed by dwType (0 = mouse, 1 = keyboard, 2 = HID)
 RawInputHandler Win32InputHandlers[3] = {
-	Win32HandleMouse,      // RIM_TYPEMOUSE (0)
-	Win32HandleKeyboard,   // RIM_TYPEKEYBOARD (1)
-	Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
+    Win32HandleMouse,      // RIM_TYPEMOUSE (0)
+    Win32HandleKeyboard,   // RIM_TYPEKEYBOARD (1)
+    Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
@@ -2094,12 +2095,12 @@ RawInputHandler Win32InputHandlers[3] = {
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 
 static int platform_get_raw_input_buffer() {
-	UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
-	UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
+    UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
+    UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
-	PRAWINPUT raw = (PRAWINPUT)g_rawInputBuffer;
-	for (UINT i = 0; i < inputEventCount; ++i) {
-		UINT type = raw->header.dwType;
+    PRAWINPUT raw = (PRAWINPUT)g_rawInputBuffer;
+    for (UINT i = 0; i < inputEventCount; ++i) {
+        UINT type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
             Win32HandleMouse(raw);
         }
@@ -2109,9 +2110,182 @@ static int platform_get_raw_input_buffer() {
         else {
             Win32HandleHID(raw);
         }
-		raw = NEXTRAWINPUTBLOCK(raw);
-	}
+        raw = NEXTRAWINPUTBLOCK(raw);
+    }
+    return 0;
+}
+
+
+uint8_t platform_does_file_exist(const char* file_path) {
+    DWORD attrs = GetFileAttributesA(file_path);
+    return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+pal_file* platform_open_file(const char* filename) {
+    if (!filename) return NULL;
+
+    HANDLE hFile = CreateFileA(
+        filename,
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS,
+        NULL
+    );
+
+    if (hFile == INVALID_HANDLE_VALUE) return NULL;
+
+    BY_HANDLE_FILE_INFORMATION fileInfo;
+    if (!GetFileInformationByHandle(hFile, &fileInfo)) {
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    LARGE_INTEGER size;
+    if (!GetFileSizeEx(hFile, &size)) {
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    pal_file* file = (pal_file*)calloc(1, sizeof(pal_file)); // Use calloc to zero-init bitfields
+    if (!file) {
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    // Core metadata
+    file->handle = hFile;
+    file->creation_time = ((uint64_t)fileInfo.ftCreationTime.dwHighDateTime << 32) | fileInfo.ftCreationTime.dwLowDateTime;
+    file->last_access_time = ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) | fileInfo.ftLastAccessTime.dwLowDateTime;
+    file->last_write_time = ((uint64_t)fileInfo.ftLastWriteTime.dwHighDateTime << 32) | fileInfo.ftLastWriteTime.dwLowDateTime;
+    file->file_size = size.QuadPart;
+    // Individual attribute flags
+    file->readonly = (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) ? 1 : 0;
+    file->directory = (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+
+    return file;
+}
+
+size_t platform_get_file_size(const char* file_path) {
+    HANDLE file = CreateFileA(
+        file_path,
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    LARGE_INTEGER file_size;
+    
+    if (GetFileSizeEx(file, &file_size)) {
+        CloseHandle(file);
+        return file_size.QuadPart;
+    }
+	CloseHandle(file);
 	return 0;
+}
+
+size_t platform_get_last_write_time(const char* file) {
+    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+    if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
+        return 0; // Error case
+    }
+    return ((uint64_t)fileInfo.ftLastWriteTime.dwHighDateTime << 32) | 
+            fileInfo.ftLastWriteTime.dwLowDateTime;
+}
+
+size_t platform_get_last_read_time(const char* file) {
+    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+    if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
+        return 0; // Error case
+    }
+    return ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) |
+            fileInfo.ftLastAccessTime.dwLowDateTime;
+}
+
+uint8_t platform_read_file(const char* file_path, char* buffer) {
+    HANDLE file = CreateFileA(
+        file_path,
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (file == INVALID_HANDLE_VALUE) {
+        return 1;
+    }
+
+    LARGE_INTEGER file_size;
+    if (!GetFileSizeEx(file, &file_size)) {
+        CloseHandle(file);
+        return 1;
+    }
+
+    size_t remaining = (size_t)file_size.QuadPart;
+    size_t offset = 0;
+
+    while (remaining > 0) {
+        DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
+        DWORD bytes_read = 0;
+
+        if (!ReadFile(file, buffer + offset, chunk, &bytes_read, NULL) || 
+            bytes_read != chunk) {
+            CloseHandle(file);
+            return 1;
+        }
+
+        remaining -= chunk;
+        offset += chunk;
+    }
+
+    CloseHandle(file);
+    return 0;
+}
+
+uint8_t platform_write_file(const char* file_path, size_t file_size, const char* buffer) {
+    HANDLE file = CreateFileA(
+        file_path,
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (file == INVALID_HANDLE_VALUE) {
+        return 1;
+    }
+
+    size_t remaining = file_size;
+    const char* current_pos = buffer;
+
+    while (remaining > 0) {
+        DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
+        DWORD bytes_written = 0;
+
+        if (!WriteFile(file, current_pos, chunk, &bytes_written, NULL) || 
+            bytes_written != chunk) {
+            CloseHandle(file);
+            return 1;
+        }
+
+        remaining -= chunk;
+        current_pos += chunk;
+    }
+
+    CloseHandle(file);
+    return 0;
+}
+
+uint8_t platform_copy_file(const char* original_path, const char* copy_path) {
+    return CopyFileA(original_path, copy_path, FALSE) ? 0 : 1;
 }
 
 int platform_init_sound() {

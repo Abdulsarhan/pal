@@ -12,6 +12,17 @@ typedef struct pal_video_mode {
     int bits_per_pixel;
 }pal_video_mode;
 
+typedef struct {
+    void* handle;
+    uint64_t creation_time;
+    uint64_t last_access_time;
+    uint64_t last_write_time;
+    uint64_t file_size;
+
+    pal_bool readonly;
+    pal_bool directory;
+} pal_file;
+
 typedef struct pal_sound pal_sound;
 typedef struct pal_music pal_music;
 #define PAL_MAX_TOUCHES 2
@@ -1137,12 +1148,15 @@ PALAPI int pal_play_music(pal_sound* sound, float volume);
 PALAPI int pal_stop_music(pal_sound* sound);
 void pal_free_music(pal_sound* sound);
 
-PALAPI uint8_t does_file_exist(const char* file_path);
-PALAPI time_t get_file_timestamp(const char* file);
-PALAPI long get_file_size(const char* file_path);
-PALAPI char* read_file(const char* filePath, int* fileSize, char* buffer);
-PALAPI void write_file(const char* filePath, char* buffer, int size);
-PALAPI uint8_t copy_file(const char* fileName, const char* outputName, char* buffer);
+PALAPI uint8_t pal_does_file_exist(const char* file_path);
+PALAPI size_t pal_get_last_write_time(const char* file);
+PALAPI size_t pal_get_last_read_time(const char* file);
+PALAPI size_t pal_get_file_size(const char* file_path);
+PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
+PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size , char* buffer);
+PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
+
+PALAPI pal_file* pal_open_file(const char* file_path);
 
 PALAPI uint8_t pal_is_uppercase(char ch);
 PALAPI uint8_t pal_is_lowercase(char ch);
