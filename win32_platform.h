@@ -8,6 +8,9 @@
 #include <mmreg.h>            // WAVEFORMATEX
 #include <Xinput.h>
 #include <hidsdi.h>   // Link with hid.lib
+// for file permissions.
+#include <accctrl.h>
+#include <aclapi.h>
 
 // C Standard Library
 #include <stdio.h>
@@ -776,7 +779,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
             };
             break;
 
-        case WM_MOUSEMOVE:
+        case WM_MOUSEMOVE: {
             event.type = PAL_MOUSE_MOTION;
             event.motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(msg.lParam),
@@ -785,7 +788,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
                 .delta_y = input.mouse_delta.y,
                 .buttons = msg.wParam
             };
-            break;
+        }; break;
 
         case WM_LBUTTONDOWN: 
         case WM_RBUTTONDOWN: 
@@ -2115,56 +2118,13 @@ static int platform_get_raw_input_buffer() {
     return 0;
 }
 
+//----------------------------------------------------------------------------------
+// File Functions.
+//----------------------------------------------------------------------------------
 
 uint8_t platform_does_file_exist(const char* file_path) {
     DWORD attrs = GetFileAttributesA(file_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
-}
-
-pal_file* platform_open_file(const char* filename) {
-    if (!filename) return NULL;
-
-    HANDLE hFile = CreateFileA(
-        filename,
-        GENERIC_READ,
-        FILE_SHARE_READ,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS,
-        NULL
-    );
-
-    if (hFile == INVALID_HANDLE_VALUE) return NULL;
-
-    BY_HANDLE_FILE_INFORMATION fileInfo;
-    if (!GetFileInformationByHandle(hFile, &fileInfo)) {
-        CloseHandle(hFile);
-        return NULL;
-    }
-
-    LARGE_INTEGER size;
-    if (!GetFileSizeEx(hFile, &size)) {
-        CloseHandle(hFile);
-        return NULL;
-    }
-
-    pal_file* file = (pal_file*)calloc(1, sizeof(pal_file)); // Use calloc to zero-init bitfields
-    if (!file) {
-        CloseHandle(hFile);
-        return NULL;
-    }
-
-    // Core metadata
-    file->handle = hFile;
-    file->creation_time = ((uint64_t)fileInfo.ftCreationTime.dwHighDateTime << 32) | fileInfo.ftCreationTime.dwLowDateTime;
-    file->last_access_time = ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) | fileInfo.ftLastAccessTime.dwLowDateTime;
-    file->last_write_time = ((uint64_t)fileInfo.ftLastWriteTime.dwHighDateTime << 32) | fileInfo.ftLastWriteTime.dwLowDateTime;
-    file->file_size = size.QuadPart;
-    // Individual attribute flags
-    file->readonly = (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) ? 1 : 0;
-    file->directory = (fileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
-
-    return file;
 }
 
 size_t platform_get_file_size(const char* file_path) {
@@ -2204,6 +2164,164 @@ size_t platform_get_last_read_time(const char* file) {
     }
     return ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) |
             fileInfo.ftLastAccessTime.dwLowDateTime;
+}
+
+uint32_t platform_get_file_permissions(const char* file_path) {
+    if (!file_path) {
+        return 0;
+    }
+
+    uint32_t permissions = 0;
+
+    // Get the file's security descriptor
+    PACL pDacl = NULL;
+    PSECURITY_DESCRIPTOR pSD = NULL;
+    DWORD dwRes = GetNamedSecurityInfoA(
+        file_path,
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,
+        NULL,
+        NULL,
+        &pDacl,
+        NULL,
+        &pSD
+    );
+
+    if (dwRes != ERROR_SUCCESS) {
+        if (pSD) LocalFree(pSD);
+        return 0;
+    }
+
+    // Get current process token
+    HANDLE hToken;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        LocalFree(pSD);
+        return 0;
+    }
+
+    // Check effective permissions
+    GENERIC_MAPPING mapping = {0};
+    mapping.GenericRead = FILE_GENERIC_READ;
+    mapping.GenericWrite = FILE_GENERIC_WRITE;
+    mapping.GenericExecute = FILE_GENERIC_EXECUTE;
+    mapping.GenericAll = FILE_ALL_ACCESS;
+
+    PRIVILEGE_SET privileges = {0};
+    DWORD privSize = sizeof(privileges);
+    BOOL accessStatus = FALSE;
+
+    ACCESS_MASK accessRights = 0;
+    dwRes = GetEffectiveRightsFromAclA(pDacl, NULL, &accessRights);
+
+    if (dwRes == ERROR_SUCCESS) {
+        if (accessRights & FILE_GENERIC_READ)   permissions |= PAL_READ;
+        if (accessRights & FILE_GENERIC_WRITE)  permissions |= PAL_WRITE;
+        if (accessRights & FILE_GENERIC_EXECUTE) permissions |= PAL_EXECUTE;
+    }
+
+    // Cleanup
+    CloseHandle(hToken);
+    LocalFree(pSD);
+
+    return permissions;
+}
+
+uint8_t platform_change_file_permissions(const char* file_path, uint32_t permission_flags) {
+    if (!file_path) {
+        return 0; // Invalid path
+    }
+
+    // Convert permission_flags to Windows-specific access rights
+    DWORD dwAccessRights = 0;
+    if (permission_flags & PAL_READ)    dwAccessRights |= GENERIC_READ;
+    if (permission_flags & PAL_WRITE)   dwAccessRights |= GENERIC_WRITE;
+    if (permission_flags & PAL_EXECUTE) dwAccessRights |= GENERIC_EXECUTE;
+
+    if (dwAccessRights == 0) {
+        return 0; // No valid permissions requested
+    }
+
+    // Get the current user's SID
+    HANDLE hToken;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        return 0;
+    }
+
+    DWORD dwSize = 0;
+    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
+    if (dwSize == 0) {
+        CloseHandle(hToken);
+        return 0;
+    }
+
+    PTOKEN_USER pTokenUser = (PTOKEN_USER)malloc(dwSize);
+    if (!pTokenUser) {
+        CloseHandle(hToken);
+        return 0;
+    }
+
+    if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) {
+        free(pTokenUser);
+        CloseHandle(hToken);
+        return 0;
+    }
+
+    CloseHandle(hToken);
+
+    // Initialize an EXPLICIT_ACCESS structure for the new permissions
+    EXPLICIT_ACCESS ea = {0};
+    ea.grfAccessPermissions = dwAccessRights;
+    ea.grfAccessMode = SET_ACCESS;
+    ea.grfInheritance = NO_INHERITANCE;
+    ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
+    ea.Trustee.ptstrName = (LPSTR)pTokenUser->User.Sid;
+
+    // Get the existing DACL and modify it
+    PACL pOldDACL = NULL, pNewDACL = NULL;
+    PSECURITY_DESCRIPTOR pSD = NULL;
+
+    DWORD dwRes = GetNamedSecurityInfo(
+        (LPSTR)file_path,
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,
+        NULL,
+        NULL,
+        &pOldDACL,
+        NULL,
+        &pSD
+    );
+
+    if (dwRes != ERROR_SUCCESS) {
+        free(pTokenUser);
+        return 0;
+    }
+
+    // Create a new DACL with the updated permissions
+    dwRes = SetEntriesInAcl(1, &ea, pOldDACL, &pNewDACL);
+    if (dwRes != ERROR_SUCCESS) {
+        LocalFree(pSD);
+        free(pTokenUser);
+        return 0;
+    }
+
+    // Apply the new DACL to the file
+    dwRes = SetNamedSecurityInfo(
+        (LPSTR)file_path,
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,
+        NULL,
+        NULL,
+        pNewDACL,
+        NULL
+    );
+
+    // Cleanup
+    LocalFree(pNewDACL);
+    LocalFree(pSD);
+    free(pTokenUser);
+
+    return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
 uint8_t platform_read_file(const char* file_path, char* buffer) {
@@ -2288,6 +2406,9 @@ uint8_t platform_copy_file(const char* original_path, const char* copy_path) {
     return CopyFileA(original_path, copy_path, FALSE) ? 0 : 1;
 }
 
+//----------------------------------------------------------------------------------
+// Sound Functions.
+//----------------------------------------------------------------------------------
 int platform_init_sound() {
 	int hr;
 
@@ -2906,6 +3027,9 @@ int platform_stop_sound(pal_sound* sound) {
     return hr;
 }
 
+//----------------------------------------------------------------------------------
+// Dynamic Library Functions.
+//----------------------------------------------------------------------------------
 void* platform_load_dynamic_library(char* dll) {
 	HMODULE result = LoadLibraryA(dll);
 	assert(result);

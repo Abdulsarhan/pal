@@ -1088,6 +1088,13 @@ typedef struct pal_ivec4 {
 #define GAMEPAD_SQUARE         GAMEPAD_X
 #define GAMEPAD_TRIANGLE       GAMEPAD_Y
 
+//----------------------------------------------------------------------------------
+// File Permissions.
+//----------------------------------------------------------------------------------
+#define PAL_READ    0x01
+#define PAL_WRITE   0x02
+#define PAL_EXECUTE 0x04
+
 #if defined(__cplusplus)
 #define CLITERAL(type)      type
 #else
@@ -1152,11 +1159,11 @@ PALAPI uint8_t pal_does_file_exist(const char* file_path);
 PALAPI size_t pal_get_last_write_time(const char* file);
 PALAPI size_t pal_get_last_read_time(const char* file);
 PALAPI size_t pal_get_file_size(const char* file_path);
+PALAPI uint32_t pal_get_file_permissions(const char* file_path);
+PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags);
 PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
 PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size , char* buffer);
 PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
-
-PALAPI pal_file* pal_open_file(const char* file_path);
 
 PALAPI uint8_t pal_is_uppercase(char ch);
 PALAPI uint8_t pal_is_lowercase(char ch);

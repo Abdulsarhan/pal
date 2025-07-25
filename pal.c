@@ -185,7 +185,6 @@ PALAPI void end_drawing(pal_window* window) {
 
 */
 
-// loader for uncompressed .wav and ogg vorbis files.
 pal_sound* pal_load_sound(const char* filename) {
 	return platform_load_sound(filename, 0.0f);
 }
@@ -202,7 +201,6 @@ void pal_free_sound(pal_sound* sound) {
 	platform_free_sound(sound);
 }
 
-// loader for uncompressed .wav and ogg vorbis files.
 pal_sound* pal_load_music(const char* filename) {
     // every loaded buffer will be this long.
     const float buffer_length_in_seconds = 2.0f;
@@ -496,10 +494,6 @@ uint8_t pal_does_file_exist(const char* file_path) {
     return platform_does_file_exist(file_path);
 }
 
-pal_file* pal_open_file(const char* file_path) {
-    return platform_open_file(file_path);
-}
-
 size_t pal_get_last_read_time(const char* file_path) {
     return platform_get_last_read_time(file_path);
 }
@@ -510,6 +504,14 @@ size_t pal_get_last_write_time(const char* file_path) {
 
 size_t pal_get_file_size(const char* file_path) {
     return platform_get_file_size(file_path);
+}
+
+uint32_t pal_get_file_permissions(const char* file_path) {
+    platform_get_file_permissions(file_path);
+}
+
+uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
+    platform_change_file_permissions(file_path, permission_flags);
 }
 
 uint8_t pal_read_file(const char* file_path, char* buffer) {
