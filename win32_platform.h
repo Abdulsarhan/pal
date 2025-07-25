@@ -51,7 +51,7 @@ struct pal_monitor {
 struct pal_sound {
     // Core audio data
     unsigned char* data;        // Raw PCM audio data (initial buffer)
-    uint32_t data_size;        // Size in bytes of initial buffer
+    size_t data_size;        // Size in bytes of initial buffer
     int sample_rate;           // Samples per second (e.g., 44100)
     int channels;              // Number of audio channels (e.g., 2 for stereo)
     int bits_per_sample;       // Usually 16 or 32
@@ -66,9 +66,9 @@ struct pal_sound {
     
     // Streaming - WAV
     FILE* source_file;
-    uint32_t total_data_size;  // Total size of audio data in file
-    uint32_t bytes_streamed;   // How many bytes we've read so far
-    uint32_t data_offset;      // Offset in file where audio data starts
+    size_t total_data_size;  // Total size of audio data in file
+    size_t bytes_streamed;   // How many bytes we've read so far
+    size_t data_offset;      // Offset in file where audio data starts
     
     // Streaming control
     float preload_seconds;     // How many seconds were preloaded
@@ -94,7 +94,7 @@ typedef struct pal_input {
 	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
 	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
 	v2 mouse_position;
-	v2 mouse_delta;
+	iv2 mouse_delta;
 }pal_input;
 pal_input input = { 0 };
 
@@ -770,7 +770,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
                 .y = pos->y,
                 .width = pos->cx,
                 .height = pos->cy,
-                .focused = 1, // guess; could adjust later
+                .focused = 1, // This is wrong, fix.
                 .visible = 1
             };
             break;
@@ -780,7 +780,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
             event.motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(msg.lParam),
                 .y = GET_Y_LPARAM(msg.lParam),
-                .delta_x = input.mouse_delta.x, // this should be assigned when we get raw input from the mouse.
+                .delta_x = input.mouse_delta.x,
                 .delta_y = input.mouse_delta.y,
                 .buttons = msg.wParam
             };
@@ -1081,7 +1081,6 @@ int platform_translate_message(MSG msg, pal_window* window) {
     pal_event_queue* queue = &window->queue;
     if (queue->size == queue->capacity) {
         fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
-        return;
     }
     queue->events[queue->back] = event;
     queue->back = (queue->back + 1) % queue->capacity;
@@ -1303,7 +1302,7 @@ int platform_get_gamepad_count(void) {
     UINT32 wgi_count = 0;
     IVectorView* gamepads = NULL;
 
-    if (g_statics && SUCCEEDED(g_statics->lpVtbl->get_Gamepads(g_statics, (void**)&gamepads)) && gamepads) {
+    if (g_statics && SUCCEEDED(g_statics->lpVtbl->get_Gamepads(g_statics, (IVectorView**)&gamepads)) && gamepads) {
         gamepads->lpVtbl->get_Size(gamepads, &wgi_count);
     }
     SAFE_RELEASE(gamepads);
@@ -1364,7 +1363,7 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     // WGI controllers
     if (g_statics && index < (int)win32_gamepad_ctx.wgi_count) {
         IVectorView* gamepads = NULL;
-        if (FAILED(g_statics->lpVtbl->get_Gamepads(g_statics, (void**)&gamepads)) || !gamepads)
+        if (FAILED(g_statics->lpVtbl->get_Gamepads(g_statics, (IVectorView**)&gamepads)) || !gamepads)
             return FALSE;
 
         IGamepad* pad = NULL;
@@ -1425,15 +1424,15 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
             if (index == 0) {
                 const XINPUT_GAMEPAD* pad = &win32_gamepad_ctx.xinput_state[i].Gamepad;
 
-                float lx = pad->sThumbLX;
-                float ly = pad->sThumbLY;
-                float rx = pad->sThumbRX;
-                float ry = pad->sThumbRY;
+                float lx = (float)pad->sThumbLX;
+                float ly = (float)pad->sThumbLY;
+                float rx = (float)pad->sThumbRX;
+                float ry = (float)pad->sThumbRY;
 
-                if (abs(lx) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) lx = 0;
-                if (abs(ly) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) ly = 0;
-                if (abs(rx) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) rx = 0;
-                if (abs(ry) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) ry = 0;
+                if (abs((int)lx) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) lx = 0;
+                if (abs((int)ly) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) ly = 0;
+                if (abs((int)rx) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) rx = 0;
+                if (abs((int)ry) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) ry = 0;
 
                 out_state->axes.left_x = fmaxf(-1.0f, lx / 32767.0f);
                 out_state->axes.left_y = fmaxf(-1.0f, ly / 32767.0f);
@@ -1461,7 +1460,7 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
 
                 strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name));
                 out_state->vendor_id = 0x045E;
-                out_state->product_id = 0xDEADBEEF;
+                out_state->product_id = (uint16_t)0xDEADBEEF;
                 out_state->connected = TRUE;
                 out_state->is_xinput = TRUE;
                 return TRUE;
@@ -1894,7 +1893,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
     }
     else {
         window->message_pump_drained = FALSE;
-        input.mouse_delta = (v2){.x = 0.0f, .y = 0.0f};
+        input.mouse_delta = (iv2){.x = 0, .y = 0};
         return 0;
     }
     assert(0); // UNREACHABLE! Just crash if we get here somehow.
@@ -2037,8 +2036,8 @@ pal_bool get_device_handle() {
 }
 
 void Win32HandleMouse(const RAWINPUT* raw) {
-	LONG dx = raw->data.mouse.lLastX;
-	LONG dy = raw->data.mouse.lLastY;
+	int32_t dx = raw->data.mouse.lLastX;
+	int32_t dy = raw->data.mouse.lLastY;
     input.mouse_delta.x += dx;
     input.mouse_delta.y += dy;
  
@@ -2154,7 +2153,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
     size_t bytes_read = 0;
     
     if (sound->source_file) {
-        uint32_t remaining = sound->total_data_size - sound->bytes_streamed;
+        size_t remaining = sound->total_data_size - sound->bytes_streamed;
         
         if (remaining == 0) {
             printf("WAV: No remaining data\n");
@@ -2167,13 +2166,13 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         }
         
         size_t to_read = (buffer_size < remaining) ? buffer_size : remaining;
-        long seek_pos = sound->data_offset + sound->bytes_streamed;
+        size_t seek_pos = sound->data_offset + sound->bytes_streamed;
         
-        printf("WAV: Seeking to %ld (data_offset=%ld + bytes_streamed=%u), reading %zu bytes\n", 
+        printf("WAV: Seeking to %zu (data_offset=%zu + bytes_streamed=%zu), reading %zu bytes\n", 
                seek_pos, sound->data_offset, sound->bytes_streamed, to_read);
         
-        if (fseek(sound->source_file, seek_pos, SEEK_SET) != 0) {
-            printf("WAV: Seek failed to position %ld\n", seek_pos);
+        if (fseek(sound->source_file, (long)seek_pos, SEEK_SET) != 0) {
+            printf("WAV: Seek failed to position %zu\n", seek_pos);
             return 0;
         }
         
@@ -2185,14 +2184,14 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         }
         
         sound->bytes_streamed += bytes_read;
-        printf("WAV: Read %zu bytes, new bytes_streamed=%u\n", bytes_read, sound->bytes_streamed);
+        printf("WAV: Read %zu bytes, new bytes_streamed=%zu\n", bytes_read, sound->bytes_streamed);
         
     } else if (sound->decoder) {
         stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
         
         // Calculate how many sample frames we can fit in the buffer
-        int bytes_per_sample_frame = sound->channels * sizeof(short);
-        int max_sample_frames = buffer_size / bytes_per_sample_frame;
+        size_t bytes_per_sample_frame = sound->channels * sizeof(short);
+        size_t max_sample_frames = buffer_size / bytes_per_sample_frame;
         
         if (max_sample_frames <= 0) {
             printf("OGG: Buffer too small for samples\n");
@@ -2201,14 +2200,14 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         
         // Calculate how many sample frames we should skip
         size_t sample_frames_streamed = sound->bytes_streamed / bytes_per_sample_frame;
-        unsigned int current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
+        int current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
         
-        printf("OGG: Loading chunk - streamed %zu sample frames, decoder at %u\n", 
+        printf("OGG: Loading chunk - streamed %zu sample frames, decoder at %d\n", 
                sample_frames_streamed, current_decoder_pos);
         
         // If decoder is behind our streaming position, seek forward
-        if (current_decoder_pos < sample_frames_streamed) {
-            printf("OGG: Seeking decoder from %u to %zu\n", current_decoder_pos, sample_frames_streamed);
+        if (current_decoder_pos < (int)sample_frames_streamed) {
+            printf("OGG: Seeking decoder from %d to %zu\n", current_decoder_pos, sample_frames_streamed);
             if (stb_vorbis_seek(vorbis, (unsigned int)sample_frames_streamed)) {
                 current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
                 printf("OGG: Seek successful, decoder now at %u\n", current_decoder_pos);
@@ -2226,7 +2225,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         
         // Read using non-interleaved API
         int total_sample_frames_read = stb_vorbis_get_samples_float(
-            vorbis, sound->channels, channel_buffers, max_sample_frames);
+            vorbis, sound->channels, channel_buffers, (int)max_sample_frames);
         
         if (total_sample_frames_read > 0) {
             // Convert float samples to interleaved 16-bit shorts
@@ -2255,17 +2254,17 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         // Update bytes_streamed to track total bytes processed
         sound->bytes_streamed += bytes_read;
         
-        unsigned int after_sample = stb_vorbis_get_sample_offset(vorbis);
+        int after_sample = stb_vorbis_get_sample_offset(vorbis);
         
         printf("OGG: Read %d sample frames (%zu bytes)\n", total_sample_frames_read, bytes_read);
-        printf("OGG: Decoder position: %u -> %u (advanced %u samples)\n", 
+        printf("OGG: Decoder position: %d -> %u (advanced %d samples)\n", 
                current_decoder_pos, after_sample, after_sample - current_decoder_pos);
-        printf("OGG: Total bytes streamed: %u\n", sound->bytes_streamed);
+        printf("OGG: Total bytes streamed: %zu\n", sound->bytes_streamed);
         
         // Check if we're at the end
         if (total_sample_frames_read == 0) {
             unsigned int total_samples = stb_vorbis_stream_length_in_samples(vorbis);
-            printf("OGG: End of stream - position %u of %u total samples\n", after_sample, total_samples);
+            printf("OGG: End of stream - position %d of %u total samples\n", after_sample, total_samples);
         }
     }
     
@@ -2585,7 +2584,7 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
             sound->total_data_size = file_end - sound->data_offset;
             sound->bytes_streamed = sound->data_size;
             
-            printf("WAV streaming setup: total_size=%u bytes, preloaded=%zu bytes\n",
+            printf("WAV streaming setup: total_size=%zu bytes, preloaded=%zu bytes\n",
                    sound->total_data_size, sound->data_size);
                    
         } else if (sound->decoder) {
@@ -2610,7 +2609,7 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
             // Start streaming from position 0
             sound->bytes_streamed = 0;
             
-            printf("  - Total estimated size: %u bytes\n", sound->total_data_size);
+            printf("  - Total estimated size: %zu bytes\n", sound->total_data_size);
             printf("  - Starting streaming from position 0\n");
             
             // Store filename for reopening decoder if needed

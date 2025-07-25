@@ -344,7 +344,7 @@ static int load_wav(const char* filename, pal_sound* out, float seconds) {
         out->total_data_size = data_size;           // Total size of audio data in file
         out->bytes_streamed = out->data_size;      // How many bytes already loaded into initial buffer
         
-        printf("WAV streaming setup: total=%u bytes, preloaded=%u bytes, data_offset=%u\n",
+        printf("WAV streaming setup: total=%zu bytes, preloaded=%zu bytes, data_offset=%zu\n",
                out->total_data_size, out->data_size, out->data_offset);
     }
     else { // Non-streaming mode - close file
@@ -369,8 +369,8 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
     sample_rate = info.sample_rate;
     
     // Calculate how many sample frames to preload based on seconds
-    int64_t total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
-    int64_t target_sample_frames = (int64_t)(sample_rate * (seconds));
+    size_t total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
+    size_t target_sample_frames = (size_t)(sample_rate * (seconds));
     
     if (seconds <= 0.0f || target_sample_frames > total_sample_frames) {
         target_sample_frames = total_sample_frames;
@@ -392,8 +392,8 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
         channel_buffers[i] = (float*)malloc(target_sample_frames * sizeof(float));
     }
     
-    int64_t total_decoded = 0;
-    unsigned int start_position = stb_vorbis_get_sample_offset(vorbis);
+    size_t total_decoded = 0;
+    size_t start_position = stb_vorbis_get_sample_offset(vorbis);
     
     while (total_decoded < target_sample_frames) {
         int samples_to_read = (int)(target_sample_frames - total_decoded);
@@ -433,15 +433,15 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
     free(channel_buffers);
     
     // Verify final decoder position
-    unsigned int final_position = stb_vorbis_get_sample_offset(vorbis);
-    unsigned int expected_position = start_position + total_decoded;
+    int final_position = stb_vorbis_get_sample_offset(vorbis);
+    size_t expected_position = start_position + total_decoded;
     
     printf("OGG Load: Finished - loaded %lld sample frames\n", total_decoded);
-    printf("OGG Load: Decoder position: %u -> %u (expected %u)\n", 
+    printf("OGG Load: Decoder position: %zu -> %d (expected %zu)\n", 
            start_position, final_position, expected_position);
     
-    if (final_position != expected_position) {
-        printf("WARNING: Decoder position mismatch! Expected %u, got %u\n", 
+    if (final_position != (int)expected_position) {
+        printf("WARNING: Decoder position mismatch! Expected %zu, got %d\n", 
                expected_position, final_position);
     }
     
@@ -455,7 +455,7 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
     // Store decoder for streaming later
     out->decoder = vorbis;
     
-    printf("OGG Load: Final data_size = %zu bytes (%lld sample frames)\n", 
+    printf("OGG Load: Final data_size = %zu bytes (%zu sample frames)\n", 
            out->data_size, total_decoded);
     
     return 1;

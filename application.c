@@ -53,7 +53,7 @@ int main() {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
 
-    OpenglInfo openglInfo = get_opengl_info();
+    // OpenglInfo openglInfo = get_opengl_info();
     pal_sound* music = pal_load_music("fine_night.ogg");
     pal_play_music(music, 1.0);
     pal_set_window_icon_legacy(window, "icon.ico");

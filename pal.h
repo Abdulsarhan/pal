@@ -483,23 +483,23 @@ typedef struct v4 {
 
 // v2, 2 components
 typedef struct iv2 {
-	int x;                // Vector x component
-	int y;                // Vector y component
+	int32_t x;                // Vector x component
+	int32_t y;                // Vector y component
 } iv2;
 
 // v3, 3 components
 typedef struct iv3 {
-	int x;                // Vector x component
-	int y;                // Vector y component
-	int z;                // Vector z component
+	int32_t x;                // Vector x component
+	int32_t y;                // Vector y component
+	int32_t z;                // Vector z component
 } iv3;
 
 // v4, 4 components
 typedef struct iv4 {
-	int x;                // Vector x component
-	int y;                // Vector y component
-	int z;                // Vector z component
-	int w;                // Vector w component
+	int32_t x;                // Vector x component
+	int32_t y;                // Vector y component
+	int32_t z;                // Vector z component
+	int32_t w;                // Vector w component
 } iv4;
 
 //----------------------------------------------------------------------------------
