@@ -63,6 +63,14 @@ PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
 	return platform_make_window_windowed(window);
 }
 
+PALAPI pal_bool pal_maximize_window(pal_window* window) {
+    return platform_maximize_window(window);
+}
+
+PALAPI pal_bool pal_minimize_window(pal_window* window) {
+    return platform_minimize_window(window);
+}
+
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
 	(void)platform_set_window_icon(window, image_path);
 }

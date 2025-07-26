@@ -24,7 +24,10 @@ static void* platform_load_dynamic_function(void* dll, char* func_name);
 static uint8_t platform_free_dynamic_library(void* dll);
 void platform_set_window_icon(pal_window* window, const char* image_path);
 void platform_set_window_icon_legacy(pal_window* window, const char* image_path);
-
+pal_bool platform_make_window_windowed(pal_window* window);
+pal_bool platform_make_window_fullscreen(pal_window* window);
+pal_bool platform_minimize_window(pal_window* window);
+pal_bool platform_maximize_window(pal_window* window);
 #ifdef __cplusplus
 }
 #endif

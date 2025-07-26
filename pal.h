@@ -1113,6 +1113,8 @@ PALAPI pal_bool pal_make_window_fullscreen(pal_window* window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate);
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window);
 PALAPI pal_bool pal_make_window_windowed(pal_window* window);
+PALAPI pal_bool pal_maximize_window(pal_window* window);
+PALAPI pal_bool pal_minimize_window(pal_window* window);
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path);
 PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path);
 PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);

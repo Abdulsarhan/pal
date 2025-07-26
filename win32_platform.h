@@ -346,17 +346,16 @@ typedef struct {
 
 // Global State
 typedef struct hid_device{
-        HANDLE handle;
-        PHIDP_PREPARSED_DATA pp_data;
-        uint16_t vendor_id;
-        uint16_t product_id;
-        char name[128];
-        win32_gamepad_button buttons[PAL_MAX_BUTTONS];
-        uint8_t button_count;
-        win32_gamepad_axis axes[PAL_MAX_AXES];
-        uint8_t axis_count;
-        pal_bool connected;
-
+	HANDLE handle;
+	PHIDP_PREPARSED_DATA pp_data;
+	uint16_t vendor_id;
+	uint16_t product_id;
+	char name[128];
+	win32_gamepad_button buttons[PAL_MAX_BUTTONS];
+	uint8_t button_count;
+	win32_gamepad_axis axes[PAL_MAX_AXES];
+	uint8_t axis_count;
+	pal_bool connected;
 }hid_device;
 
 typedef struct win32_gamepad_context{
@@ -401,39 +400,6 @@ typedef struct {
 } ICONDIRENTRY;
 #pragma pack(pop)
 
-pal_bool platform_make_window_fullscreen(pal_window* window) {
-    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
-    GetWindowRect(window->hwnd, &window->windowedRect);
-
-    DEVMODE dm = {0};
-    dm.dmSize = sizeof(dm);
-
-    HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFOEXA mi = { .cbSize = sizeof(mi) };
-    if (!GetMonitorInfoA(monitor, (MONITORINFO*)&mi)) {
-        MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
-        return FALSE;
-    }
-
-    if (!EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
-        MessageBoxA(window->hwnd, "Failed to get current monitor settings.", "Error", MB_OK);
-        return FALSE;
-    }
-
-    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
-
-    if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
-        MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
-        return FALSE;
-    }
-
-    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
-        dm.dmPelsWidth, dm.dmPelsHeight,
-        SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
-
-    return TRUE;
-}
 pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
     GetWindowRect(window->hwnd, &window->windowedRect);
@@ -458,6 +424,33 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
 
     return TRUE;
 }
+
+pal_bool platform_make_window_fullscreen(pal_window* window) {
+    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
+    GetWindowRect(window->hwnd, &window->windowedRect);
+    int width = window->windowedRect.right - window->windowedRect.left;
+    int height = window->windowedRect.bottom - window->windowedRect.top;
+    DEVMODE dm = {0};
+    EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
+    dm.dmSize = sizeof(dm);
+    dm.dmPelsWidth = width;
+    dm.dmPelsHeight = height;
+    dm.dmBitsPerPel = 32;
+    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+
+    if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
+        MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
+        return FALSE;
+    }
+
+    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+    SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
+        width, height,
+        SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+
+    return TRUE;
+}
+
 pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
     // Save the current window style and rect
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
@@ -760,7 +753,6 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
 
 int platform_translate_message(MSG msg, pal_window* window) {
     pal_event event = {0};
-    // test WM_QUIT, WM_DESTORY, and WM_CLOSE
     switch (msg.message) {
         case WM_DESTROY:
             PostQuitMessage(0);
@@ -835,6 +827,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
         window->mouse_inside_window = FALSE;
         ClipCursor(NULL);
         // Mouse just left the window
+        DefWindowProcA(window->hwnd, msg.message, msg.wParam, msg.lParam);
         break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
@@ -851,8 +844,6 @@ int platform_translate_message(MSG msg, pal_window* window) {
                 .visible = 1
             };
             break;
-
-
         case WM_LBUTTONDOWN: 
         case WM_RBUTTONDOWN: 
         case WM_MBUTTONDOWN: 
@@ -1141,8 +1132,8 @@ int platform_translate_message(MSG msg, pal_window* window) {
 
         default:
             event.type = PAL_NONE;
-            // This function dispatches the message to win32_window_proc()
-            DispatchMessage(&msg);
+            DispatchMessageA(&msg);
+            return 0;
             break;
     }
 
@@ -1153,7 +1144,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
     queue->events[queue->back] = event;
     queue->back = (queue->back + 1) % queue->capacity;
     queue->size++;
-    return 0;
+    return 1;
 }
 
 void platform_set_window_icon(pal_window* window, const char* image_path) {
@@ -1211,8 +1202,6 @@ void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
 
 static void win32_update_xinput() {
 }
-
-// --- pal_gamepad_state (simplified) ---
 
 // --- platform_get_gamepad_count ---
 
@@ -1416,7 +1405,15 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_INPUT:
             win32_handle_raw_input((HRAWINPUT)lparam);
             return 0;
-            
+		case WM_ACTIVATE:
+			if ((BOOL)wparam == FALSE) {
+                printf("INFO: LOST FOCUS!\n");
+                ShowWindow(hwnd, SW_MINIMIZE);
+			} else {
+                printf("INFO: GAINED FOCUS!\n");
+			}
+			return 0;
+
         case WM_INPUT_DEVICE_CHANGE:
             win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
             printf("Device Changed!\n");
@@ -1770,6 +1767,14 @@ static int platform_hide_cursor() {
     return result;
 }
 
+static pal_bool platform_maximize_window(pal_window* window) {
+    ShowWindow(window->hwnd, SW_MAXIMIZE);
+}
+
+static pal_bool platform_minimize_window(pal_window* window) {
+    ShowWindow(window->hwnd, SW_MINIMIZE);
+}
+
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 
 	MSG msg = {0};
@@ -1781,7 +1786,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 			TranslateMessage(&msg);
 
 			platform_translate_message(msg, window);
-
+            
 		}
         window->message_pump_drained = TRUE;
     }
