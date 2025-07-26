@@ -14,7 +14,6 @@
 
 PALAPI void pal_init() {
 	platform_init_sound();
-	get_device_handle();
     if (!platform_init_gamepads()) {
         printf("ERROR: %s: platform_init_gamepads failed\n", __func__);
     }

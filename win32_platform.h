@@ -361,6 +361,29 @@ typedef struct hid_device{
 
 }hid_device;
 
+typedef struct win32_gamepad_context{
+    uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
+    XINPUT_STATE xinput_state[MAX_XINPUT_CONTROLLERS];
+
+    uint8_t raw_input_buffer[1024];  // <-- THIS IS THE BUFFER
+
+    struct hid_device hid_devices[PAL_MAX_GAMEPADS];
+    struct { // DualSense/DS4
+        HANDLE handle;
+        win32_dualsense_state state;
+        uint16_t vendor_id;
+        uint16_t product_id;
+        char name[128];
+        pal_bool connected;
+    } ds_devices[PAL_MAX_GAMEPADS];
+
+    win32_gamepad_mapping mappings[PAL_MAX_MAPPINGS];
+    int mapping_count;
+    pal_bool initialized;
+    HWND hwnd;
+}win32_gamepad_context;
+win32_gamepad_context win32_gamepad_ctx = {0};
+
 #pragma pack(push, 1)
 typedef struct {
     uint16_t idReserved;   // Must be 0
@@ -1192,28 +1215,6 @@ static void win32_update_xinput() {
 }
 
 // --- pal_gamepad_state (simplified) ---
-typedef struct win32_gamepad_context{
-    uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
-    XINPUT_STATE xinput_state[MAX_XINPUT_CONTROLLERS];
-
-    uint8_t raw_input_buffer[1024];  // <-- THIS IS THE BUFFER
-
-    struct hid_device hid_devices[PAL_MAX_GAMEPADS];
-    struct { // DualSense/DS4
-        HANDLE handle;
-        win32_dualsense_state state;
-        uint16_t vendor_id;
-        uint16_t product_id;
-        char name[128];
-        pal_bool connected;
-    } ds_devices[PAL_MAX_GAMEPADS];
-
-    win32_gamepad_mapping mappings[PAL_MAX_MAPPINGS];
-    int mapping_count;
-    pal_bool initialized;
-    HWND hwnd;
-}win32_gamepad_context;
-win32_gamepad_context win32_gamepad_ctx = {0};
 
 // --- platform_get_gamepad_count ---
 
@@ -1855,89 +1856,6 @@ typedef void (*RawInputHandler)(const RAWINPUT*);
 #define MAX_BUTTON_CAPS 32
 
 // Helper struct to hold reusable buffers
-typedef struct {
-    PHIDP_PREPARSED_DATA prep_data;
-    HIDP_BUTTON_CAPS button_caps[MAX_BUTTON_CAPS];
-    USHORT num_button_caps;
-} MouseHIDBuffers;
-
-MouseHIDBuffers hid_buffer = {0};
-
-pal_bool InitMouseHIDBuffers(HANDLE device_handle) {
-    UINT prep_size = 0;
-    if (GetRawInputDeviceInfo(device_handle, RIDI_PREPARSEDDATA, NULL, &prep_size) == (UINT)-1)
-        return FALSE;
-
-    if (hid_buffer.prep_data) {
-        HidD_FreePreparsedData(hid_buffer.prep_data);
-        hid_buffer.prep_data = NULL;
-    }
-
-    hid_buffer.prep_data = (PHIDP_PREPARSED_DATA)malloc(prep_size);
-    if (!hid_buffer.prep_data)
-        return FALSE;
-
-    if (GetRawInputDeviceInfo(device_handle, RIDI_PREPARSEDDATA, hid_buffer.prep_data, &prep_size) == (UINT)-1) {
-        free(hid_buffer.prep_data);
-        hid_buffer.prep_data = NULL;
-        return FALSE;
-    }
-
-    hid_buffer.num_button_caps = MAX_BUTTON_CAPS;
-    NTSTATUS status = HidP_GetButtonCaps(
-        HidP_Input,
-        hid_buffer.button_caps,
-        &hid_buffer.num_button_caps,
-        hid_buffer.prep_data
-    );
-
-    if (status != HIDP_STATUS_SUCCESS) {
-        HidD_FreePreparsedData(hid_buffer.prep_data);
-        free(hid_buffer.prep_data);
-        hid_buffer.prep_data = NULL;
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
-pal_bool get_device_handle() {
-    UINT device_count = 0;
-    if (GetRawInputDeviceList(NULL, &device_count, sizeof(RAWINPUTDEVICELIST)) != 0 || device_count == 0)
-        return FALSE;
-
-    RAWINPUTDEVICELIST* device_list = (RAWINPUTDEVICELIST*)malloc(sizeof(RAWINPUTDEVICELIST) * device_count);
-    if (!device_list)
-        return FALSE;
-
-    if (GetRawInputDeviceList(device_list, &device_count, sizeof(RAWINPUTDEVICELIST)) == (UINT)-1) {
-        free(device_list);
-        return FALSE;
-    }
-
-    pal_bool initialized = FALSE;
-    for (UINT i = 0; i < device_count; ++i) {
-        if (device_list[i].dwType == RIM_TYPEMOUSE)
-            continue; // skip traditional mice
-
-        RID_DEVICE_INFO info = {0};
-        info.cbSize = sizeof(info);
-        UINT size = sizeof(info);
-        if (GetRawInputDeviceInfo(device_list[i].hDevice, RIDI_DEVICEINFO, &info, &size) == (UINT)-1)
-            continue;
-
-if (info.dwType == RIM_TYPEHID && info.hid.usUsagePage == 0x01 && info.hid.usUsage == 0x02) {
-    if (InitMouseHIDBuffers(device_list[i].hDevice)) {
-        initialized = TRUE;
-        break;
-    }
-}
-    }
-
-    free(device_list);
-    return initialized;
-}
-
 void Win32HandleMouse(const RAWINPUT* raw) {
     int32_t dx = raw->data.mouse.lLastX;
     int32_t dy = raw->data.mouse.lLastY;
