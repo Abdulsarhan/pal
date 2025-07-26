@@ -54,6 +54,8 @@ struct pal_window {
     RECT windowedRect;
     pal_event_queue queue;
     pal_bool message_pump_drained;
+    pal_bool confine_mouse;
+    pal_bool mouse_inside_window;
 };
 
 struct pal_monitor {
@@ -411,7 +413,7 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
 
     return TRUE;
 }
-pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refreshRate) {
+pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
     GetWindowRect(window->hwnd, &window->windowedRect);
 
@@ -420,7 +422,7 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
     dm.dmPelsWidth = width;
     dm.dmPelsHeight = height;
     dm.dmBitsPerPel = 32;
-    dm.dmDisplayFrequency = refreshRate;
+    dm.dmDisplayFrequency = refresh_rate;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
     if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
@@ -736,7 +738,7 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
 }
 
 int platform_translate_message(MSG msg, pal_window* window) {
-    pal_event event;
+    pal_event event = {0};
     // test WM_QUIT, WM_DESTORY, and WM_CLOSE
     switch (msg.message) {
         case WM_DESTROY:
@@ -772,6 +774,47 @@ int platform_translate_message(MSG msg, pal_window* window) {
 				.visible = 1
 			};
 			break;
+
+        case WM_MOUSEMOVE: {
+			if (!window->mouse_inside_window)
+				window->mouse_inside_window = TRUE;
+
+            if (window->confine_mouse) {
+				TRACKMOUSEEVENT tme = {
+					.cbSize = sizeof(tme),
+					.dwFlags = TME_LEAVE,
+					.hwndTrack = window->hwnd,
+					.dwHoverTime = HOVER_DEFAULT
+				};
+				TrackMouseEvent(&tme);
+				RECT rect;
+				GetClientRect(window->hwnd, &rect);
+				POINT tl = { rect.left, rect.top };
+				POINT br = { rect.right, rect.bottom };
+				ClientToScreen(window->hwnd, &tl);
+				ClientToScreen(window->hwnd, &br);
+				rect.left = tl.x;
+				rect.top = tl.y;
+				rect.right = br.x;
+				rect.bottom = br.y;
+				ClipCursor(&rect);
+            }
+            // Mouse just entered the window
+            event.type = PAL_MOUSE_MOTION;
+            event.motion = (pal_mouse_motion_event){
+                .x = GET_X_LPARAM(msg.lParam),
+                .y = GET_Y_LPARAM(msg.lParam),
+                .delta_x = input.mouse_delta.x,
+                .delta_y = input.mouse_delta.y,
+                .buttons = msg.wParam
+            };
+        }; break;
+
+    case WM_MOUSELEAVE:
+        window->mouse_inside_window = FALSE;
+        ClipCursor(NULL);
+        // Mouse just left the window
+        break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
             event.type = PAL_WINDOW_EVENT;
@@ -788,16 +831,6 @@ int platform_translate_message(MSG msg, pal_window* window) {
             };
             break;
 
-        case WM_MOUSEMOVE: {
-            event.type = PAL_MOUSE_MOTION;
-            event.motion = (pal_mouse_motion_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .delta_x = input.mouse_delta.x,
-                .delta_y = input.mouse_delta.y,
-                .buttons = msg.wParam
-            };
-        }; break;
 
         case WM_LBUTTONDOWN: 
         case WM_RBUTTONDOWN: 
@@ -1087,6 +1120,7 @@ int platform_translate_message(MSG msg, pal_window* window) {
 
         default:
             event.type = PAL_NONE;
+            // This function dispatches the message to win32_window_proc()
             DispatchMessage(&msg);
             break;
     }
@@ -1353,7 +1387,7 @@ int platform_get_gamepad_count(void) {
     return total_count;
 }
 
-void platform_init_gamepads() {
+int platform_init_gamepads() {
     //---------------
     //     Xinput
     //---------------
@@ -1481,7 +1515,7 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
     out_state->name[sizeof(out_state->name) - 1] = '\0';
     out_state->vendor_id = 0x045E;  // Microsoft
-    out_state->product_id = 0xDEADBEEF;  // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
+    out_state->product_id = (uint16_t)0xDEADBEEF;  // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
     out_state->connected = TRUE;
     out_state->is_xinput = TRUE;
 
@@ -1541,7 +1575,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
       return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
-static pal_window* platform_create_window(int width, int height, const char* windowTitle, uint64_t window_flags) {
+static pal_window* platform_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
     // these variables are only
     // used when initializing opengl.
     pal_window* fakewindow = NULL;
@@ -1698,7 +1732,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	window->hwnd = CreateWindowExA(
 		ext_window_style,           // Optional window styles.
 		wc.lpszClassName,     // Window class
-		windowTitle,          // Window text
+		window_title,          // Window text
 		window_style,          // Window style
 
 		// Size and position
@@ -1760,7 +1794,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
     pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
 
     if(events == NULL) {
-        fprintf(stderr, "ERROR: platform_create_window(): failed to allocate memory for events!\n");
+        fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
     }
 
     pal_event_queue queue = {
@@ -1822,7 +1856,23 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		} else {
 			ShowWindow(window->hwnd, SW_HIDE);
 		}
-
+        if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
+			RECT rect;
+			GetClientRect(window->hwnd, &rect);
+			POINT tl = { rect.left, rect.top };
+			POINT br = { rect.right, rect.bottom };
+			ClientToScreen(window->hwnd, &tl);
+			ClientToScreen(window->hwnd, &br);
+			rect.left   = tl.x;
+			rect.top    = tl.y;
+			rect.right  = br.x;
+			rect.bottom = br.y;
+			ClipCursor(&rect);
+            window->confine_mouse = TRUE;
+        }
+        else {
+            window->confine_mouse = FALSE;
+        }
 		SetForegroundWindow(window->hwnd);
 		SetFocus(window->hwnd);
 		OutputDebugStringA("INFO: Using modern OpenGL Context.");
@@ -1852,6 +1902,22 @@ static int platform_make_context_current(pal_window* window) {
 		return 1;
 	}
 	return 0;
+}
+
+static int platform_show_cursor() {
+    int result = -1;
+    while (result < 0) {
+        result = ShowCursor(TRUE);
+    }
+    return result;
+}
+
+static int platform_hide_cursor() {
+    int result = 1;
+    while (result >= 0) {
+        result = ShowCursor(FALSE);
+    }
+    return result;
 }
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
@@ -1894,7 +1960,6 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {
 	return SetWindowTextA(window->hwnd, string);
 }
-
 
 static pal_monitor* platform_get_primary_monitor(void) {
     // The point (0, 0) is guaranteed to be on the primary monitor

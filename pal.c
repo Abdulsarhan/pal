@@ -15,7 +15,9 @@
 PALAPI void pal_init() {
 	platform_init_sound();
 	get_device_handle();
-    platform_init_gamepads();
+    if (!platform_init_gamepads()) {
+        printf("ERROR: %s: platform_init_gamepads failed\n", __func__);
+    }
 }
 
 PALAPI void pal_shutdown() {
@@ -30,8 +32,16 @@ PALAPI void pal_shutdown() {
 
 */
 
-PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags) {
-	 return platform_create_window(width, height, windowTitle, window_flags);
+PALAPI pal_window* pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
+	 return platform_create_window(width, height, window_title, window_flags);
+}
+
+PALAPI int pal_show_cursor() {
+    return platform_show_cursor();
+}
+
+PALAPI int pal_hide_cursor() {
+    return platform_hide_cursor();
 }
 
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
@@ -42,8 +52,8 @@ PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
 	return platform_make_window_fullscreen(window);
 }
 
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refreshrate) {
-	return platform_make_window_fullscreen_ex(window, width, height, refreshrate);
+PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
+	return platform_make_window_fullscreen_ex(window, width, height, refresh_rate);
 }
 
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {

@@ -521,33 +521,31 @@ typedef struct pal_ivec4 {
 #define PAL_WINDOW_MINIMIZED 0x40
 #define PAL_WINDOW_MAXIMIZED 0x80
 #define PAL_WINDOW_RESIZABLE 0x20
-#define PAL_WINDOW_OCCLUDED 0x4
+#define PAL_WINDOW_OCCLUDED 0x4 // unimplemented
 #define PAL_WINDOW_HIDDEN 0x8
-#define PAL_WINDOW_TRANSPARENT 0x400000
+#define PAL_WINDOW_TRANSPARENT 0x400000 // unimplemented
 #define PAL_WINDOW_ALWAYS_ON_TOP 0x8000
 
 // graphics APIs
 #define PAL_WINDOW_OPENGL 0x2
-#define PAL_WINDOW_VULKAN 0x100000
-#define PAL_WINDOW_METAL 0x200000
+#define PAL_WINDOW_VULKAN 0x100000 // unimplemented
+#define PAL_WINDOW_METAL 0x200000 // unimplemented
 
 // window type
-#define PAL_WINDOW_MODAL 0x1000
+#define PAL_WINDOW_MODAL 0x1000 // unimplemented
 #define PAL_WINDOW_UTILITY 0x10000
 #define PAL_WINDOW_TOOLTIP 0x20000
 #define PAL_WINDOW_POPUP_MENU 0x40000
 
-// keyboard / mouse input
-#define PAL_WINDOW_INPUT_FOCUS 0x200
-#define PAL_WINDOW_MOUSE_FOCUS 0x400
-#define PAL_WINDOW_MOUSE_GRABBED 0x100
-#define PAL_WINDOW_KEYBOARD_GRABBED 0x80000
-#define PAL_WINDOW_NOT_FOCUSABLE 0x800000
-#define PAL_WINDOW_MOUSE_CAPTURE 0x4000
-
+#define PAL_WINDOW_INPUT_FOCUS 0x200  // unimplemented
+#define PAL_WINDOW_MOUSE_FOCUS 0x400 // unimplemented
+#define PAL_WINDOW_MOUSE_CONFINED 0x100
+#define PAL_WINDOW_KEYBOARD_GRABBED 0x80000 // unimplemented
+#define PAL_WINDOW_NOT_FOCUSABLE 0x800000 // unimplemented
+#define PAL_WINDOW_MOUSE_CAPTURE 0x4000 // unimplemented
 // unreleated stuff.
 #define PAL_WINDOW_EXTERNAL 0x800
-#define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000
+#define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000 // not implemented
 
 //----------------------------------------------------------------------------------
 // Window Hint Values
@@ -1108,9 +1106,11 @@ extern "C" {
 PALAPI void pal_init();
 PALAPI void pal_shutdown();
 PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags);
+PALAPI int pal_show_cursor();
+PALAPI int pal_hide_cursor();
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window);
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refreshrate);
+PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate);
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window);
 PALAPI pal_bool pal_make_window_windowed(pal_window* window);
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path);
@@ -1123,6 +1123,8 @@ PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* pal_gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
 PALAPI int pal_make_context_current(pal_window* window);
+
+// Keyboard input
 PALAPI uint8_t is_key_pressed(int key);
 PALAPI uint8_t is_key_down(int key);
 PALAPI uint8_t is_key_processed(int key);
@@ -1176,7 +1178,7 @@ PALAPI uint8_t pal_is_underscore(char ch);
 PALAPI uint8_t pal_is_hyphen(char ch);
 PALAPI uint8_t pal_is_dot(char ch);
 PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
-PALAPI uint8_t pal_are_strings_equal(int count, char* str1, char* str2);
+PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2);
 
 void* load_dynamic_library(char* dll);
 void* load_dynamic_function(void* dll, char* func_name);

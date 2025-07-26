@@ -47,21 +47,22 @@ int main() {
 
     pal_monitor* monitor = pal_get_primary_monitor();
     pal_video_mode* mode = pal_get_video_mode(monitor);
-    pal_window* window = pal_create_window(mode->width, mode->height, "Window Title", PAL_WINDOW_RESIZABLE);
+    pal_window* window = pal_create_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Window Title", PAL_WINDOW_RESIZABLE);
     pal_make_context_current(window);
     if (!gladLoadGLLoader((GLADloadproc)pal_gl_get_proc_address)) {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
 
-    // OpenglInfo openglInfo = get_opengl_info();
-    pal_sound* music = pal_load_music("fine_night.ogg");
-    pal_play_music(music, 1.0);
+    OpenglInfo openglInfo = get_opengl_info();
+    pal_sound* music = pal_load_music("sine_wave.wav");
+    pal_play_music(music, 0.1f);
     pal_set_window_icon_legacy(window, "icon.ico");
     pal_set_taskbar_icon(window, "png.png");
     pal_set_cursor(window, "png.png", 16);
     uint8_t running = TRUE;
     pal_event event;
     pal_gamepad_state state;
+
     while (running) {
 		while (pal_poll_events(&event, window))
 		{
