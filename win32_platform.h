@@ -50,7 +50,7 @@ struct pal_window {
 	HWND hwnd;
 	HDC hdc;
 	HGLRC hglrc;
-    DWORD windowedStyle;
+    LONG windowedStyle;
     RECT windowedRect;
     pal_event_queue queue;
     pal_bool message_pump_drained;
