@@ -1143,9 +1143,8 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state);
 PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger);
 PALAPI void pal_stop_gamepad_vibration(int controller_id);
 
-PALAPI void begin_drawing(void);
-PALAPI void DrawTriangle(void);
-PALAPI void end_drawing(pal_window* window);
+// Rendering stuff.
+PALAPI void pal_swap_buffers(pal_window* window);
 
 // Sound
 PALAPI pal_sound* pal_load_sound(const char* filename);
@@ -1158,6 +1157,7 @@ PALAPI int pal_play_music(pal_sound* sound, float volume);
 PALAPI int pal_stop_music(pal_sound* sound);
 void pal_free_music(pal_sound* sound);
 
+// File I/O
 PALAPI uint8_t pal_does_file_exist(const char* file_path);
 PALAPI size_t pal_get_last_write_time(const char* file);
 PALAPI size_t pal_get_last_read_time(const char* file);
@@ -1168,6 +1168,7 @@ PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
 PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size , char* buffer);
 PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
 
+// File Parsing
 PALAPI uint8_t pal_is_uppercase(char ch);
 PALAPI uint8_t pal_is_lowercase(char ch);
 PALAPI uint8_t pal_is_letter(char ch);
@@ -1180,6 +1181,7 @@ PALAPI uint8_t pal_is_dot(char ch);
 PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
 PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2);
 
+// .dll/.so/.dylib loading
 void* load_dynamic_library(char* dll);
 void* load_dynamic_function(void* dll, char* func_name);
 uint8_t free_dynamic_library(void* dll);

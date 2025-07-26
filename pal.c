@@ -181,16 +181,8 @@ PALAPI int pal_make_context_current(pal_window* window) {
 
 */
 
-PALAPI void begin_drawing(void) {
-	(void)platform_begin_drawing();
-}
-
-PALAPI void DrawTriangle() {
-
-}
-
-PALAPI void end_drawing(pal_window* window) {
-	(void)platform_end_drawing(window);
+PALAPI void pal_swap_buffers(pal_window* window) {
+	(void)platform_swap_buffers(window);
 }
 
 /*

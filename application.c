@@ -138,10 +138,9 @@ int main() {
                 }
             }
         }
-		begin_drawing();
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		end_drawing(window);
+		pal_swap_buffers(window);
     }
 
     return 0;

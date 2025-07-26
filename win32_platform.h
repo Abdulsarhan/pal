@@ -1842,11 +1842,7 @@ static void* platform_gl_get_proc_address(const char* proc) {
 	return wglGetProcAddress(proc);
 }
 
-void platform_begin_drawing() {
-
-}
-
-void platform_end_drawing(pal_window* window) {
+void platform_swap_buffers(pal_window* window) {
 	SwapBuffers(window->hdc);
 }
 
