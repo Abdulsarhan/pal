@@ -77,6 +77,7 @@ struct pal_sound {
     
     // Streaming - OGG
     void* decoder;             // stb_vorbis* (using void* to avoid header dependency)
+    char* filename;            // Filename for reopening OGG decoder
     
     // Streaming - WAV
     FILE* source_file;
@@ -88,9 +89,6 @@ struct pal_sound {
     float preload_seconds;     // How many seconds were preloaded
     int is_streaming;          // 1 if this is a streaming sound
     int stream_finished;       // 1 when streaming is complete
-    
-    // ADD THIS NEW FIELD:
-    char* filename;            // Filename for reopening OGG decoder
 };
 
 // Keyboard & Mouse Input
