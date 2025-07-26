@@ -1191,122 +1191,10 @@ void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
 static void win32_update_xinput() {
 }
 
-// --- COM interface IDs (IIDs) ---
-
-static const IID IID_IGamepadStatics = { 0x6a44c408, 0x6ff0, 0x46ab, {0xb6, 0x22, 0xd9, 0x18, 0x19, 0x7b, 0x03, 0x23} };
-static const IID IID_IGamepad = {0x3C1689BD, 0x5915, 0x4489, 0x83, 0x13, 0xF6, 0xE3, 0xFC, 0xBF, 0xE7, 0x9C};
-static const IID IID_IGamepad2 = { 0x0e2b57cc, 0x4a5d, 0x4b66, {0xb6, 0xbb, 0x38, 0xbb, 0x8b, 0x3c, 0xb7, 0x0a} };
-static const IID IID_IVectorView = { 0xbbe1fa4c, 0x7110, 0x4af6, {0xba, 0x5b, 0xd8, 0x2f, 0xe0, 0x9f, 0x0c, 0x1f} };
-
-// --- COM interfaces (IGamepad, IGamepadStatics, IVectorView) ---
-
-typedef struct IGamepad IGamepad;
-typedef struct IGamepadVtbl IGamepadVtbl;
-typedef struct IGamepadStatics IGamepadStatics;
-typedef struct IGamepadStaticsVtbl IGamepadStaticsVtbl;
-typedef struct IVectorView IVectorView;
-typedef struct IVectorViewVtbl IVectorViewVtbl;
-
-static IGamepadStatics* g_statics = NULL;
-typedef struct GamepadReading {
-    uint16_t LeftThumbstickX;
-    uint16_t LeftThumbstickY;
-    uint16_t RightThumbstickX;
-    uint16_t RightThumbstickY;
-    float LeftTrigger;
-    float RightTrigger;
-    uint16_t Buttons;
-} GamepadReading;
-
-typedef struct GamepadVibration {
-    float LeftMotor;
-    float RightMotor;
-    float LeftTrigger;
-    float RightTrigger;
-} GamepadVibration;
-
-struct IGamepadVtbl {
-    HRESULT(STDMETHODCALLTYPE* QueryInterface)(IGamepad* This, REFIID riid, void** ppvObject);
-    ULONG(STDMETHODCALLTYPE* AddRef)(IGamepad* This);
-    ULONG(STDMETHODCALLTYPE* Release)(IGamepad* This);
-    HRESULT(STDMETHODCALLTYPE* GetIids)(IGamepad* This, ULONG* iidCount, IID** iids);
-    HRESULT(STDMETHODCALLTYPE* GetRuntimeClassName)(IGamepad* This, HSTRING* className);
-    HRESULT(STDMETHODCALLTYPE* GetTrustLevel)(IGamepad* This, int* trustLevel);
-    HRESULT(STDMETHODCALLTYPE* GetCurrentReading)(IGamepad* This, GamepadReading* reading);
-    HRESULT(STDMETHODCALLTYPE* get_Vibration)(IGamepad* This, GamepadVibration* vibration);
-    HRESULT(STDMETHODCALLTYPE* put_Vibration)(IGamepad* This, GamepadVibration vibration);
-    HRESULT(STDMETHODCALLTYPE* add_GamepadRemoved)(IGamepad* This, IUnknown* handler, void* token);
-    HRESULT(STDMETHODCALLTYPE* remove_GamepadRemoved)(IGamepad* This, void* token);
-    HRESULT(STDMETHODCALLTYPE* add_GamepadAdded)(IGamepad* This, IUnknown* handler, void* token);
-    HRESULT(STDMETHODCALLTYPE* remove_GamepadAdded)(IGamepad* This, void* token);
-};
-
-struct IGamepad {
-    IGamepadVtbl* lpVtbl;
-};
-
-struct IVectorViewVtbl {
-    HRESULT(STDMETHODCALLTYPE* QueryInterface)(IVectorView* This, REFIID riid, void** ppvObject);
-    ULONG(STDMETHODCALLTYPE* AddRef)(IVectorView* This);
-    ULONG(STDMETHODCALLTYPE* Release)(IVectorView* This);
-    HRESULT(STDMETHODCALLTYPE* GetIids)(IVectorView* This, ULONG* iidCount, IID** iids);
-    HRESULT(STDMETHODCALLTYPE* GetRuntimeClassName)(IVectorView* This, HSTRING* className);
-    HRESULT(STDMETHODCALLTYPE* GetTrustLevel)(IVectorView* This, int* trustLevel);
-    HRESULT(STDMETHODCALLTYPE* GetAt)(IVectorView* This, UINT32 index, IGamepad** item);
-    HRESULT(STDMETHODCALLTYPE* get_Size)(IVectorView* This, UINT32* size);
-    HRESULT(STDMETHODCALLTYPE* IndexOf)(IVectorView* This, IGamepad* value, UINT32* index, BOOL* found);
-    HRESULT(STDMETHODCALLTYPE* GetMany)(IVectorView* This, UINT32 startIndex, UINT32 capacity, IGamepad** items, UINT32* actual);
-};
-
-struct IVectorView {
-    IVectorViewVtbl* lpVtbl;
-};
-
-struct IGamepadStaticsVtbl {
-    HRESULT(STDMETHODCALLTYPE* QueryInterface)(IGamepadStatics* This, REFIID riid, void** ppvObject);
-    ULONG(STDMETHODCALLTYPE* AddRef)(IGamepadStatics* This);
-    ULONG(STDMETHODCALLTYPE* Release)(IGamepadStatics* This);
-    HRESULT(STDMETHODCALLTYPE* GetIids)(IGamepadStatics* This, ULONG* iidCount, IID** iids);
-    HRESULT(STDMETHODCALLTYPE* GetRuntimeClassName)(IGamepadStatics* This, HSTRING* className);
-    HRESULT(STDMETHODCALLTYPE* GetTrustLevel)(IGamepadStatics* This, int* trustLevel);
-    HRESULT(STDMETHODCALLTYPE* get_Gamepads)(IGamepadStatics* This, IVectorView** gamepads);
-    HRESULT(STDMETHODCALLTYPE* add_GamepadAdded)(IGamepadStatics* This, IUnknown* handler, void* token);
-    HRESULT(STDMETHODCALLTYPE* remove_GamepadAdded)(IGamepadStatics* This, void* token);
-    HRESULT(STDMETHODCALLTYPE* add_GamepadRemoved)(IGamepadStatics* This, IUnknown* handler, void* token);
-    HRESULT(STDMETHODCALLTYPE* remove_GamepadRemoved)(IGamepadStatics* This, void* token);
-};
-
-struct IGamepadStatics {
-    IGamepadStaticsVtbl* lpVtbl;
-};
-
-typedef struct IGamepad2Vtbl {
-    HRESULT (STDMETHODCALLTYPE* QueryInterface)(void* This, REFIID riid, void** ppvObject);
-    ULONG (STDMETHODCALLTYPE* AddRef)(void* This);
-    ULONG (STDMETHODCALLTYPE* Release)(void* This);
-    HRESULT (STDMETHODCALLTYPE* GetIids)(void* This, ULONG* iidCount, IID** iids);
-    HRESULT (STDMETHODCALLTYPE* GetRuntimeClassName)(void* This, HSTRING* className);
-    HRESULT (STDMETHODCALLTYPE* GetTrustLevel)(void* This, TrustLevel* trustLevel);
-    HRESULT (STDMETHODCALLTYPE* get_Vibration)(void* This, GamepadVibration* value);
-    HRESULT (STDMETHODCALLTYPE* put_Vibration)(void* This, GamepadVibration value);
-} IGamepad2Vtbl;
-
-typedef struct IGamepad2 {
-    IGamepad2Vtbl* lpVtbl;
-} IGamepad2;
-
-
-// --- Helper macros ---
-#define SAFE_RELEASE(p) do { if (p) { (p)->lpVtbl->Release(p); (p) = NULL; } } while (0)
-
 // --- pal_gamepad_state (simplified) ---
 typedef struct win32_gamepad_context{
     uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
     XINPUT_STATE xinput_state[MAX_XINPUT_CONTROLLERS];
-
-    // windows gaming input.
-    IVectorView* wgi_gamepads;
-    UINT32 wgi_count;
 
     uint8_t raw_input_buffer[1024];  // <-- THIS IS THE BUFFER
 
@@ -1327,48 +1215,11 @@ typedef struct win32_gamepad_context{
 }win32_gamepad_context;
 win32_gamepad_context win32_gamepad_ctx = {0};
 
-static const wchar_t* RuntimeClass_Gamepad = L"Windows.Gaming.Input.Gamepad";
-
-int init_windows_gaming_input(void) {
-    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
-    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return 0;
-
-    HSTRING class_str;
-    hr = WindowsCreateString(RuntimeClass_Gamepad, (UINT32)wcslen(RuntimeClass_Gamepad), &class_str);
-    if (FAILED(hr)) return 0;
-
-    hr = RoGetActivationFactory(class_str, &IID_IGamepadStatics, (void**)&g_statics);
-    WindowsDeleteString(class_str);
-
-    return SUCCEEDED(hr);
-}
-
 // --- platform_get_gamepad_count ---
 
 int platform_get_gamepad_count(void) {
-    UINT32 wgi_count = 0;
-    IVectorView* gamepads = NULL;
-
-    if (g_statics && SUCCEEDED(g_statics->lpVtbl->get_Gamepads(g_statics, (IVectorView**)&gamepads)) && gamepads) {
-        gamepads->lpVtbl->get_Size(gamepads, &wgi_count);
-    }
-    SAFE_RELEASE(gamepads);
-
-    win32_gamepad_ctx.wgi_count = wgi_count;
-
-    // Track XInput slots used by WGI
-    pal_bool xinput_slot_used[MAX_XINPUT_CONTROLLERS] = { FALSE };
-    for (UINT32 i = 0; i < wgi_count && i < MAX_XINPUT_CONTROLLERS; ++i) {
-        xinput_slot_used[i] = TRUE;
-    }
-
     // Poll remaining XInput slots
     for (DWORD i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
-        if (xinput_slot_used[i]) {
-            // we check xinput_connected when polling input to ensure that the same gamepad is not polled twice when it's in xinput and wgi.
-            win32_gamepad_ctx.xinput_connected[i] = FALSE; 
-            continue;
-        }
 
         XINPUT_STATE state;
         if (XinputGetstate_fn(i, &state) == ERROR_SUCCESS) {
@@ -1379,7 +1230,7 @@ int platform_get_gamepad_count(void) {
         }
     }
 
-    int total_count = (int)wgi_count;
+    int total_count = 0;
     for (int i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
         if (win32_gamepad_ctx.xinput_connected[i]) total_count++;
     }
@@ -1532,7 +1383,7 @@ void platform_set_gamepad_vibration(int controller_id, float left_motor, float r
             WORD wRightMotorSpeed;
             WORD wLeftTriggerMotor;
             WORD wRightTriggerMotor;
-        } vibration_ex;
+        } vibration_ex; // we call it this to avoid potential naming conflicts.
 
         vibration_ex.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
         vibration_ex.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
