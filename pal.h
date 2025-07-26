@@ -1106,6 +1106,7 @@ extern "C" {
 #endif
 
 PALAPI void pal_init();
+PALAPI void pal_shutdown();
 PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags);
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window);
@@ -1119,7 +1120,7 @@ PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_p
 PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size);
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
-PALAPI void* gl_get_proc_address(const unsigned char* proc);
+PALAPI void* pal_gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
 PALAPI int pal_make_context_current(pal_window* window);
 PALAPI uint8_t is_key_pressed(int key);

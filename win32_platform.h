@@ -28,6 +28,11 @@
 #include <winstring.h>
 
 #include "pal_platform.h"
+// Global function pointers
+static DWORD (WINAPI *XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE* pState) = NULL;
+static DWORD (WINAPI *XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration) = NULL;
+static DWORD (WINAPI *XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL;
+static void  (WINAPI *XInputEnable_fn)(BOOL enable) = NULL;
 
 typedef unsigned __int64 QWORD;
 
@@ -35,6 +40,10 @@ static HDC s_fakeDC = { 0 };
 
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
+
+// Global state
+static HMODULE g_xinput_dll = NULL;
+static pal_bool g_has_trigger_motors = FALSE;
 
 struct pal_window {
 	uint32_t id;
@@ -1328,7 +1337,7 @@ int platform_get_gamepad_count(void) {
         }
 
         XINPUT_STATE state;
-        if (XInputGetState(i, &state) == ERROR_SUCCESS) {
+        if (XinputGetstate_fn(i, &state) == ERROR_SUCCESS) {
             win32_gamepad_ctx.xinput_connected[i] = TRUE;
             win32_gamepad_ctx.xinput_state[i] = state;
         } else {
@@ -1343,189 +1352,167 @@ int platform_get_gamepad_count(void) {
 
     return total_count;
 }
-// --- platform_gamepad_get_state ---
 
-#define GamepadButtons_None             0x0000
-#define GamepadButtons_Menu             0x0001  // Start button
-#define GamepadButtons_View             0x0002  // Back button
-#define GamepadButtons_DPadUp           0x0004
-#define GamepadButtons_DPadDown         0x0008
-#define GamepadButtons_DPadLeft         0x0010
-#define GamepadButtons_DPadRight        0x0020
-#define GamepadButtons_LeftThumbstick  0x0040
-#define GamepadButtons_RightThumbstick 0x0080
-#define GamepadButtons_LeftShoulder    0x0100
-#define GamepadButtons_RightShoulder   0x0200
-#define GamepadButtons_A                0x1000
-#define GamepadButtons_B                0x2000
-#define GamepadButtons_X                0x4000
-#define GamepadButtons_Y                0x8000
+void platform_init_gamepads() {
+    //---------------
+    //     Xinput
+    //---------------
+
+    // Try XInput 1.4 first (Windows 8+, has trigger motors)
+    g_xinput_dll = LoadLibraryW(L"xinput1_4.dll");
+    if (g_xinput_dll) {
+        g_has_trigger_motors = TRUE;
+    } else {
+        // Fallback to XInput 1.3 (Windows Vista/7)
+        g_xinput_dll = LoadLibraryW(L"xinput1_3.dll");
+        if (!g_xinput_dll) {
+            // Last resort: XInput 9.1.0 (Windows 7 compatibility)
+            g_xinput_dll = LoadLibraryW(L"xinput9_1_0.dll");
+        }
+        g_has_trigger_motors = FALSE;
+    }
+
+    if (!g_xinput_dll) {
+        return FALSE;
+    }
+    // Load function pointers
+    XinputGetstate_fn = (DWORD (WINAPI *)(DWORD, XINPUT_STATE*))GetProcAddress(g_xinput_dll, "XInputGetState");
+    XInputSetState_fn = (DWORD (WINAPI *)(DWORD, XINPUT_VIBRATION*))GetProcAddress(g_xinput_dll, "XInputSetState");
+    XInputGetCapabilities_fn = (DWORD (WINAPI *)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities");
+    XInputEnable_fn = (void (WINAPI *)(BOOL))GetProcAddress(g_xinput_dll, "XInputEnable");
+
+    // Check if we got the essential functions
+    if (!XinputGetstate_fn || !XInputSetState_fn) {
+        FreeLibrary(g_xinput_dll);
+        g_xinput_dll = NULL;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+void platform_shutdown_gamepads() {
+    if (g_xinput_dll) {
+        FreeLibrary(g_xinput_dll);
+        g_xinput_dll = NULL;
+    }
+    
+    XinputGetstate_fn = NULL;
+    XInputSetState_fn = NULL;
+    XInputGetCapabilities_fn = NULL;
+    XInputEnable_fn = NULL;
+    g_has_trigger_motors = FALSE;
+}
 
 pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     memset(out_state, 0, sizeof(pal_gamepad_state));
 
-    // WGI controllers
-    if (g_statics && index < (int)win32_gamepad_ctx.wgi_count) {
-        IVectorView* gamepads = NULL;
-        if (FAILED(g_statics->lpVtbl->get_Gamepads(g_statics, (IVectorView**)&gamepads)) || !gamepads)
-            return FALSE;
-
-        IGamepad* pad = NULL;
-        HRESULT hr = gamepads->lpVtbl->GetAt(gamepads, (UINT32)index, &pad);
-        SAFE_RELEASE(gamepads);
-        if (FAILED(hr) || !pad) return FALSE;
-
-        GamepadReading reading = {0};
-        hr = pad->lpVtbl->GetCurrentReading(pad, &reading);
-        SAFE_RELEASE(pad);
-        if (FAILED(hr)) return FALSE;
-
-        // Normalize & deadzone
-        const float DEADZONE = 0.25f;
-        float lx = reading.LeftThumbstickX;
-        float ly = reading.LeftThumbstickY;
-        float rx = reading.RightThumbstickX;
-        float ry = reading.RightThumbstickY;
-
-        if (sqrtf(lx*lx + ly*ly) < DEADZONE) lx = ly = 0;
-        if (sqrtf(rx*rx + ry*ry) < DEADZONE) rx = ry = 0;
-
-        out_state->axes.left_x = lx;
-        out_state->axes.left_y = ly;
-        out_state->axes.right_x = rx;
-        out_state->axes.right_y = ry;
-        out_state->axes.left_trigger = reading.LeftTrigger;
-        out_state->axes.right_trigger = reading.RightTrigger;
-
-        out_state->buttons.a = (reading.Buttons & GamepadButtons_A) != 0;
-        out_state->buttons.b = (reading.Buttons & GamepadButtons_B) != 0;
-        out_state->buttons.x = (reading.Buttons & GamepadButtons_X) != 0;
-        out_state->buttons.y = (reading.Buttons & GamepadButtons_Y) != 0;
-        out_state->buttons.back = (reading.Buttons & GamepadButtons_View) != 0;
-        out_state->buttons.start = (reading.Buttons & GamepadButtons_Menu) != 0;
-        out_state->buttons.left_stick = (reading.Buttons & GamepadButtons_LeftThumbstick) != 0;
-        out_state->buttons.right_stick = (reading.Buttons & GamepadButtons_RightThumbstick) != 0;
-        out_state->buttons.left_shoulder = (reading.Buttons & GamepadButtons_LeftShoulder) != 0;
-        out_state->buttons.right_shoulder = (reading.Buttons & GamepadButtons_RightShoulder) != 0;
-        out_state->buttons.dpad_up = (reading.Buttons & GamepadButtons_DPadUp) != 0;
-        out_state->buttons.dpad_down = (reading.Buttons & GamepadButtons_DPadDown) != 0;
-        out_state->buttons.dpad_left = (reading.Buttons & GamepadButtons_DPadLeft) != 0;
-        out_state->buttons.dpad_right = (reading.Buttons & GamepadButtons_DPadRight) != 0;
-
-        strncpy(out_state->name, "Windows Gaming Input Controller", sizeof(out_state->name));
-        out_state->vendor_id = 0x045E;
-        out_state->product_id = 0;
-        out_state->connected = TRUE;
-        out_state->is_xinput = FALSE;
-        return TRUE;
+    // XInput controllers only
+    if (index >= MAX_XINPUT_CONTROLLERS) {
+        return FALSE;
     }
 
-    // XInput controllers
-    index -= (int)win32_gamepad_ctx.wgi_count;
-
-    for (int i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
-        if (win32_gamepad_ctx.xinput_connected[i]) {
-            if (index == 0) {
-                const XINPUT_GAMEPAD* pad = &win32_gamepad_ctx.xinput_state[i].Gamepad;
-
-                float lx = (float)pad->sThumbLX;
-                float ly = (float)pad->sThumbLY;
-                float rx = (float)pad->sThumbRX;
-                float ry = (float)pad->sThumbRY;
-
-                if (abs((int)lx) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) lx = 0;
-                if (abs((int)ly) < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) ly = 0;
-                if (abs((int)rx) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) rx = 0;
-                if (abs((int)ry) < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) ry = 0;
-
-                out_state->axes.left_x = fmaxf(-1.0f, lx / 32767.0f);
-                out_state->axes.left_y = fmaxf(-1.0f, ly / 32767.0f);
-                out_state->axes.right_x = fmaxf(-1.0f, rx / 32767.0f);
-                out_state->axes.right_y = fmaxf(-1.0f, ry / 32767.0f);
-
-                out_state->axes.left_trigger = (pad->bLeftTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bLeftTrigger / 255.0f);
-                out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bRightTrigger / 255.0f);
-
-                WORD b = pad->wButtons;
-                out_state->buttons.a = (b & XINPUT_GAMEPAD_A) != 0;
-                out_state->buttons.b = (b & XINPUT_GAMEPAD_B) != 0;
-                out_state->buttons.x = (b & XINPUT_GAMEPAD_X) != 0;
-                out_state->buttons.y = (b & XINPUT_GAMEPAD_Y) != 0;
-                out_state->buttons.back = (b & XINPUT_GAMEPAD_BACK) != 0;
-                out_state->buttons.start = (b & XINPUT_GAMEPAD_START) != 0;
-                out_state->buttons.left_stick = (b & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
-                out_state->buttons.right_stick = (b & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
-                out_state->buttons.left_shoulder = (b & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
-                out_state->buttons.right_shoulder = (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
-                out_state->buttons.dpad_up = (b & XINPUT_GAMEPAD_DPAD_UP) != 0;
-                out_state->buttons.dpad_down = (b & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
-                out_state->buttons.dpad_left = (b & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
-                out_state->buttons.dpad_right = (b & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
-
-                strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name));
-                out_state->vendor_id = 0x045E;
-                out_state->product_id = (uint16_t)0xDEADBEEF;
-                out_state->connected = TRUE;
-                out_state->is_xinput = TRUE;
-                return TRUE;
-            }
-            --index;
-        }
+    // Check if this specific controller slot is connected
+    if (!win32_gamepad_ctx.xinput_connected[index]) {
+        return FALSE;
     }
 
-    return FALSE;
+    const XINPUT_GAMEPAD* pad = &win32_gamepad_ctx.xinput_state[index].Gamepad;
+
+    // Process analog sticks with proper deadzone handling
+    float lx = (float)pad->sThumbLX;
+    float ly = (float)pad->sThumbLY;
+    float rx = (float)pad->sThumbRX;
+    float ry = (float)pad->sThumbRY;
+
+    // Apply circular deadzone for left stick
+    float left_magnitude = sqrtf(lx * lx + ly * ly);
+    if (left_magnitude < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
+        lx = ly = 0;
+    } else {
+        // Normalize to remove deadzone
+        float normalized = (left_magnitude - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / 
+                          (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        lx = (lx / left_magnitude) * normalized;
+        ly = (ly / left_magnitude) * normalized;
+    }
+
+    // Apply circular deadzone for right stick
+    float right_magnitude = sqrtf(rx * rx + ry * ry);
+    if (right_magnitude < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
+        rx = ry = 0;
+    } else {
+        // Normalize to remove deadzone
+        float normalized = (right_magnitude - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) / 
+                          (32767.0f - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        rx = (rx / right_magnitude) * normalized;
+        ry = (ry / right_magnitude) * normalized;
+    }
+
+    out_state->axes.left_x = fmaxf(-1.0f, fminf(1.0f, lx));
+    out_state->axes.left_y = fmaxf(-1.0f, fminf(1.0f, ly));
+    out_state->axes.right_x = fmaxf(-1.0f, fminf(1.0f, rx));
+    out_state->axes.right_y = fmaxf(-1.0f, fminf(1.0f, ry));
+
+    // Process triggers with deadzone
+    out_state->axes.left_trigger = (pad->bLeftTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 
+                                   0.0f : (pad->bLeftTrigger / 255.0f);
+    out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 
+                                    0.0f : (pad->bRightTrigger / 255.0f);
+
+    // Process buttons
+    WORD b = pad->wButtons;
+    out_state->buttons.a = (b & XINPUT_GAMEPAD_A) != 0;
+    out_state->buttons.b = (b & XINPUT_GAMEPAD_B) != 0;
+    out_state->buttons.x = (b & XINPUT_GAMEPAD_X) != 0;
+    out_state->buttons.y = (b & XINPUT_GAMEPAD_Y) != 0;
+    out_state->buttons.back = (b & XINPUT_GAMEPAD_BACK) != 0;
+    out_state->buttons.start = (b & XINPUT_GAMEPAD_START) != 0;
+    out_state->buttons.left_stick = (b & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
+    out_state->buttons.right_stick = (b & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
+    out_state->buttons.left_shoulder = (b & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
+    out_state->buttons.right_shoulder = (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
+    out_state->buttons.dpad_up = (b & XINPUT_GAMEPAD_DPAD_UP) != 0;
+    out_state->buttons.dpad_down = (b & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
+    out_state->buttons.dpad_left = (b & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
+    out_state->buttons.dpad_right = (b & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
+
+    // Set controller info
+    strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
+    out_state->name[sizeof(out_state->name) - 1] = '\0';
+    out_state->vendor_id = 0x045E;  // Microsoft
+    out_state->product_id = 0xDEADBEEF;  // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
+    out_state->connected = TRUE;
+    out_state->is_xinput = TRUE;
+
+    return TRUE;
 }
-// --- platform_set_controller_vibration ---
 
 void platform_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
-    // Clamp all values to [0.0f, 1.0f]
-    if (left_motor < 0.0f) left_motor = 0.0f;
-    if (left_motor > 1.0f) left_motor = 1.0f;
-    if (right_motor < 0.0f) right_motor = 0.0f;
-    if (right_motor > 1.0f) right_motor = 1.0f;
+    if (!XInputSetState_fn || controller_id > 4) return;
 
-    // --- WGI Gamepads ---
-    if (controller_id >= 0 && controller_id < (int)win32_gamepad_ctx.wgi_count && win32_gamepad_ctx.wgi_gamepads) {
-        IGamepad* gamepad = NULL;
-        HRESULT hr = win32_gamepad_ctx.wgi_gamepads->lpVtbl->GetAt(
-            win32_gamepad_ctx.wgi_gamepads,
-            (UINT32)controller_id,
-            &gamepad
-        );
+    if (g_has_trigger_motors) {
+        // Extended vibration structure with trigger motors (XInput 1.4+)
+        struct {
+            WORD wLeftMotorSpeed;
+            WORD wRightMotorSpeed;
+            WORD wLeftTriggerMotor;
+            WORD wRightTriggerMotor;
+        } vibration_ex;
 
-        if (SUCCEEDED(hr) && gamepad) {
-            // Try to query IGamepad2 for trigger vibration support
-            IGamepad2* gamepad2 = NULL;
-            hr = gamepad->lpVtbl->QueryInterface(gamepad, &IID_IGamepad2, (void**)&gamepad2);
-            if (SUCCEEDED(hr) && gamepad2) {
-                GamepadVibration vibration = {
-                    .LeftMotor = left_motor,
-                    .RightMotor = right_motor,
-                    .LeftTrigger = left_trigger,
-                    .RightTrigger = right_trigger
-                };
-                gamepad2->lpVtbl->put_Vibration(gamepad2, vibration);
-                gamepad2->lpVtbl->Release(gamepad2);
-                gamepad->lpVtbl->Release(gamepad);
-                return;
-            }
+        vibration_ex.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
+        vibration_ex.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
+        vibration_ex.wLeftTriggerMotor = (WORD)(left_trigger * 65535.0f);
+        vibration_ex.wRightTriggerMotor = (WORD)(right_trigger * 65535.0f);
 
-            // Fallback: if only IGamepad (no trigger vibration support)
-            GamepadVibration vib = { left_motor, right_motor, 0.0f, 0.0f };
-            gamepad->lpVtbl->put_Vibration(gamepad, vib);
-            gamepad->lpVtbl->Release(gamepad);
-            return;
-        }
-    }
+        XInputSetState_fn(controller_id, (XINPUT_VIBRATION*)&vibration_ex);
+    } else {
+        // Standard vibration (XInput 9.1.0/1.3)
+        XINPUT_VIBRATION vibration;
+        vibration.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
+        vibration.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
 
-    // --- XInput Gamepads ---
-    int xinput_index = controller_id - (int)win32_gamepad_ctx.wgi_count;
-    if (xinput_index >= 0 && xinput_index < MAX_XINPUT_CONTROLLERS && win32_gamepad_ctx.xinput_connected[xinput_index]) {
-        XINPUT_VIBRATION vibration = {
-            .wLeftMotorSpeed = (WORD)(left_motor * 65535.0f),
-            .wRightMotorSpeed = (WORD)(right_motor * 65535.0f)
-        };
-        XInputSetState(xinput_index, &vibration);
+        XInputSetState_fn(controller_id, &vibration);
     }
 }
 

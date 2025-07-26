@@ -15,6 +15,11 @@
 PALAPI void pal_init() {
 	platform_init_sound();
 	get_device_handle();
+    platform_init_gamepads();
+}
+
+PALAPI void pal_shutdown() {
+    platform_shutdown_gamepads();
 }
 
 /*
@@ -72,11 +77,12 @@ PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size)
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
 	return platform_get_video_mode(monitor);
 }
+
 PALAPI pal_monitor* pal_get_primary_monitor(void) {
 	return platform_get_primary_monitor();
 }
 
-PALAPI void* gl_get_proc_address(const unsigned char* proc) {
+PALAPI void* pal_gl_get_proc_address(const unsigned char* proc) {
 	return platform_gl_get_proc_address(proc);
 }
 
