@@ -541,6 +541,18 @@ uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
     return platform_copy_file(original_path, copy_path);
 }
 
+PALAPI pal_file* pal_open_file(const char* file_path) {
+    return platform_open_file(file_path);
+}
+
+PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
+     return platform_read_from_open_file(file, offset, bytes_to_read, buffer);
+}
+
+PALAPI pal_bool pal_close_file(pal_file* file) {
+    return platform_close_file(file);
+}
+
 /*
 
 ###########################################

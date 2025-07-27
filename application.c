@@ -62,7 +62,7 @@ int main() {
     uint8_t running = TRUE;
     pal_event event;
     pal_gamepad_state state;
-    pal_make_window_fullscreen(window);
+    //pal_make_window_fullscreen(window);
     while (running) {
 		while (pal_poll_events(&event, window))
 		{

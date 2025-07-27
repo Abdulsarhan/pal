@@ -2,6 +2,7 @@ Now:
 
 Make it so that you can alt-tab out of a fullscreen window.
 Integrate gamepad system into the window events.
+Some functions return 0 on success, others return 1. Audit each function and make sure that all of them return 1 on success and 0 on failure.
 
 Later:
 

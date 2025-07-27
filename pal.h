@@ -12,15 +12,8 @@ typedef struct pal_video_mode {
     int bits_per_pixel;
 }pal_video_mode;
 
-typedef struct {
+typedef struct pal_file{
     void* handle;
-    uint64_t creation_time;
-    uint64_t last_access_time;
-    uint64_t last_write_time;
-    uint64_t file_size;
-
-    pal_bool readonly;
-    pal_bool directory;
 } pal_file;
 
 typedef struct pal_sound pal_sound;
@@ -1169,6 +1162,11 @@ PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permi
 PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
 PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size , char* buffer);
 PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
+
+//Open File I/O
+PALAPI pal_file* pal_open_file(const char* file_path);
+PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer);
+PALAPI pal_bool pal_close_file(pal_file* file);
 
 // File Parsing
 PALAPI uint8_t pal_is_uppercase(char ch);

@@ -2226,6 +2226,67 @@ uint8_t platform_copy_file(const char* original_path, const char* copy_path) {
     return CopyFileA(original_path, copy_path, FALSE) ? 0 : 1;
 }
 
+pal_file* platform_open_file(const char* file_path) {
+    pal_file* file = (pal_file*)malloc(sizeof(pal_file));
+    file->handle = CreateFileA(
+        file_path,              // File name
+        GENERIC_READ,           // Desired access
+        FILE_SHARE_READ,        // Share mode
+        NULL,                   // Security attributes
+        OPEN_EXISTING,          // Creation disposition
+        FILE_ATTRIBUTE_NORMAL,  // Flags and attributes
+        NULL                    // Template file
+    );
+
+    if (file->handle == INVALID_HANDLE_VALUE) {
+        DWORD error = GetLastError();
+        // Optional: Log or handle error here
+        return NULL;
+    }
+
+    return file;
+}
+
+pal_bool platform_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
+    if (!file || file->handle == INVALID_HANDLE_VALUE || !buffer) {
+        return 0;
+    }
+
+    LARGE_INTEGER file_offset = {0};
+    file_offset.QuadPart = (LONGLONG)offset;
+
+    if (!SetFilePointerEx(file->handle, file_offset, NULL, FILE_BEGIN)) {
+        return 0;
+    }
+
+    size_t total_read = 0;
+    DWORD to_read;
+    while (total_read < bytes_to_read) {
+        if ((DWORD)((bytes_to_read - total_read) > MAXDWORD)) {
+            to_read = MAXDWORD;
+        }
+        else {
+            to_read = (bytes_to_read - total_read);
+        }
+        DWORD bytesRead = 0;
+        BOOL success = ReadFile(file->handle, buffer + total_read, to_read, &bytesRead, NULL);
+        if (!success || bytesRead != to_read) {
+            return 0;
+        }
+        total_read += bytesRead;
+    }
+
+    return 1;
+}
+
+pal_bool platform_close_file(pal_file* file) {
+    if (!CloseHandle(file->handle)) {
+        return 0;
+    }
+    free(file);
+    return 1;
+}
+
 //----------------------------------------------------------------------------------
 // Sound Functions.
 //----------------------------------------------------------------------------------
@@ -2264,6 +2325,7 @@ static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds)
     size_t bytes_per_second = sound->sample_rate * sound->channels * (sound->bits_per_sample / 8);
     return (size_t)(bytes_per_second * seconds);
 }
+
 static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
     size_t bytes_read = 0;
     
