@@ -1,10 +1,10 @@
 Now:
+
+Make it so that you can alt-tab out of a fullscreen window.
 Integrate gamepad system into the window events.
 
-Fix popping sound on the load of the second chunk for wav files.
-
 Later:
-Fully integrate new gamepad system that supports all gamepads.
 
+Fully integrate new gamepad system that supports all gamepads.
 Implement linux_x11_platform.h.
 Implement linux_wayland_platform.h
