@@ -36,26 +36,26 @@ static void  (WINAPI *XInputEnable_fn)(BOOL enable) = NULL;
 
 typedef unsigned __int64 QWORD;
 
-static HDC s_fakeDC = { 0 };
-
-IXAudio2* g_xaudio2 = NULL;
-IXAudio2MasteringVoice* g_mastering_voice = NULL;
-
 // Global state
 static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = FALSE;
 
+static HDC s_fakeDC = { 0 };
+
+pal_window* g_current_window;
+IXAudio2* g_xaudio2 = NULL;
+IXAudio2MasteringVoice* g_mastering_voice = NULL;
+
 struct pal_window {
-	uint32_t id;
 	HWND hwnd;
 	HDC hdc;
 	HGLRC hglrc;
     LONG windowedStyle;
-    RECT windowedRect;
     pal_event_queue queue;
     pal_bool message_pump_drained;
     pal_bool confine_mouse;
-    pal_bool mouse_inside_window;
+    float width;
+    float height;
 };
 
 struct pal_monitor {
@@ -402,7 +402,6 @@ typedef struct {
 
 pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
-    GetWindowRect(window->hwnd, &window->windowedRect);
 
     DEVMODE dm = {0};
     dm.dmSize = sizeof(dm);
@@ -427,14 +426,13 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
 
 pal_bool platform_make_window_fullscreen(pal_window* window) {
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
-    GetWindowRect(window->hwnd, &window->windowedRect);
-    int width = window->windowedRect.right - window->windowedRect.left;
-    int height = window->windowedRect.bottom - window->windowedRect.top;
+    int width = window->width;
+    int height = window->height;
     DEVMODE dm = {0};
     EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
     dm.dmSize = sizeof(dm);
-    dm.dmPelsWidth = width;
-    dm.dmPelsHeight = height;
+    dm.dmPelsWidth = 1280;
+    dm.dmPelsHeight = 720;
     dm.dmBitsPerPel = 32;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
@@ -445,7 +443,7 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
 
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
-        width, height,
+        dm.dmPelsWidth, dm.dmPelsHeight,
         SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 
     return TRUE;
@@ -454,7 +452,6 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
 pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
     // Save the current window style and rect
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
-    GetWindowRect(window->hwnd, &window->windowedRect);
 
     // Get the monitor bounds
     HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
@@ -486,12 +483,13 @@ pal_bool platform_make_window_windowed(pal_window* window) {
         MessageBoxA(window->hwnd, "Failed to restore window style.", "Error", MB_OK);
         return FALSE;
     }
-
+    RECT rect;
+    GetWindowRect(window->hwnd, &rect);
     // Restore the window's size and position
     if (!SetWindowPos(window->hwnd, NULL,
-        window->windowedRect.left, window->windowedRect.top,
-        window->windowedRect.right - window->windowedRect.left,
-        window->windowedRect.bottom - window->windowedRect.top,
+        rect.left, rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
         SWP_NOZORDER | SWP_FRAMECHANGED)) {
         MessageBoxA(window->hwnd, "Failed to restore window position.", "Error", MB_OK);
         return FALSE;
@@ -751,402 +749,6 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     return hIcon;
 }
 
-int platform_translate_message(MSG msg, pal_window* window) {
-    pal_event event = {0};
-    switch (msg.message) {
-        case WM_DESTROY:
-            PostQuitMessage(0);
-        case WM_QUIT:
-        case WM_CLOSE:
-            event.type = PAL_QUIT;
-            event.quit = (pal_quit_event){ .code = 0 };
-            break;
-		case WM_MOVE:
-			event.type = PAL_WINDOW_EVENT;
-			event.window = (pal_window_event){
-				.windowid = window->id,
-				.event_code = WM_MOVE,
-				.x = LOWORD(msg.lParam),
-				.y = HIWORD(msg.lParam),
-				.width = 0,
-				.height = 0,
-				.focused = 1,
-				.visible = 1
-			};
-			break;
-		case WM_SIZE:
-			event.type = PAL_WINDOW_EVENT;
-			event.window = (pal_window_event){
-				.windowid = window->id,
-				.event_code = WM_SIZE,
-				.x = 0,
-				.y = 0,
-				.width = LOWORD(msg.lParam),
-				.height = HIWORD(msg.lParam),
-				.focused = 1,
-				.visible = 1
-			};
-			break;
-
-        case WM_MOUSEMOVE: {
-			if (!window->mouse_inside_window)
-				window->mouse_inside_window = TRUE;
-
-            if (window->confine_mouse) {
-				TRACKMOUSEEVENT tme = {
-					.cbSize = sizeof(tme),
-					.dwFlags = TME_LEAVE,
-					.hwndTrack = window->hwnd,
-					.dwHoverTime = HOVER_DEFAULT
-				};
-				TrackMouseEvent(&tme);
-				RECT rect;
-				GetClientRect(window->hwnd, &rect);
-				POINT tl = { rect.left, rect.top };
-				POINT br = { rect.right, rect.bottom };
-				ClientToScreen(window->hwnd, &tl);
-				ClientToScreen(window->hwnd, &br);
-				rect.left = tl.x;
-				rect.top = tl.y;
-				rect.right = br.x;
-				rect.bottom = br.y;
-				ClipCursor(&rect);
-            }
-            // Mouse just entered the window
-            event.type = PAL_MOUSE_MOTION;
-            event.motion = (pal_mouse_motion_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .delta_x = input.mouse_delta.x,
-                .delta_y = input.mouse_delta.y,
-                .buttons = msg.wParam
-            };
-        }; break;
-
-    case WM_MOUSELEAVE:
-        window->mouse_inside_window = FALSE;
-        ClipCursor(NULL);
-        // Mouse just left the window
-        DefWindowProcA(window->hwnd, msg.message, msg.wParam, msg.lParam);
-        break;
-        case WM_WINDOWPOSCHANGED:
-        case WM_WINDOWPOSCHANGING:
-            event.type = PAL_WINDOW_EVENT;
-            WINDOWPOS* pos = (WINDOWPOS*)msg.lParam;
-            event.window = (pal_window_event){
-                .windowid = window->id,
-                .event_code = msg.message,
-                .x = pos->x,
-                .y = pos->y,
-                .width = pos->cx,
-                .height = pos->cy,
-                .focused = 1, // This is wrong, fix.
-                .visible = 1
-            };
-            break;
-        case WM_LBUTTONDOWN: 
-        case WM_RBUTTONDOWN: 
-        case WM_MBUTTONDOWN: 
-        case WM_XBUTTONDOWN: {
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .pressed = 1,
-                .clicks = 1,
-                .modifiers = msg.wParam,
-                .button = win32_button_to_pal_button[msg.message - WM_LBUTTONDOWN]
-            };
-
-            if (msg.message == WM_XBUTTONDOWN) {
-                WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
-                if (xButton == XBUTTON1) {
-                    event.button.button = PAL_MOUSE_4;
-                    input.mouse_buttons[PAL_MOUSE_4] = 1;
-                } else if (xButton == XBUTTON2) {
-                    event.button.button = PAL_MOUSE_5;
-                    input.mouse_buttons[PAL_MOUSE_5] = 1;
-                }
-            } else {
-                input.mouse_buttons[event.button.button] = 1;
-            }
-        } break;
-
-        case WM_LBUTTONDBLCLK:
-        case WM_RBUTTONDBLCLK:
-        case WM_MBUTTONDBLCLK:
-        case WM_XBUTTONDBLCLK: {
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .pressed = 1,
-                .clicks = 2,
-                .modifiers = msg.wParam,
-                .button = win32_button_to_pal_button[msg.message - WM_LBUTTONDOWN]
-            };
-
-            if (msg.message == WM_XBUTTONDBLCLK) {
-                WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
-                if (xButton == XBUTTON1) {
-                    event.button.button = PAL_MOUSE_4;
-                    input.mouse_buttons[PAL_MOUSE_4] = 1;
-                } else if (xButton == XBUTTON2) {
-                    event.button.button = PAL_MOUSE_5;
-                    input.mouse_buttons[PAL_MOUSE_5] = 1;
-                }
-            } else {
-                input.mouse_buttons[event.button.button] = 1;
-            }
-        } break;
-
-        case WM_LBUTTONUP:
-        case WM_RBUTTONUP:
-        case WM_MBUTTONUP:
-        case WM_XBUTTONUP: {
-            event.type = PAL_MOUSE_BUTTON_UP;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .pressed = 0,
-                .modifiers = msg.wParam,
-                .button = win32_button_to_pal_button[msg.message - WM_LBUTTONDOWN]
-            };
-
-            if (msg.message == WM_XBUTTONUP) {
-                WORD xButton = GET_XBUTTON_WPARAM(msg.wParam);
-                if (xButton == XBUTTON1) {
-                    event.button.button = PAL_MOUSE_4;
-                    input.mouse_buttons[PAL_MOUSE_4] = 0;
-                    input.mouse_buttons_processed[PAL_MOUSE_4] = 0;
-                } else if (xButton == XBUTTON2) {
-                    event.button.button = PAL_MOUSE_5;
-                    input.mouse_buttons[PAL_MOUSE_5] = 0;
-                    input.mouse_buttons_processed[PAL_MOUSE_5] = 0;
-                }
-            } else {
-                input.mouse_buttons[event.button.button] = 0;
-                input.mouse_buttons_processed[event.button.button] = 0;
-            }
-        } break;
-
-        case WM_MOUSEWHEEL:
-        case WM_MOUSEHWHEEL: {
-            int delta = GET_WHEEL_DELTA_WPARAM(msg.wParam);
-            event.type = PAL_MOUSE_WHEEL;
-            event.wheel = (pal_mouse_wheel_event){
-                .x = GET_X_LPARAM(msg.lParam),
-                .y = GET_Y_LPARAM(msg.lParam),
-                .delta_x = (msg.message == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .delta_y = (msg.message == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .modifiers = GET_KEYSTATE_WPARAM(msg.wParam)
-            };
-            break;
-        }
-		case WM_KEYDOWN:
-		case WM_SYSKEYDOWN: {
-			uint32_t vk = (uint32_t)msg.wParam;
-			uint8_t scancode = (msg.lParam >> 16) & 0xFF;
-			uint8_t extended = (msg.lParam >> 24) & 1;
-
-			uint16_t modifiers = 0;
-
-			switch (vk) {
-				case VK_SHIFT:
-					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
-						modifiers |= PAL_MOD_LSHIFT;
-					else
-						modifiers |= PAL_MOD_RSHIFT;
-					break;
-
-				case VK_CONTROL:
-					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
-					break;
-
-				case VK_MENU:
-					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
-					break;
-
-				case VK_LWIN:
-					modifiers |= PAL_MOD_LWINDOWS;
-					break;
-
-				case VK_RWIN:
-					modifiers |= PAL_MOD_RWINDOWS;
-					break;
-
-				case VK_NUMLOCK:
-					modifiers |= PAL_MOD_NUM;
-					break;
-
-				case VK_SCROLL:
-					modifiers |= PAL_MOD_SCROLL;
-					break;
-
-				case VK_PROCESSKEY:
-					modifiers |= PAL_MOD_ALTGR;
-					break;
-
-				case VK_SHIFT | 0x100: // Level 5 shift (user-defined)
-					modifiers |= PAL_MOD_LEVEL5SHIFT;
-					break;
-			}
-
-			// Check toggle states:
-			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
-			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
-			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
-
-			// AltGr detection: Right Alt + Ctrl
-			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
-				modifiers |= PAL_MOD_ALTGR;
-			}
-
-            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
-
-			event.type = PAL_KEY_DOWN;
-			event.key = (pal_keyboard_event){
-				.virtual_key = win32_key_to_pal_key[vk],
-				.scancode = pal_scancode,
-				.pressed = 1,
-				.repeat = (msg.lParam >> 30) & 1,
-				.modifiers = modifiers
-			};
-			input.keys[win32_key_to_pal_key[vk]] = 1;
-			break;
-		}
-
-		case WM_KEYUP:
-		case WM_SYSKEYUP: {
-			uint32_t vk = (uint32_t)msg.wParam;
-			uint8_t scancode = (msg.lParam >> 16) & 0xFF;
-			uint8_t extended = (msg.lParam >> 24) & 1;
-
-			uint16_t modifiers = 0;
-
-			switch (vk) {
-				case VK_SHIFT:
-					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
-						modifiers |= PAL_MOD_LSHIFT;
-					else
-						modifiers |= PAL_MOD_RSHIFT;
-					break;
-
-				case VK_CONTROL:
-					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
-					break;
-
-				case VK_MENU:
-					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
-					break;
-
-				case VK_LWIN:
-					modifiers |= PAL_MOD_LWINDOWS;
-					break;
-
-				case VK_RWIN:
-					modifiers |= PAL_MOD_RWINDOWS;
-					break;
-
-				case VK_NUMLOCK:
-					modifiers |= PAL_MOD_NUM;
-					break;
-
-				case VK_SCROLL:
-					modifiers |= PAL_MOD_SCROLL;
-					break;
-
-				case VK_PROCESSKEY:
-					modifiers |= PAL_MOD_ALTGR;
-					break;
-
-				case VK_SHIFT | 0x100:
-					modifiers |= PAL_MOD_LEVEL5SHIFT;
-					break;
-			}
-
-			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
-			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
-			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
-
-			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
-				modifiers |= PAL_MOD_ALTGR;
-			}
-
-            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
-
-			event.type = PAL_KEY_UP;
-			event.key = (pal_keyboard_event){
-				.virtual_key = win32_key_to_pal_key[vk],
-				.scancode = pal_scancode,
-				.pressed = 0,
-				.repeat = 0,
-				.modifiers = modifiers
-			};
-			input.keys[win32_key_to_pal_key[vk]] = 0;
-			input.keys_processed[win32_key_to_pal_key[vk]] = 0;
-			break;
-		}
-        case WM_CHAR:
-        case WM_UNICHAR:
-            event.type = PAL_TEXT_INPUT;
-            event.text = (pal_text_input_event){
-                .utf8_text = {0}
-            };
-            {
-                char utf8[8] = {0};
-                int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&msg.wParam, 1, utf8, sizeof(utf8), NULL, NULL);
-                memcpy(event.text.utf8_text, utf8, len);
-            }
-            break;
-
-        case WM_INPUT:
-            event.type = PAL_SENSOR_UPDATE;
-            event.sensor = (pal_sensor_event){
-                .device_id = 0,
-                .x = 0, .y = 0, .z = 0,
-                .sensor_type = 0
-            };
-            break;
-
-        case WM_DROPFILES: {
-            event.type = PAL_DROP_FILE;
-            HDROP hDrop = (HDROP)msg.wParam;
-            UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
-            const char** paths = malloc(sizeof(char*) * count);
-            for (UINT i = 0; i < count; ++i) {
-                WCHAR buffer[MAX_PATH];
-                DragQueryFileW(hDrop, i, buffer, MAX_PATH);
-                int len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
-                char* utf8 = malloc(len);
-                WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
-                paths[i] = utf8;
-            }
-            event.drop = (pal_drop_event){
-                .paths = paths,
-                .count = count
-            };
-            DragFinish(hDrop);
-            break;
-        }
-
-        default:
-            event.type = PAL_NONE;
-            DispatchMessageA(&msg);
-            return 0;
-            break;
-    }
-
-    pal_event_queue* queue = &window->queue;
-    if (queue->size == queue->capacity) {
-        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
-    }
-    queue->events[queue->back] = event;
-    queue->back = (queue->back + 1) % queue->capacity;
-    queue->size++;
-    return 1;
-}
-
 void platform_set_window_icon(pal_window* window, const char* image_path) {
     HICON hIcon = load_icon_from_file(image_path, FALSE);
     if (hIcon) {
@@ -1394,32 +996,421 @@ void platform_stop_gamepad_vibration(int controller_id) {
 }
 
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-
+    pal_window* window = g_current_window;
+    pal_event event = {0};
     switch (msg) {
-        case WM_CLOSE:
-            DestroyWindow(hwnd); // This is required to get WM_DESTROY
-            return 0;
         case WM_DESTROY:
-            PostQuitMessage(0); // Posts WM_QUIT to the message queue
-            return 0;
+            PostQuitMessage(0);
+        case WM_QUIT:
+        case WM_CLOSE:
+            event.type = PAL_QUIT;
+            event.quit = (pal_quit_event){ .code = 0 };
+            break;
+		case WM_MOVE:
+			event.type = PAL_WINDOW_EVENT;
+			event.window = (pal_window_event){
+				.x = LOWORD(lparam),
+				.y = HIWORD(lparam),
+				.width = 0,
+				.height = 0,
+				.focused = 1,
+				.visible = 1
+			};
+			break;
+		case WM_SIZE:
+			event.type = PAL_WINDOW_EVENT;
+			event.window = (pal_window_event){
+				.event_code = WM_SIZE,
+				.x = 0,
+				.y = 0,
+				.width = LOWORD(lparam),
+				.height = HIWORD(lparam),
+				.focused = 1,
+				.visible = 1
+			};
+			break;
+
+        case WM_MOUSEMOVE: {
+
+            if (window->confine_mouse) {
+				TRACKMOUSEEVENT tme = {
+					.cbSize = sizeof(tme),
+					.dwFlags = TME_LEAVE,
+					.hwndTrack = window->hwnd,
+					.dwHoverTime = HOVER_DEFAULT
+				};
+				TrackMouseEvent(&tme);
+				RECT rect;
+				GetClientRect(window->hwnd, &rect);
+				POINT tl = { rect.left, rect.top };
+				POINT br = { rect.right, rect.bottom };
+				ClientToScreen(window->hwnd, &tl);
+				ClientToScreen(window->hwnd, &br);
+				rect.left = tl.x;
+				rect.top = tl.y;
+				rect.right = br.x;
+				rect.bottom = br.y;
+				ClipCursor(&rect);
+            }
+            // Mouse just entered the window
+            event.type = PAL_MOUSE_MOTION;
+            event.motion = (pal_mouse_motion_event){
+                .x = GET_X_LPARAM(lparam),
+                .y = GET_Y_LPARAM(lparam),
+                .delta_x = input.mouse_delta.x,
+                .delta_y = input.mouse_delta.y,
+                .buttons = wparam
+            };
+        }; break;
+
+    case WM_MOUSELEAVE:
+        ClipCursor(NULL);
+        // Mouse just left the window
+        DefWindowProcA(window->hwnd, msg, wparam, lparam);
+        break;
+        case WM_WINDOWPOSCHANGED:
+        case WM_WINDOWPOSCHANGING:
+            event.type = PAL_WINDOW_EVENT;
+            WINDOWPOS* pos = (WINDOWPOS*)lparam;
+            event.window = (pal_window_event){
+                .event_code = msg,
+                .x = pos->x,
+                .y = pos->y,
+                .width = pos->cx,
+                .height = pos->cy,
+                .focused = 1, // This is wrong, fix.
+                .visible = 1
+            };
+            break;
+        case WM_LBUTTONDOWN: 
+        case WM_RBUTTONDOWN: 
+        case WM_MBUTTONDOWN: 
+        case WM_XBUTTONDOWN: {
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
+                .x = GET_X_LPARAM(lparam),
+                .y = GET_Y_LPARAM(lparam),
+                .pressed = 1,
+                .clicks = 1,
+                .modifiers = wparam,
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
+            };
+
+            if (msg == WM_XBUTTONDOWN) {
+                WORD xButton = GET_XBUTTON_WPARAM(wparam);
+                if (xButton == XBUTTON1) {
+                    event.button.button = PAL_MOUSE_4;
+                    input.mouse_buttons[PAL_MOUSE_4] = 1;
+                } else if (xButton == XBUTTON2) {
+                    event.button.button = PAL_MOUSE_5;
+                    input.mouse_buttons[PAL_MOUSE_5] = 1;
+                }
+            } else {
+                input.mouse_buttons[event.button.button] = 1;
+            }
+        } break;
+
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDBLCLK:
+        case WM_MBUTTONDBLCLK:
+        case WM_XBUTTONDBLCLK: {
+            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
+                .x = GET_X_LPARAM(lparam),
+                .y = GET_Y_LPARAM(lparam),
+                .pressed = 1,
+                .clicks = 2,
+                .modifiers = wparam,
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
+            };
+
+            if (msg == WM_XBUTTONDBLCLK) {
+                WORD xButton = GET_XBUTTON_WPARAM(wparam);
+                if (xButton == XBUTTON1) {
+                    event.button.button = PAL_MOUSE_4;
+                    input.mouse_buttons[PAL_MOUSE_4] = 1;
+                } else if (xButton == XBUTTON2) {
+                    event.button.button = PAL_MOUSE_5;
+                    input.mouse_buttons[PAL_MOUSE_5] = 1;
+                }
+            } else {
+                input.mouse_buttons[event.button.button] = 1;
+            }
+        } break;
+
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+        case WM_XBUTTONUP: {
+            event.type = PAL_MOUSE_BUTTON_UP;
+            event.button = (pal_mouse_button_event){
+                .x = GET_X_LPARAM(lparam),
+                .y = GET_Y_LPARAM(lparam),
+                .pressed = 0,
+                .modifiers = wparam,
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
+            };
+
+            if (msg == WM_XBUTTONUP) {
+                WORD xButton = GET_XBUTTON_WPARAM(wparam);
+                if (xButton == XBUTTON1) {
+                    event.button.button = PAL_MOUSE_4;
+                    input.mouse_buttons[PAL_MOUSE_4] = 0;
+                    input.mouse_buttons_processed[PAL_MOUSE_4] = 0;
+                } else if (xButton == XBUTTON2) {
+                    event.button.button = PAL_MOUSE_5;
+                    input.mouse_buttons[PAL_MOUSE_5] = 0;
+                    input.mouse_buttons_processed[PAL_MOUSE_5] = 0;
+                }
+            } else {
+                input.mouse_buttons[event.button.button] = 0;
+                input.mouse_buttons_processed[event.button.button] = 0;
+            }
+        } break;
+
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL: {
+            int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            event.type = PAL_MOUSE_WHEEL;
+            event.wheel = (pal_mouse_wheel_event){
+                .x = GET_X_LPARAM(lparam),
+                .y = GET_Y_LPARAM(lparam),
+                .delta_x = (msg == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
+                .delta_y = (msg == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
+                .modifiers = GET_KEYSTATE_WPARAM(wparam)
+            };
+            break;
+        }
+		case WM_KEYDOWN:
+		case WM_SYSKEYDOWN: {
+			uint32_t vk = (uint32_t)wparam;
+			uint8_t scancode = (lparam >> 16) & 0xFF;
+			uint8_t extended = (lparam >> 24) & 1;
+
+			uint16_t modifiers = 0;
+
+			switch (vk) {
+				case VK_SHIFT:
+					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
+						modifiers |= PAL_MOD_LSHIFT;
+					else
+						modifiers |= PAL_MOD_RSHIFT;
+					break;
+
+				case VK_CONTROL:
+					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
+					break;
+
+				case VK_MENU:
+					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
+					break;
+
+				case VK_LWIN:
+					modifiers |= PAL_MOD_LWINDOWS;
+					break;
+
+				case VK_RWIN:
+					modifiers |= PAL_MOD_RWINDOWS;
+					break;
+
+				case VK_NUMLOCK:
+					modifiers |= PAL_MOD_NUM;
+					break;
+
+				case VK_SCROLL:
+					modifiers |= PAL_MOD_SCROLL;
+					break;
+
+				case VK_PROCESSKEY:
+					modifiers |= PAL_MOD_ALTGR;
+					break;
+
+				case VK_SHIFT | 0x100: // Level 5 shift (user-defined)
+					modifiers |= PAL_MOD_LEVEL5SHIFT;
+					break;
+			}
+
+			// Check toggle states:
+			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
+			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
+			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
+
+			// AltGr detection: Right Alt + Ctrl
+			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+				modifiers |= PAL_MOD_ALTGR;
+			}
+
+            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
+
+			event.type = PAL_KEY_DOWN;
+			event.key = (pal_keyboard_event){
+				.virtual_key = win32_key_to_pal_key[vk],
+				.scancode = pal_scancode,
+				.pressed = 1,
+				.repeat = (lparam >> 30) & 1,
+				.modifiers = modifiers
+			};
+			input.keys[win32_key_to_pal_key[vk]] = 1;
+			break;
+		}
+
+		case WM_KEYUP:
+		case WM_SYSKEYUP: {
+			uint32_t vk = (uint32_t)wparam;
+			uint8_t scancode = (lparam >> 16) & 0xFF;
+			uint8_t extended = (lparam >> 24) & 1;
+
+			uint16_t modifiers = 0;
+
+			switch (vk) {
+				case VK_SHIFT:
+					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
+						modifiers |= PAL_MOD_LSHIFT;
+					else
+						modifiers |= PAL_MOD_RSHIFT;
+					break;
+
+				case VK_CONTROL:
+					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
+					break;
+
+				case VK_MENU:
+					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
+					break;
+
+				case VK_LWIN:
+					modifiers |= PAL_MOD_LWINDOWS;
+					break;
+
+				case VK_RWIN:
+					modifiers |= PAL_MOD_RWINDOWS;
+					break;
+
+				case VK_NUMLOCK:
+					modifiers |= PAL_MOD_NUM;
+					break;
+
+				case VK_SCROLL:
+					modifiers |= PAL_MOD_SCROLL;
+					break;
+
+				case VK_PROCESSKEY:
+					modifiers |= PAL_MOD_ALTGR;
+					break;
+
+				case VK_SHIFT | 0x100:
+					modifiers |= PAL_MOD_LEVEL5SHIFT;
+					break;
+			}
+
+			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
+			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
+			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
+
+			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+				modifiers |= PAL_MOD_ALTGR;
+			}
+
+            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
+
+			event.type = PAL_KEY_UP;
+			event.key = (pal_keyboard_event){
+				.virtual_key = win32_key_to_pal_key[vk],
+				.scancode = pal_scancode,
+				.pressed = 0,
+				.repeat = 0,
+				.modifiers = modifiers
+			};
+			input.keys[win32_key_to_pal_key[vk]] = 0;
+			input.keys_processed[win32_key_to_pal_key[vk]] = 0;
+			break;
+		}
+        case WM_CHAR:
+        case WM_UNICHAR:
+            event.type = PAL_TEXT_INPUT;
+            event.text = (pal_text_input_event){
+                .utf8_text = {0}
+            };
+            {
+                char utf8[8] = {0};
+                int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&wparam, 1, utf8, sizeof(utf8), NULL, NULL);
+                memcpy(event.text.utf8_text, utf8, len);
+            }
+            break;
+
         case WM_INPUT:
             win32_handle_raw_input((HRAWINPUT)lparam);
-            return 0;
-		case WM_ACTIVATE:
+            event.type = PAL_SENSOR_UPDATE;
+            event.sensor = (pal_sensor_event){
+                .device_id = 0,
+                .x = 0, .y = 0, .z = 0,
+                .sensor_type = 0
+            };
+            break;
+
+        case WM_DROPFILES: {
+            event.type = PAL_DROP_FILE;
+            HDROP hDrop = (HDROP)wparam;
+            UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+            const char** paths = malloc(sizeof(char*) * count);
+            for (UINT i = 0; i < count; ++i) {
+                WCHAR buffer[MAX_PATH];
+                DragQueryFileW(hDrop, i, buffer, MAX_PATH);
+                int len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
+                char* utf8 = malloc(len);
+                WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
+                paths[i] = utf8;
+            }
+            event.drop = (pal_drop_event){
+                .paths = paths,
+                .count = count
+            };
+            DragFinish(hDrop);
+            break;
+        }
+
+		case WM_ACTIVATEAPP:
+            event.type = PAL_WINDOW_EVENT;
+			event.window = (pal_window_event){
+				.event_code = WM_MOVE,
+				.x = LOWORD(lparam),
+				.y = HIWORD(lparam),
+				.width = 0,
+				.height = 0,
+				.visible = 1
+			};
+            // false means that we lost focus.
 			if ((BOOL)wparam == FALSE) {
-                printf("INFO: LOST FOCUS!\n");
+                event.window.focused = 0;
+                platform_make_window_windowed(window);
                 ShowWindow(hwnd, SW_MINIMIZE);
 			} else {
-                printf("INFO: GAINED FOCUS!\n");
+                event.window.focused = 1;
+                platform_make_window_fullscreen(window);
 			}
-			return 0;
+            break;
 
+            // this is for when raw input/hid devices get connected/disconnected.
+            // This also applies to bluetooth devices.
         case WM_INPUT_DEVICE_CHANGE:
             win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
             printf("Device Changed!\n");
-            return 0;
+            break;
+
+        default:
+            event.type = PAL_NONE;
+            break;
     }
-      return DefWindowProc(hwnd, msg, wparam, lparam);
+
+    pal_event_queue queue = window->queue;
+    if (queue.size == queue.capacity) {
+        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
+    }
+    queue.events[queue.back] = event;
+    queue.back = (queue.back + 1) % queue.capacity;
+    queue.size++;
+
+    return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 static pal_window* platform_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
@@ -1526,6 +1517,25 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	RegisterClassExA(&wc);
 
 	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    // -- CREATE QUEUE FOR THE WINDOW --
+    size_t capacity = 10000;
+    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
+
+    if(events == NULL) {
+        fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
+    }
+
+    pal_event_queue queue = {
+        // size and capacity are measured in pal_events, not bytes.
+        .size = 0,
+        .capacity = capacity,
+        .front = 0,
+        .back = 0,
+        .events = events
+    };
+
+    window->queue = queue;
+
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
 
@@ -1560,7 +1570,6 @@ static pal_window* platform_create_window(int width, int height, const char* win
     }
 
     if (window_flags & PAL_WINDOW_FULLSCREEN) {
-		// Desired fullscreen resolution
 
 		DEVMODE dm = {0};
 		dm.dmSize = sizeof(dm);
@@ -1575,7 +1584,15 @@ static pal_window* platform_create_window(int width, int height, const char* win
 		}
         window_style = WS_POPUP;
     }
-
+    // -- CREATING EVENT QUEUE --
+    // It's very important to set g_current_window to the pal_window
+    // before we call CreateWindowExA() on window->hwnd, because if we don't,
+    // windows will call win32_window_proc() as soon as the window is created,
+    // and in that function, we rely on g_current_window for some things like
+    // getting the event queue that belongs to the window, and if it's not set,
+    // we will just crash. - Abdelrahman July 29, 2025
+    g_current_window = window;
+    // -- CREATING WINDOW --
 	window->hwnd = CreateWindowExA(
 		ext_window_style,           // Optional window styles.
 		wc.lpszClassName,     // Window class
@@ -1637,23 +1654,6 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
 	window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
 
-    size_t capacity = 10000;
-    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
-
-    if(events == NULL) {
-        fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
-    }
-
-    pal_event_queue queue = {
-        // size and capacity are measured in pal_events, not bytes.
-        .size = 0,
-        .capacity = capacity,
-        .front = 0,
-        .back = 0,
-        .events = events
-    };
-
-    window->queue = queue;
 
 	RAWINPUTDEVICE rid[3];
 
@@ -1728,7 +1728,6 @@ static pal_window* platform_create_window(int width, int height, const char* win
         // but if the user doesn't, the make_window_windowed() function uses a state that's all zeroes
         //, so we have to save it here. - Abdelrahman june 13, 2024
 		window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
-		GetWindowRect(window->hwnd, &window->windowedRect); // size and pos of the window.
 		return window;
 	}
 	else {
@@ -1776,17 +1775,14 @@ static pal_bool platform_minimize_window(pal_window* window) {
 }
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
-
+    g_current_window = window;
 	MSG msg = {0};
     if (!window->message_pump_drained) {
 
 		platform_get_raw_input_buffer();
 		while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
-
 			TranslateMessage(&msg);
-
-			platform_translate_message(msg, window);
-            
+            DispatchMessageA(&msg);
 		}
         window->message_pump_drained = TRUE;
     }
@@ -1803,13 +1799,10 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 		queue->size--;
 		return 1;
     }
-    else {
-        window->message_pump_drained = FALSE;
-        input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
-        return 0;
-    }
-    assert(0); // UNREACHABLE! Just crash if we get here somehow.
-    return 0;
+    // not putting an else here to avoid unreachable section.
+	window->message_pump_drained = FALSE;
+	input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
+	return 0;
 }
 
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {
@@ -1842,7 +1835,6 @@ static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
 }
 
 static void* platform_gl_get_proc_address(const char* proc) {
-	 
 	return wglGetProcAddress(proc);
 }
 
