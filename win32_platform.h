@@ -858,7 +858,7 @@ int platform_init_gamepads() {
     return TRUE;
 }
 
-void platform_shutdown_gamepads() {
+void platform_shutdown_gamepads(void) {
     if (g_xinput_dll) {
         FreeLibrary(g_xinput_dll);
         g_xinput_dll = NULL;
@@ -1765,7 +1765,7 @@ static int platform_make_context_current(pal_window* window) {
 	return 0;
 }
 
-static int platform_show_cursor() {
+static int platform_show_cursor(void) {
     int result = -1;
     while (result < 0) {
         result = ShowCursor(TRUE);
@@ -1773,7 +1773,7 @@ static int platform_show_cursor() {
     return result;
 }
 
-static int platform_hide_cursor() {
+static int platform_hide_cursor(void) {
     int result = 1;
     while (result >= 0) {
         result = ShowCursor(FALSE);
@@ -1924,7 +1924,7 @@ RawInputHandler Win32InputHandlers[3] = {
 
 static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
 
-static int platform_get_raw_input_buffer() {
+static int platform_get_raw_input_buffer(void) {
     UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
     UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
@@ -2320,7 +2320,7 @@ uint32_t platform_rand(uint64_t *state) {
 //----------------------------------------------------------------------------------
 // Sound Functions.
 //----------------------------------------------------------------------------------
-int platform_init_sound() {
+int platform_init_sound(void) {
 	int hr;
 
 	// Initialize COM (needed for XAudio2)
@@ -3182,12 +3182,6 @@ static uint64_t platform_get_timer_frequency(void) {
     
     return frequency;
 }
-
-//----------------------------------------------------------------------------------
-// Random Number Generation.
-//----------------------------------------------------------------------------------
-
-
 
 //----------------------------------------------------------------------------------
 // Dynamic Library Functions.

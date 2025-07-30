@@ -1116,11 +1116,11 @@ typedef struct pal_ivec4 {
 extern "C" {
 #endif
 
-PALAPI void pal_init();
-PALAPI void pal_shutdown();
+PALAPI void pal_init(void);
+PALAPI void pal_shutdown(void);
 PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags);
-PALAPI int pal_show_cursor();
-PALAPI int pal_hide_cursor();
+PALAPI int pal_show_cursor(void);
+PALAPI int pal_hide_cursor(void);
 PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate);
@@ -1153,7 +1153,7 @@ PALAPI void set_mouse_processed(int button);
 PALAPI pal_vec2 get_mouse_position(pal_window* window);
 
 // Gamepad Input
-PALAPI int pal_get_gamepad_count();
+PALAPI int pal_get_gamepad_count(void);
 PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state);
 PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger);
 PALAPI void pal_stop_gamepad_vibration(int controller_id);

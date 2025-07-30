@@ -12,7 +12,7 @@
 #include "linux_x11_platform.h"
 #endif
 
-PALAPI void pal_init() {
+PALAPI void pal_init(void) {
     platform_init_timer();
 	platform_init_sound();
     if (!platform_init_gamepads()) {
@@ -20,7 +20,7 @@ PALAPI void pal_init() {
     }
 }
 
-PALAPI void pal_shutdown() {
+PALAPI void pal_shutdown(void) {
     platform_shutdown_gamepads();
 }
 
@@ -36,11 +36,11 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
 	 return platform_create_window(width, height, window_title, window_flags);
 }
 
-PALAPI int pal_show_cursor() {
+PALAPI int pal_show_cursor(void) {
     return platform_show_cursor();
 }
 
-PALAPI int pal_hide_cursor() {
+PALAPI int pal_hide_cursor(void) {
     return platform_hide_cursor();
 }
 
