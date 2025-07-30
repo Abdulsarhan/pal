@@ -8,24 +8,23 @@
 #include <mmreg.h>            // WAVEFORMATEX
 #include <Xinput.h>
 #include <hidsdi.h>   // Link with hid.lib
+// for reading from undocumented structs to bypass win32.
+#include <winternl.h>
+#include <intrin.h>
+
 // for file permissions.
 #include <accctrl.h>
 #include <aclapi.h>
-
-// C Standard Library
-#include <stdio.h>
-#include <stdint.h>
-#include <assert.h>
 
 // OpenGL
 #include <gl/gl.h>
 #include <GL/glext.h>
 #include <GL/wglext.h>
 
-// Windows Gaming Input (For Xbone / Series S Controllers)
-#define COBJMACROS
-#include <roapi.h>
-#include <winstring.h>
+// C Standard Library
+#include <stdio.h>
+#include <stdint.h>
+#include <assert.h>
 
 #include "pal_platform.h"
 // Global function pointers
@@ -41,8 +40,8 @@ static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = FALSE;
 
 static HDC s_fakeDC = { 0 };
-
 pal_window* g_current_window;
+
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
@@ -407,7 +406,6 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
     dm.dmSize = sizeof(dm);
     dm.dmPelsWidth = width;
     dm.dmPelsHeight = height;
-    dm.dmBitsPerPel = 32;
     dm.dmDisplayFrequency = refresh_rate;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
@@ -431,9 +429,8 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
     DEVMODE dm = {0};
     EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
     dm.dmSize = sizeof(dm);
-    dm.dmPelsWidth = 1280;
-    dm.dmPelsHeight = 720;
-    dm.dmBitsPerPel = 32;
+    dm.dmPelsWidth = window->width;
+    dm.dmPelsHeight = window->height;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
     if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
@@ -995,19 +992,42 @@ void platform_stop_gamepad_vibration(int controller_id) {
     platform_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+pal_bool platform_close_window(pal_window* window) {
+    return (pal_bool)DestroyWindow(window->hwnd);
+}
+
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     pal_window* window = g_current_window;
     pal_event event = {0};
     switch (msg) {
-        case WM_DESTROY:
-            PostQuitMessage(0);
-        case WM_QUIT:
         case WM_CLOSE:
+            event.type = PAL_WINDOW_CLOSE_REQUESTED;
+			event.window = (pal_window_event){
+				.x = LOWORD(lparam),
+				.y = HIWORD(lparam),
+				.width = 0,
+				.height = 0,
+				.focused = 1,
+				.visible = 0
+			};
+            break;
+        case WM_DESTROY:
+            event.type = PAL_WINDOW_CLOSED;
+			event.window = (pal_window_event){
+				.x = LOWORD(lparam),
+				.y = HIWORD(lparam),
+				.width = 0,
+				.height = 0,
+				.focused = 0,
+				.visible = 0
+			};
+            break;
+        case WM_QUIT: // we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing.
             event.type = PAL_QUIT;
             event.quit = (pal_quit_event){ .code = 0 };
             break;
 		case WM_MOVE:
-			event.type = PAL_WINDOW_EVENT;
+			event.type = PAL_WINDOW;
 			event.window = (pal_window_event){
 				.x = LOWORD(lparam),
 				.y = HIWORD(lparam),
@@ -1018,7 +1038,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 			};
 			break;
 		case WM_SIZE:
-			event.type = PAL_WINDOW_EVENT;
+			event.type = PAL_WINDOW;
 			event.window = (pal_window_event){
 				.event_code = WM_SIZE,
 				.x = 0,
@@ -1064,13 +1084,12 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         }; break;
 
     case WM_MOUSELEAVE:
-        ClipCursor(NULL);
+        ClipCursor(NULL); // we unclip the cursor to the window in case it was clipped before.
         // Mouse just left the window
-        DefWindowProcA(window->hwnd, msg, wparam, lparam);
         break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
-            event.type = PAL_WINDOW_EVENT;
+            event.type = PAL_WINDOW;
             WINDOWPOS* pos = (WINDOWPOS*)lparam;
             event.window = (pal_window_event){
                 .event_code = msg,
@@ -1370,7 +1389,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         }
 
 		case WM_ACTIVATEAPP:
-            event.type = PAL_WINDOW_EVENT;
+            event.type = PAL_WINDOW;
 			event.window = (pal_window_event){
 				.event_code = WM_MOVE,
 				.x = LOWORD(lparam),
@@ -1379,19 +1398,18 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 				.height = 0,
 				.visible = 1
 			};
-            // false means that we lost focus.
+		    // false means that we lost focus.
 			if ((BOOL)wparam == FALSE) {
-                event.window.focused = 0;
-                platform_make_window_windowed(window);
-                ShowWindow(hwnd, SW_MINIMIZE);
+				event.window.focused = 0;
+				ShowWindow(hwnd, SW_MINIMIZE);
+				ChangeDisplaySettingsA(NULL, 0);
 			} else {
-                event.window.focused = 1;
-                platform_make_window_fullscreen(window);
+				event.window.focused = 1;
+				platform_make_window_fullscreen(window);
 			}
             break;
 
-            // this is for when raw input/hid devices get connected/disconnected.
-            // This also applies to bluetooth devices.
+            // TODO: Make this return a pal_event of some kind.
         case WM_INPUT_DEVICE_CHANGE:
             win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
             printf("Device Changed!\n");
@@ -1399,7 +1417,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
         default:
             event.type = PAL_NONE;
-            break;
+            return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
     pal_event_queue queue = window->queue;
@@ -1410,7 +1428,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     queue.back = (queue.back + 1) % queue.capacity;
     queue.size++;
 
-    return DefWindowProc(hwnd, msg, wparam, lparam);
+    return 0;
 }
 
 static pal_window* platform_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
@@ -1517,6 +1535,8 @@ static pal_window* platform_create_window(int width, int height, const char* win
 	RegisterClassExA(&wc);
 
 	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    window->width = width;
+    window->height = height;
     // -- CREATE QUEUE FOR THE WINDOW --
     size_t capacity = 10000;
     pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
@@ -2439,6 +2459,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
     
     return bytes_read;
 }
+
 static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
@@ -2571,6 +2592,7 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnLoopEnd,
     OnVoiceError,
 };
+
 static int platform_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
@@ -2802,6 +2824,7 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
 
     return sound;
 }
+
 static void platform_free_music(pal_sound* sound) {
     if (sound->is_streaming) {
         sound->stream_finished = 1;
@@ -2829,6 +2852,7 @@ static void platform_free_music(pal_sound* sound) {
     free(sound->data);
     free(sound);
 }
+
 static int platform_play_sound(pal_sound* sound, float volume) {
 	if (!g_xaudio2 || !g_mastering_voice) {
 		return E_FAIL;
@@ -2895,6 +2919,261 @@ int platform_stop_sound(pal_sound* sound) {
 	}
     return hr;
 }
+
+//----------------------------------------------------------------------------------
+// Time Functions.
+//----------------------------------------------------------------------------------
+typedef struct _KSYSTEM_TIME {
+    ULONG LowPart;      // Low 32 bits of the 64-bit time value
+    LONG High1Time;     // High 32 bits (first copy)
+    LONG High2Time;     // High 32 bits (second copy)
+} KSYSTEM_TIME, *PKSYSTEM_TIME;
+
+typedef struct _KUSER_SHARED_DATA {
+    ULONG TickCountLowDeprecated;
+    ULONG TickCountMultiplier;
+    KSYSTEM_TIME InterruptTime;
+    KSYSTEM_TIME SystemTime;
+    KSYSTEM_TIME TimeZoneBias;
+    // padding to get to right offsets.
+    UCHAR Padding0[0x30C - 0x14];
+    KSYSTEM_TIME QpcData; // Performance Counter.
+    UCHAR Padding1[0x320 - 0x314];
+    union {
+        KSYSTEM_TIME TickCount;
+        UINT64 TickCountQuad;
+    };
+    // more padding.
+    UCHAR Padding2[0x380 - 0x328];
+    LONGLONG QpcFrequency; // Performance Counter Frequency.
+} KUSER_SHARED_DATA, *PKUSER_SHARED_DATA;
+#define KUSER_SHARED_DATA_ADDRESS 0x7FFE0000
+static uint64_t g_app_start_time = 0;
+
+static inline pal_time platform_get_system_time_utc(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    LARGE_INTEGER time = {0};
+    do {
+        time.HighPart = kuser->SystemTime.High1Time;
+        time.LowPart = kuser->SystemTime.LowPart;
+    } while (time.HighPart != kuser->SystemTime.High2Time);
+    
+    uint64_t total_100ns = time.QuadPart;
+    uint64_t total_days = total_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
+    uint64_t remaining_100ns = total_100ns % (10000000ULL * 60 * 60 * 24);
+    
+    uint32_t year = 1601 + (uint32_t)(total_days / 365.25);
+    
+    uint64_t days_since_1601 = total_days;
+    year = 1601;
+    while (1) {
+        uint32_t days_in_year = 365;
+        if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+            days_in_year = 366;
+        }
+        
+        if (days_since_1601 < days_in_year) break;
+        days_since_1601 -= days_in_year;
+        year++;
+    }
+    
+    uint32_t days_in_months[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    
+    if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+        days_in_months[1] = 29;
+    }
+    
+    uint32_t month = 1;
+    while (month <= 12 && days_since_1601 >= days_in_months[month - 1]) {
+        days_since_1601 -= days_in_months[month - 1];
+        month++;
+    }
+    
+    uint32_t day = (uint32_t)days_since_1601 + 1;
+    
+    uint64_t total_seconds = remaining_100ns / 10000000ULL;
+    uint32_t hours = (uint32_t)(total_seconds / 3600);
+    total_seconds %= 3600;
+    uint32_t minutes = (uint32_t)(total_seconds / 60);
+    uint32_t seconds = (uint32_t)(total_seconds % 60);
+    
+    pal_time result = {0};
+    result.year = year;
+    result.month = month;
+    result.day = day;
+    result.weeks = 0; // Unused for system time
+    result.hours = hours;
+    result.minutes = minutes;
+    result.seconds = seconds;
+    
+    return result;
+}
+
+static inline pal_time platform_get_system_time_local(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    
+    LARGE_INTEGER system_time = {0};
+    do {
+        system_time.HighPart = kuser->SystemTime.High1Time;
+        system_time.LowPart = kuser->SystemTime.LowPart;
+    } while (system_time.HighPart != kuser->SystemTime.High2Time);
+    
+    LARGE_INTEGER timezone_bias = {0};
+    do {
+        timezone_bias.HighPart = kuser->TimeZoneBias.High1Time;
+        timezone_bias.LowPart = kuser->TimeZoneBias.LowPart;
+    } while (timezone_bias.HighPart != kuser->TimeZoneBias.High2Time);
+    
+    uint64_t local_time_100ns = system_time.QuadPart - timezone_bias.QuadPart;
+    
+    uint64_t total_days = local_time_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
+    uint64_t remaining_100ns = local_time_100ns % (10000000ULL * 60 * 60 * 24);
+    
+    uint32_t year = 1601 + (uint32_t)(total_days / 365.25);
+    
+    uint64_t days_since_1601 = total_days;
+    year = 1601;
+    while (1) {
+        uint32_t days_in_year = 365;
+
+        if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+            days_in_year = 366;
+        }
+        
+        if (days_since_1601 < days_in_year) break;
+        days_since_1601 -= days_in_year;
+        year++;
+    }
+    
+    uint32_t days_in_months[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    
+    if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+        days_in_months[1] = 29;
+    }
+    
+    uint32_t month = 1;
+    while (month <= 12 && days_since_1601 >= days_in_months[month - 1]) {
+        days_since_1601 -= days_in_months[month - 1];
+        month++;
+    }
+    
+    uint32_t day = (uint32_t)days_since_1601 + 1;
+    
+    uint64_t total_seconds = remaining_100ns / 10000000ULL;
+    uint32_t hours = (uint32_t)(total_seconds / 3600);
+    total_seconds %= 3600;
+    uint32_t minutes = (uint32_t)(total_seconds / 60);
+    uint32_t seconds = (uint32_t)(total_seconds % 60);
+    
+    pal_time result = {0};
+    result.year = year;
+    result.month = month;
+    result.day = day;
+    result.weeks = 0; // Unused for system time
+    result.hours = hours;
+    result.minutes = minutes;
+    result.seconds = seconds;
+    
+    return result;
+}
+
+static inline pal_time platform_get_time_since_boot(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    LARGE_INTEGER time = {0};
+
+    do {
+        time.HighPart = kuser->TickCount.High1Time;
+        time.LowPart = kuser->TickCount.LowPart;
+    } while (time.HighPart != kuser->TickCount.High2Time);
+    
+	uint64_t tick_ms = ((uint64_t)time.QuadPart * kuser->TickCountMultiplier) >> 24;
+	uint64_t total_seconds = tick_ms / 1000;
+    uint32_t total_days = (uint32_t)(total_seconds / (24 * 60 * 60));
+    uint32_t remaining_seconds = (uint32_t)(total_seconds % (24 * 60 * 60));
+    
+    uint32_t years = total_days / 365;
+    uint32_t remaining_days = total_days % 365;
+    
+    uint32_t leap_days = years / 4 - years / 100 + years / 400;
+    if (remaining_days >= leap_days && years > 0) {
+        remaining_days -= leap_days;
+    }
+    
+    uint32_t months = remaining_days / 30;
+    remaining_days %= 30;
+    
+    uint32_t weeks = remaining_days / 7;
+    remaining_days %= 7;
+    
+    uint32_t hours = remaining_seconds / 3600;
+    remaining_seconds %= 3600;
+    uint32_t minutes = remaining_seconds / 60;
+    uint32_t seconds = remaining_seconds % 60;
+    
+    pal_time result = {0};
+    result.year = years;
+    result.month = months;
+    result.weeks = weeks;
+    result.day = remaining_days;
+    result.hours = hours;
+    result.minutes = minutes;
+    result.seconds = seconds;
+    
+    return result;
+}
+
+void platform_init_timer(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    LARGE_INTEGER time = {0};
+    do {
+        time.HighPart = kuser->QpcData.High1Time;
+        time.LowPart = kuser->QpcData.LowPart;
+    } while (time.HighPart != kuser->QpcData.High2Time);
+    
+    g_app_start_time = time.QuadPart;
+    assert(g_app_start_time != 0);
+}
+
+// Time since pal has started, not including any time
+// the computer is sleeping while pal is running.
+// Uses the highest resolution timer available on the system.
+static double platform_get_time_since_pal_started(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    LARGE_INTEGER time = {0};
+    do {
+        time.HighPart = kuser->QpcData.High1Time;
+        time.LowPart = kuser->QpcData.LowPart;
+    } while (time.HighPart != kuser->QpcData.High2Time);
+    
+    uint64_t elapsed_ticks = time.QuadPart - g_app_start_time;
+    return (double)elapsed_ticks / (double)kuser->QpcFrequency;
+}
+
+// Gets the raw timer that is used by pal, not including any time the computer
+// is sleeping while pal is running.
+static uint64_t platform_get_timer(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    LARGE_INTEGER counter = {0};
+    do {
+        counter.HighPart = kuser->QpcData.High1Time;
+        counter.LowPart = kuser->QpcData.LowPart;
+    } while (counter.HighPart != kuser->QpcData.High2Time);
+    
+    return counter.QuadPart;
+}
+
+// Gets the frequency of the raw timer that is used by pal, not including any time the computer
+// is sleeping while pal is running.
+static uint64_t platform_get_timer_frequency(void) {
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    return kuser->QpcFrequency;
+}
+
+//----------------------------------------------------------------------------------
+// Random Number Generation.
+//----------------------------------------------------------------------------------
+
+
 
 //----------------------------------------------------------------------------------
 // Dynamic Library Functions.

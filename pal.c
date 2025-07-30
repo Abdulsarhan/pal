@@ -13,6 +13,7 @@
 #endif
 
 PALAPI void pal_init() {
+    platform_init_timer();
 	platform_init_sound();
     if (!platform_init_gamepads()) {
         printf("ERROR: %s: platform_init_gamepads failed\n", __func__);
@@ -472,6 +473,34 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
            out->data_size, total_decoded);
     
     return 1;
+}
+
+/*
+
+###########################################
+	          Time Functions. 
+###########################################
+
+*/
+
+ pal_time pal_get_system_time_utc(void) {
+    return platform_get_system_time_utc();
+}
+ pal_time pal_get_system_time_local(void) {
+    return platform_get_system_time_local();
+}
+ pal_time pal_get_time_since_boot(void) {
+    return platform_get_time_since_boot();
+}
+
+double pal_get_time_since_pal_started(void) {
+    return platform_get_time_since_pal_started();
+}
+uint64_t pal_get_timer(void) {
+    return platform_get_timer();
+}
+uint64_t pal_get_timer_frequency(void) {
+    return platform_get_timer_frequency();
 }
 
 /*

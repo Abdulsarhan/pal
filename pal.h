@@ -16,6 +16,16 @@ typedef struct pal_file{
     void* handle;
 } pal_file;
 
+typedef struct {
+    uint32_t year;
+    uint32_t month;
+    uint32_t weeks;
+    uint32_t day;
+    uint32_t hours;
+    uint32_t minutes; 
+    uint32_t seconds;
+} pal_time;
+
 typedef struct pal_sound pal_sound;
 typedef struct pal_music pal_music;
 #define PAL_MAX_TOUCHES 2
@@ -73,8 +83,18 @@ typedef enum pal_event_type
     PAL_NONE = 0x0,
     PAL_QUIT = 0x100,
 
-    PAL_WINDOW_EVENT = 0x200,
-    PAL_SYSWM_EVENT,
+    PAL_WINDOW = 0x200,
+    PAL_WINDOW_SHOWN,
+    PAL_WINDOW_HIDDEN,
+    PAL_WINDOW_EXPOSED,
+    PAL_WINDOW_CLOSE_REQUESTED,
+    PAL_WINDOW_CLOSED,
+    PAL_WINDOW_MINIMIZED,
+    PAL_WINDOW_MAXIMIZED,
+    PAL_WINDOW_MOVED,
+    PAL_WINDOW_RESIZED,
+    PAL_WINDOW_ENTERED_FULLSCREEN,
+    PAL_WINDOW_LEFT_FULLSCREEN,
 
     PAL_KEY_DOWN = 0x300,
     PAL_KEY_UP,
@@ -142,9 +162,9 @@ typedef enum pal_event_type
 
     PAL_TEXT_EDITING_CANDIDATES = 0x1600,
 
-    PAL_USER_EVENT = 0x8000,
+    PAL_USER = 0x8000,
 
-    PAL_LAST_EVENT = 0xFFFF
+    PAL_LAST = 0xFFFF
 } pal_event_type;
 
 typedef struct pal_common_event {
@@ -1163,7 +1183,7 @@ PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
 PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size , char* buffer);
 PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
 
-//Open File I/O
+// Open File I/O
 PALAPI pal_file* pal_open_file(const char* file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer);
 PALAPI pal_bool pal_close_file(pal_file* file);
@@ -1180,6 +1200,14 @@ PALAPI uint8_t pal_is_hyphen(char ch);
 PALAPI uint8_t pal_is_dot(char ch);
 PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
 PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2);
+
+// Time functions
+pal_time pal_get_system_time_utc(void);
+pal_time pal_get_system_time_local(void);
+pal_time pal_get_time_since_boot(void);
+double pal_get_time_since_pal_started(void);
+uint64_t pal_get_timer(void);
+uint64_t pal_get_timer_frequency(void);
 
 // .dll/.so/.dylib loading
 void* load_dynamic_library(char* dll);
