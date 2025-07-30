@@ -5,12 +5,10 @@
 #include <Windows.h>
 #include <windowsx.h>         // Useful macros (e.g., GET_X_LPARAM)
 #include <xaudio2.h>          // XAudio2
-#include <mmreg.h>            // WAVEFORMATEX
 #include <Xinput.h>
 #include <hidsdi.h>   // Link with hid.lib
 
 // for file permissions.
-#include <accctrl.h>
 #include <aclapi.h>
 
 // OpenGL
@@ -2931,16 +2929,14 @@ typedef struct _KUSER_SHARED_DATA {
     KSYSTEM_TIME SystemTime;
     KSYSTEM_TIME TimeZoneBias;
     // padding to get to right offsets.
-    UCHAR Padding0[0x30C - 0x14];
-    KSYSTEM_TIME QpcData; // Performance Counter.
-    UCHAR Padding1[0x320 - 0x314];
+    UCHAR Padding0[0x300 - 0x20];
+    LONGLONG QpcFrequency; // Performance Counter Frequency at offset 0x300
+    // padding to get to TickCount
+    UCHAR Padding1[0x320 - 0x308];
     union {
         KSYSTEM_TIME TickCount;
         UINT64 TickCountQuad;
     };
-    // more padding.
-    UCHAR Padding2[0x380 - 0x328];
-    LONGLONG QpcFrequency; // Performance Counter Frequency.
 } KUSER_SHARED_DATA, *PKUSER_SHARED_DATA;
 #define KUSER_SHARED_DATA_ADDRESS 0x7FFE0000
 static uint64_t g_app_start_time = 0;
@@ -3118,50 +3114,50 @@ static inline pal_time platform_get_time_since_boot(void) {
 }
 
 void platform_init_timer(void) {
-    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-    LARGE_INTEGER time = {0};
-    do {
-        time.HighPart = kuser->QpcData.High1Time;
-        time.LowPart = kuser->QpcData.LowPart;
-    } while (time.HighPart != kuser->QpcData.High2Time);
-    
-    g_app_start_time = time.QuadPart;
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    g_app_start_time = counter.QuadPart;
     assert(g_app_start_time != 0);
 }
 
-// Time since pal has started, not including any time
-// the computer is sleeping while pal is running.
-// Uses the highest resolution timer available on the system.
 static double platform_get_time_since_pal_started(void) {
-    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-    LARGE_INTEGER time = {0};
-    do {
-        time.HighPart = kuser->QpcData.High1Time;
-        time.LowPart = kuser->QpcData.LowPart;
-    } while (time.HighPart != kuser->QpcData.High2Time);
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
     
-    uint64_t elapsed_ticks = time.QuadPart - g_app_start_time;
-    return (double)elapsed_ticks / (double)kuser->QpcFrequency;
+    uint64_t elapsed_ticks = counter.QuadPart - g_app_start_time;
+    
+    // Get frequency from KUSER_SHARED_DATA (Windows 8+) or fall back to API
+    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+    uint64_t frequency = kuser->QpcFrequency;
+    
+    // Fallback to API if frequency is 0 (older Windows versions)
+    if (frequency == 0) {
+        LARGE_INTEGER freq;
+        QueryPerformanceFrequency(&freq);
+        frequency = freq.QuadPart;
+    }
+    
+    return (double)elapsed_ticks / (double)frequency;
 }
 
-// Gets the raw timer that is used by pal, not including any time the computer
-// is sleeping while pal is running.
 static uint64_t platform_get_timer(void) {
-    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-    LARGE_INTEGER counter = {0};
-    do {
-        counter.HighPart = kuser->QpcData.High1Time;
-        counter.LowPart = kuser->QpcData.LowPart;
-    } while (counter.HighPart != kuser->QpcData.High2Time);
-    
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
     return counter.QuadPart;
 }
-
 // Gets the frequency of the raw timer that is used by pal, not including any time the computer
 // is sleeping while pal is running.
 static uint64_t platform_get_timer_frequency(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-    return kuser->QpcFrequency;
+    uint64_t frequency = kuser->QpcFrequency;
+    // Fallback to API if frequency is 0 (older Windows versions)
+    if (frequency == 0) {
+        LARGE_INTEGER freq;
+        QueryPerformanceFrequency(&freq);
+        frequency = freq.QuadPart;
+    }
+    
+    return frequency;
 }
 
 //----------------------------------------------------------------------------------
