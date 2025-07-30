@@ -8,9 +8,6 @@
 #include <mmreg.h>            // WAVEFORMATEX
 #include <Xinput.h>
 #include <hidsdi.h>   // Link with hid.lib
-// for reading from undocumented structs to bypass win32.
-#include <winternl.h>
-#include <intrin.h>
 
 // for file permissions.
 #include <accctrl.h>
@@ -1787,11 +1784,11 @@ static int platform_hide_cursor() {
 }
 
 static pal_bool platform_maximize_window(pal_window* window) {
-    ShowWindow(window->hwnd, SW_MAXIMIZE);
+    return ShowWindow(window->hwnd, SW_MAXIMIZE);
 }
 
 static pal_bool platform_minimize_window(pal_window* window) {
-    ShowWindow(window->hwnd, SW_MINIMIZE);
+    return ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
@@ -2786,11 +2783,9 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
             printf("  - Total sample frames: %u\n", total_sample_frames);
             printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
             
-            // DON'T reset the decoder - it's already positioned after the preloaded data
             unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
             printf("  - Decoder position after preload: %u\n", current_position);
             
-            // Calculate total size
             sound->total_data_size = total_sample_frames * bytes_per_sample_frame;
             
             // Set bytes_streamed to match what we've already preloaded
