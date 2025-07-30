@@ -201,7 +201,7 @@ PALAPI void pal_swap_buffers(pal_window* window) {
 
 */
 
-pal_sound* pal_load_sound(const char* filename) {
+PALAPI pal_sound* pal_load_sound(const char* filename) {
 	return platform_load_sound(filename, 0.0f);
 }
 
@@ -213,11 +213,11 @@ PALAPI int pal_stop_sound(pal_sound* sound) {
 	return platform_stop_sound(sound);
 }
 
-void pal_free_sound(pal_sound* sound) {
+PALAPI void pal_free_sound(pal_sound* sound) {
 	platform_free_sound(sound);
 }
 
-pal_sound* pal_load_music(const char* filename) {
+PALAPI pal_sound* pal_load_music(const char* filename) {
     // every loaded buffer will be this long.
     const float buffer_length_in_seconds = 2.0f;
 	return platform_load_sound(filename, buffer_length_in_seconds);
@@ -233,7 +233,7 @@ PALAPI int pal_stop_music(pal_sound* sound) {
 }
 
 */
-void pal_free_music(pal_sound* sound) {
+PALAPI void pal_free_music(pal_sound* sound) {
 	platform_free_music(sound);
 }
 
@@ -483,23 +483,23 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
 
 */
 
- pal_time pal_get_system_time_utc(void) {
+PALAPI pal_time pal_get_system_time_utc(void) {
     return platform_get_system_time_utc();
 }
- pal_time pal_get_system_time_local(void) {
+PALAPI pal_time pal_get_system_time_local(void) {
     return platform_get_system_time_local();
 }
- pal_time pal_get_time_since_boot(void) {
+PALAPI pal_time pal_get_time_since_boot(void) {
     return platform_get_time_since_boot();
 }
 
-double pal_get_time_since_pal_started(void) {
+PALAPI double pal_get_time_since_pal_started(void) {
     return platform_get_time_since_pal_started();
 }
-uint64_t pal_get_timer(void) {
+PALAPI uint64_t pal_get_timer(void) {
     return platform_get_timer();
 }
-uint64_t pal_get_timer_frequency(void) {
+PALAPI uint64_t pal_get_timer_frequency(void) {
     return platform_get_timer_frequency();
 }
 
@@ -511,17 +511,17 @@ uint64_t pal_get_timer_frequency(void) {
 
 */
 
-void* load_dynamic_library(char* dll) {
+PALAPI void* load_dynamic_library(char* dll) {
 	return platform_load_dynamic_library(dll);
 
 }
 
-void* load_dynamic_function(void* dll, char* func_name) {
+PALAPI void* load_dynamic_function(void* dll, char* func_name) {
 	return platform_load_dynamic_function(dll, func_name);
 
 }
 
-uint8_t free_dynamic_library(void* dll) {
+PALAPI uint8_t free_dynamic_library(void* dll) {
 	return platform_free_dynamic_library(dll);
 
 }
@@ -534,39 +534,39 @@ uint8_t free_dynamic_library(void* dll) {
 
 */
 
-uint8_t pal_does_file_exist(const char* file_path) {
+PALAPI uint8_t pal_does_file_exist(const char* file_path) {
     return platform_does_file_exist(file_path);
 }
 
-size_t pal_get_last_read_time(const char* file_path) {
+PALAPI size_t pal_get_last_read_time(const char* file_path) {
     return platform_get_last_read_time(file_path);
 }
 
-size_t pal_get_last_write_time(const char* file_path) {
+PALAPI size_t pal_get_last_write_time(const char* file_path) {
     return platform_get_last_write_time(file_path);
 }
 
-size_t pal_get_file_size(const char* file_path) {
+PALAPI size_t pal_get_file_size(const char* file_path) {
     return platform_get_file_size(file_path);
 }
 
-uint32_t pal_get_file_permissions(const char* file_path) {
+PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     return platform_get_file_permissions(file_path);
 }
 
-uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
+PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
     return platform_change_file_permissions(file_path, permission_flags);
 }
 
-uint8_t pal_read_file(const char* file_path, char* buffer) {
+PALAPI uint8_t pal_read_file(const char* file_path, char* buffer) {
     return platform_read_file(file_path, buffer);
 }
 
-uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer) {
+PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer) {
     return platform_write_file(file_path, file_size, buffer);
 }
 
-uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
+PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
     return platform_copy_file(original_path, copy_path);
 }
 
@@ -581,6 +581,23 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
 PALAPI pal_bool pal_close_file(pal_file* file) {
     return platform_close_file(file);
 }
+
+/*
+
+###########################################
+		  Random Number Generator 
+###########################################
+
+*/
+
+PALAPI void pal_srand(uint64_t* state, uint64_t seed) {
+    (void)platform_srand(state, seed);
+}
+
+PALAPI uint32_t pal_rand(uint64_t* state) {
+    return platform_rand(state);
+}
+
 
 /*
 
@@ -721,6 +738,7 @@ PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* st
     return 1;
 }
 
+// TODO: this should not be here, since this is only used by the platform-specific implementation in the background. 
 pal_bool pal_eventq_free(pal_event_queue* queue);
 
 pal_bool pal_eventq_free(pal_event_queue* queue) {

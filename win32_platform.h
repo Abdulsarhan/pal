@@ -2295,6 +2295,29 @@ pal_bool platform_close_file(pal_file* file) {
 }
 
 //----------------------------------------------------------------------------------
+// Random Number Generator.
+//----------------------------------------------------------------------------------
+
+void platform_srand(uint64_t *state, uint64_t seed) {
+    if (seed == 0) {
+        seed = 1; // Avoid zero state which would produce all zeros
+    }
+    *state = seed;
+}
+
+uint32_t platform_rand(uint64_t *state) {
+    // SDL's well-tested LCG constants:
+    // - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs)
+    // - Increment: 0x05 (small odd number, generates smaller ARM code)
+    // - These constants passed extensive testing with PractRand and TestU01
+    *state = *state * 0xff1cd035ul + 0x05;
+    
+    // Return upper 32 bits - they have better statistical properties
+    // and longer period than lower bits in an LCG
+    return (uint32_t)(*state >> 32);
+}
+
+//----------------------------------------------------------------------------------
 // Sound Functions.
 //----------------------------------------------------------------------------------
 int platform_init_sound() {

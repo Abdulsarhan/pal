@@ -1167,10 +1167,10 @@ PALAPI int pal_play_sound(pal_sound* sound, float volume);
 PALAPI int pal_stop_sound(pal_sound* sound);
 PALAPI void pal_free_sound(pal_sound* sound);
 
-pal_sound* pal_load_music(const char* filename);
+PALAPI pal_sound* pal_load_music(const char* filename);
 PALAPI int pal_play_music(pal_sound* sound, float volume);
 PALAPI int pal_stop_music(pal_sound* sound);
-void pal_free_music(pal_sound* sound);
+PALAPI void pal_free_music(pal_sound* sound);
 
 // File I/O
 PALAPI uint8_t pal_does_file_exist(const char* file_path);
@@ -1188,6 +1188,10 @@ PALAPI pal_file* pal_open_file(const char* file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer);
 PALAPI pal_bool pal_close_file(pal_file* file);
 
+// Random Number Generation
+PALAPI void pal_srand(uint64_t* state, uint64_t seed);
+PALAPI uint32_t pal_rand(uint64_t * state);
+
 // File Parsing
 PALAPI uint8_t pal_is_uppercase(char ch);
 PALAPI uint8_t pal_is_lowercase(char ch);
@@ -1202,17 +1206,17 @@ PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
 PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2);
 
 // Time functions
-pal_time pal_get_system_time_utc(void);
-pal_time pal_get_system_time_local(void);
-pal_time pal_get_time_since_boot(void);
-double pal_get_time_since_pal_started(void);
-uint64_t pal_get_timer(void);
-uint64_t pal_get_timer_frequency(void);
+PALAPI pal_time pal_get_system_time_utc(void);
+PALAPI pal_time pal_get_system_time_local(void);
+PALAPI pal_time pal_get_time_since_boot(void);
+PALAPI double pal_get_time_since_pal_started(void);
+PALAPI uint64_t pal_get_timer(void);
+PALAPI uint64_t pal_get_timer_frequency(void);
 
 // .dll/.so/.dylib loading
-void* load_dynamic_library(char* dll);
-void* load_dynamic_function(void* dll, char* func_name);
-uint8_t free_dynamic_library(void* dll);
+PALAPI void* load_dynamic_library(char* dll);
+PALAPI void* load_dynamic_function(void* dll, char* func_name);
+PALAPI uint8_t free_dynamic_library(void* dll);
 
 
 #ifdef __cplusplus
