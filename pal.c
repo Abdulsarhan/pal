@@ -96,6 +96,10 @@ PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     return platform_get_video_mode(monitor);
 }
 
+PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
+    return platform_set_video_mode(mode);
+}
+
 PALAPI pal_monitor* pal_get_primary_monitor(void) {
     return platform_get_primary_monitor();
 }

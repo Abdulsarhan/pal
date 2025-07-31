@@ -1169,6 +1169,7 @@ PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size);
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
+PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* pal_gl_get_proc_address(const unsigned char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);

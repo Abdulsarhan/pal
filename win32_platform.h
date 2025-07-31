@@ -1806,6 +1806,28 @@ static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
     return mode;
 }
 
+static pal_bool platform_set_video_mode(pal_video_mode* mode) {
+    DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
+    if (mode == NULL) {
+		if (ChangeDisplaySettingsA(NULL, 0)) {
+			return 1; 
+		} else {
+			return 0;
+		}
+    } else {
+        dm.dmPelsWidth = mode->width;
+        dm.dmPelsHeight = mode->height;
+        dm.dmDisplayFrequency = mode->refresh_rate;
+        dm.dmBitsPerPel = mode->bits_per_pixel;
+		if (ChangeDisplaySettingsA(&dm, 0)) {
+			return 1; 
+		} else {
+			return 0;
+		}
+    }
+
+}
+
 static void* platform_gl_get_proc_address(const char* proc) {
     return wglGetProcAddress(proc);
 }

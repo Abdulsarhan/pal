@@ -61,7 +61,7 @@ int main() {
     uint8_t running = TRUE;
     pal_event event;
     pal_gamepad_state state;
-    //pal_make_window_fullscreen(window);
+    pal_bool is_fullscreen = TRUE;
     while (running) {
         while (pal_poll_events(&event, window)) {
 
@@ -78,7 +78,7 @@ int main() {
                     if (event.key.scancode == PAL_SCAN_ESCAPE) {
                         printf("Exited!\n");
                         printf("scancode: %d", event.key.scancode);
-                        exit(0);
+                        running = FALSE;
                     }
                     break;
                 case PAL_EVENT_KEY_UP:
@@ -92,13 +92,15 @@ int main() {
                     printf("mouse_motion!\n");
                     break;
                 case PAL_EVENT_WINDOW_LOST_FOCUS:
-                    ChangeDisplaySettingsA(NULL, 0);
-                    pal_minimize_window(window);
-                    printf("APP: Lost Focus!\N");
+                    if (is_fullscreen) {
+						pal_set_video_mode(NULL);
+						pal_minimize_window(window);
+                    }
                     break;
                 case PAL_EVENT_WINDOW_GAINED_FOCUS:
-                    pal_make_window_fullscreen(window);
-                    printf("APP: Gained Focus!\n");
+                    if (is_fullscreen) {
+						pal_make_window_fullscreen(window);
+                    }
                     break;
                 default:
                     // printf("%d\n", event.type);
