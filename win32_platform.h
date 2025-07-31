@@ -984,7 +984,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     pal_event event = {0};
     switch (msg) {
         case WM_CLOSE:
-            event.type = PAL_WINDOW_CLOSE_REQUESTED;
+            event.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
             event.window = (pal_window_event){
                 .x = LOWORD(lparam),
                 .y = HIWORD(lparam),
@@ -994,7 +994,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .visible = 0};
             break;
         case WM_DESTROY:
-            event.type = PAL_WINDOW_CLOSED;
+            event.type = PAL_EVENT_WINDOW_CLOSED;
             event.window = (pal_window_event){
                 .x = LOWORD(lparam),
                 .y = HIWORD(lparam),
@@ -1004,11 +1004,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .visible = 0};
             break;
         case WM_QUIT: // we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing.
-            event.type = PAL_QUIT;
+            event.type = PAL_EVENT_QUIT;
             event.quit = (pal_quit_event){.code = 0};
             break;
         case WM_MOVE:
-            event.type = PAL_WINDOW;
+            event.type = PAL_EVENT_WINDOW_MOVED;
             event.window = (pal_window_event){
                 .x = LOWORD(lparam),
                 .y = HIWORD(lparam),
@@ -1018,7 +1018,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .visible = 1};
             break;
         case WM_SIZE:
-            event.type = PAL_WINDOW;
+            event.type = PAL_EVENT_WINDOW_RESIZED;
             event.window = (pal_window_event){
                 .event_code = WM_SIZE,
                 .x = 0,
@@ -1051,7 +1051,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 ClipCursor(&rect);
             }
             // Mouse just entered the window
-            event.type = PAL_MOUSE_MOTION;
+            event.type = PAL_EVENT_MOUSE_MOTION;
             event.motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
@@ -1066,7 +1066,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
-            event.type = PAL_WINDOW;
+            event.type = PAL_EVENT_WINDOW_MOVED;
             WINDOWPOS* pos = (WINDOWPOS*)lparam;
             event.window = (pal_window_event){
                 .event_code = msg,
@@ -1081,7 +1081,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_RBUTTONDOWN:
         case WM_MBUTTONDOWN:
         case WM_XBUTTONDOWN: {
-            event.type = PAL_MOUSE_BUTTON_DOWN;
+            event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
@@ -1108,15 +1108,15 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_RBUTTONDBLCLK:
         case WM_MBUTTONDBLCLK:
         case WM_XBUTTONDBLCLK: {
-            event.type = PAL_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
+            event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event) {
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
                 .pressed = 1,
                 .clicks = 2,
                 .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]};
-
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
+            };
             if (msg == WM_XBUTTONDBLCLK) {
                 WORD xButton = GET_XBUTTON_WPARAM(wparam);
                 if (xButton == XBUTTON1) {
@@ -1135,7 +1135,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_RBUTTONUP:
         case WM_MBUTTONUP:
         case WM_XBUTTONUP: {
-            event.type = PAL_MOUSE_BUTTON_UP;
+            event.type = PAL_EVENT_MOUSE_BUTTON_UP;
             event.button = (pal_mouse_button_event){
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
@@ -1163,7 +1163,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_MOUSEWHEEL:
         case WM_MOUSEHWHEEL: {
             int delta = GET_WHEEL_DELTA_WPARAM(wparam);
-            event.type = PAL_MOUSE_WHEEL;
+            event.type = PAL_EVENT_MOUSE_WHEEL;
             event.wheel = (pal_mouse_wheel_event){
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
@@ -1236,7 +1236,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
             uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
 
-            event.type = PAL_KEY_DOWN;
+            event.type = PAL_EVENT_KEY_DOWN;
             event.key = (pal_keyboard_event){
                 .virtual_key = win32_key_to_pal_key[vk],
                 .scancode = pal_scancode,
@@ -1309,7 +1309,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
             uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
 
-            event.type = PAL_KEY_UP;
+            event.type = PAL_EVENT_KEY_UP;
             event.key = (pal_keyboard_event){
                 .virtual_key = win32_key_to_pal_key[vk],
                 .scancode = pal_scancode,
@@ -1322,7 +1322,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         }
         case WM_CHAR:
         case WM_UNICHAR:
-            event.type = PAL_TEXT_INPUT;
+            event.type = PAL_EVENT_TEXT_INPUT;
             event.text = (pal_text_input_event){
                 .utf8_text = {0}};
             {
@@ -1332,19 +1332,20 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             }
             break;
 
-        case WM_INPUT:
+        case WM_INPUT: {
+
             win32_handle_raw_input((HRAWINPUT)lparam);
-            event.type = PAL_SENSOR_UPDATE;
+            event.type = PAL_EVENT_SENSOR_UPDATE;
             event.sensor = (pal_sensor_event){
                 .device_id = 0,
                 .x = 0,
                 .y = 0,
                 .z = 0,
                 .sensor_type = 0};
-            break;
+        }; break;
 
         case WM_DROPFILES: {
-            event.type = PAL_DROP_FILE;
+            event.type = PAL_EVENT_DROP_FILE;
             HDROP hDrop = (HDROP)wparam;
             UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
             const char** paths = malloc(sizeof(char*) * count);
@@ -1363,8 +1364,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         }
 
-        case WM_ACTIVATEAPP:
-            event.type = PAL_WINDOW;
+        case WM_ACTIVATEAPP: {
             event.window = (pal_window_event){
                 .event_code = WM_MOVE,
                 .x = LOWORD(lparam),
@@ -1372,35 +1372,35 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .width = 0,
                 .height = 0,
                 .visible = 1};
-            // false means that we lost focus.
             if ((BOOL)wparam == FALSE) {
+                event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
                 event.window.focused = 0;
-                ShowWindow(hwnd, SW_MINIMIZE);
-                ChangeDisplaySettingsA(NULL, 0);
+                printf("PAL: Lost Focus!\N");
             } else {
+                event.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
                 event.window.focused = 1;
-                platform_make_window_fullscreen(window);
+                printf("PAL: Gained Focus!\N");
             }
-            break;
+        }; break;
 
             // TODO: Make this return a pal_event of some kind.
-        case WM_INPUT_DEVICE_CHANGE:
+        case WM_INPUT_DEVICE_CHANGE: {
             win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
             printf("Device Changed!\n");
-            break;
+        }; break;
 
         default:
-            event.type = PAL_NONE;
+            event.type = PAL_EVENT_NONE;
             return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
-    pal_event_queue queue = window->queue;
-    if (queue.size == queue.capacity) {
-        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue.\n");
+    pal_event_queue* queue = &window->queue;
+    if (queue->size == queue->capacity) {
+        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
     }
-    queue.events[queue.back] = event;
-    queue.back = (queue.back + 1) % queue.capacity;
-    queue.size++;
+    queue->events[queue->back] = event;
+    queue->back = (queue->back + 1) % queue->capacity;
+    queue->size++;
 
     return 0;
 }
@@ -1770,11 +1770,11 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
         queue->front = (queue->front + 1) % queue->capacity;
         queue->size--;
         return 1;
+    } else {
+		window->message_pump_drained = FALSE;
+		input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
+		return 0;
     }
-    // not putting an else here to avoid unreachable section.
-    window->message_pump_drained = FALSE;
-    input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
-    return 0;
 }
 
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {

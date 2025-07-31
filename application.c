@@ -61,34 +61,44 @@ int main() {
     uint8_t running = TRUE;
     pal_event event;
     pal_gamepad_state state;
-    // pal_make_window_fullscreen(window);
+    //pal_make_window_fullscreen(window);
     while (running) {
         while (pal_poll_events(&event, window)) {
 
             switch (event.type) {
 
-                case PAL_MOUSE_BUTTON_DOWN:
+                case PAL_EVENT_MOUSE_BUTTON_DOWN:
                     if (event.button.button == PAL_MOUSE_LEFT)
-                        printf("Mouse button DOWN!\n");
+                    printf("App: Mouse Button DOWN!\n");
                     break;
-                case PAL_MOUSE_BUTTON_UP:
-                    printf("Mouse Button UP!\n");
+                case PAL_EVENT_MOUSE_BUTTON_UP:
+                    printf("App: Mouse Button UP!\n");
                     break;
-                case PAL_KEY_DOWN:
+                case PAL_EVENT_KEY_DOWN:
                     if (event.key.scancode == PAL_SCAN_ESCAPE) {
                         printf("Exited!\n");
                         printf("scancode: %d", event.key.scancode);
                         exit(0);
                     }
                     break;
-                case PAL_KEY_UP:
+                case PAL_EVENT_KEY_UP:
                     printf("Keyboard UP!\n");
                     break;
-                case PAL_QUIT:
+                case PAL_EVENT_QUIT:
                     printf("SHOULD HAVE CLOSED THE WINDOW!\n");
                     running = FALSE;
                     break;
-                case PAL_MOUSE_MOTION:
+                case PAL_EVENT_MOUSE_MOTION:
+                    printf("mouse_motion!\n");
+                    break;
+                case PAL_EVENT_WINDOW_LOST_FOCUS:
+                    ChangeDisplaySettingsA(NULL, 0);
+                    pal_minimize_window(window);
+                    printf("APP: Lost Focus!\N");
+                    break;
+                case PAL_EVENT_WINDOW_GAINED_FOCUS:
+                    pal_make_window_fullscreen(window);
+                    printf("APP: Gained Focus!\n");
                     break;
                 default:
                     // printf("%d\n", event.type);
