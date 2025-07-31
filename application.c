@@ -16,10 +16,10 @@ typedef struct OpenglInfo {
     const char* version;
     const char* shadingLanguageVersion;
     char extensions[8124];
-}OpenglInfo;
+} OpenglInfo;
 
 static OpenglInfo get_opengl_info(void) {
-    OpenglInfo info = { 0 };
+    OpenglInfo info = {0};
     info.vendor = (char*)glGetString(GL_VENDOR);
     info.renderer = (char*)glGetString(GL_RENDERER);
     info.version = (char*)glGetString(GL_VERSION);
@@ -32,8 +32,7 @@ static OpenglInfo get_opengl_info(void) {
             strcat(info.extensions, ext);
             strcat(info.extensions, " ");
         }
-    }
-    else {
+    } else {
         info.extensions[0] = (char*)glGetString(GL_EXTENSIONS);
     }
 
@@ -41,7 +40,7 @@ static OpenglInfo get_opengl_info(void) {
 }
 
 int main() {
-//int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
+    // int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
 
     pal_init();
 
@@ -62,41 +61,40 @@ int main() {
     uint8_t running = TRUE;
     pal_event event;
     pal_gamepad_state state;
-    //pal_make_window_fullscreen(window);
+    // pal_make_window_fullscreen(window);
     while (running) {
-		while (pal_poll_events(&event, window))
-		{
+        while (pal_poll_events(&event, window)) {
 
             switch (event.type) {
 
-            case PAL_MOUSE_BUTTON_DOWN:
-                if(event.button.button == PAL_MOUSE_LEFT)
-				printf("Mouse button DOWN!\n");
-                break;
-            case PAL_MOUSE_BUTTON_UP:
-				printf("Mouse Button UP!\n");
-                break;
-            case PAL_KEY_DOWN:
-                if (event.key.scancode == PAL_SCAN_ESCAPE) {
-                    printf("Exited!\n");
-                    printf("scancode: %d", event.key.scancode);
-                    exit(0);
-                }
-                break;
-            case PAL_KEY_UP:
-				printf("Keyboard UP!\n");
-                break;
-            case PAL_QUIT:
-                printf("SHOULD HAVE CLOSED THE WINDOW!\n");
-                running = FALSE;
-                break;
-            case PAL_MOUSE_MOTION:
-                break;
-            default:
-                //printf("%d\n", event.type);
-                break;
+                case PAL_MOUSE_BUTTON_DOWN:
+                    if (event.button.button == PAL_MOUSE_LEFT)
+                        printf("Mouse button DOWN!\n");
+                    break;
+                case PAL_MOUSE_BUTTON_UP:
+                    printf("Mouse Button UP!\n");
+                    break;
+                case PAL_KEY_DOWN:
+                    if (event.key.scancode == PAL_SCAN_ESCAPE) {
+                        printf("Exited!\n");
+                        printf("scancode: %d", event.key.scancode);
+                        exit(0);
+                    }
+                    break;
+                case PAL_KEY_UP:
+                    printf("Keyboard UP!\n");
+                    break;
+                case PAL_QUIT:
+                    printf("SHOULD HAVE CLOSED THE WINDOW!\n");
+                    running = FALSE;
+                    break;
+                case PAL_MOUSE_MOTION:
+                    break;
+                default:
+                    // printf("%d\n", event.type);
+                    break;
             }
-		}
+        }
         // The is_* functions only work after all the events have been polled.
         // do not call this in the message loop.
         if (is_key_pressed(PAL_W)) {
@@ -121,15 +119,15 @@ int main() {
 
         for (int i = 0; i < pal_get_gamepad_count(); i++) {
             if (pal_get_gamepad_state(i, &state)) {
-/*
-                printf("\nController %d: %s\n", i, state.name);
-                printf("  Left Stick: %.2f, %.2f\n", state.axes.left_x, state.axes.left_y);
-                printf("  Right Stick: %.2f, %.2f\n", state.axes.right_x, state.axes.right_y);
-                printf("  Triggers: L=%.2f R=%.2f\n", state.axes.left_trigger, state.axes.right_trigger);
-                printf("  Buttons: A=%d B=%d X=%d Y=%d\n", 
-                      state.buttons.a, state.buttons.b, 
-                      state.buttons.x, state.buttons.y);
-*/
+                /*
+                                printf("\nController %d: %s\n", i, state.name);
+                                printf("  Left Stick: %.2f, %.2f\n", state.axes.left_x, state.axes.left_y);
+                                printf("  Right Stick: %.2f, %.2f\n", state.axes.right_x, state.axes.right_y);
+                                printf("  Triggers: L=%.2f R=%.2f\n", state.axes.left_trigger, state.axes.right_trigger);
+                                printf("  Buttons: A=%d B=%d X=%d Y=%d\n",
+                                      state.buttons.a, state.buttons.b,
+                                      state.buttons.x, state.buttons.y);
+                */
                 // 6. Example vibration (Xbox controllers only)
                 if (state.buttons.a && state.is_xinput) {
                     pal_set_gamepad_vibration(i, 0.5f, 0.5f, 0, 0);
@@ -138,9 +136,9 @@ int main() {
                 }
             }
         }
-		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		pal_swap_buffers(window);
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        pal_swap_buffers(window);
     }
 
     return 0;

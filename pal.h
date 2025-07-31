@@ -1,18 +1,18 @@
 #ifndef PAL_H
 #define PAL_H
 
-#include <stdint.h> // For Clearly Defined Types.
+#include <stdint.h>   // For Clearly Defined Types.
 #include <sys/stat.h> // For time_t and stat.
 typedef uint8_t pal_bool;
 
 typedef struct pal_video_mode {
-	int width;
-	int height;
+    int width;
+    int height;
     int refresh_rate;
     int bits_per_pixel;
-}pal_video_mode;
+} pal_video_mode;
 
-typedef struct pal_file{
+typedef struct pal_file {
     void* handle;
 } pal_file;
 
@@ -22,7 +22,7 @@ typedef struct {
     uint32_t weeks;
     uint32_t day;
     uint32_t hours;
-    uint32_t minutes; 
+    uint32_t minutes;
     uint32_t seconds;
 } pal_time;
 
@@ -36,7 +36,7 @@ typedef struct {
         float right_x, right_y;
         float left_trigger, right_trigger;
     } axes;
-    
+
     struct {
         pal_bool a, b, x, y;
         pal_bool back, start, guide;
@@ -45,7 +45,7 @@ typedef struct {
         pal_bool dpad_up, dpad_down, dpad_left, dpad_right;
         pal_bool touchpad_button;
     } buttons;
-    
+
     // Identification
     char name[128];
     uint16_t vendor_id;
@@ -54,20 +54,20 @@ typedef struct {
     pal_bool is_xinput;
 
     // Battery information
-    float battery_level;        // 0.0-1.0
+    float battery_level; // 0.0-1.0
     pal_bool is_charging;
 
     // Motion sensors
-    float accel_x, accel_y, accel_z;  // In G's
-    float gyro_x, gyro_y, gyro_z;     // In degrees/second
+    float accel_x, accel_y, accel_z; // In G's
+    float gyro_x, gyro_y, gyro_z;    // In degrees/second
 
     // Touchpad
     struct {
         int touch_count;
         struct {
-            int id;            // Touch ID
-            float x, y;        // Normalized coordinates (0-1)
-            pal_bool down;     // Is touch active
+            int id;                 // Touch ID
+            float x, y;             // Normalized coordinates (0-1)
+            pal_bool down;          // Is touch active
         } touches[PAL_MAX_TOUCHES]; // Two fingers on the touch pad at the same time. Kinky. commonly used for scrolling, zooming and rotating.
     } touchpad;
 } pal_gamepad_state;
@@ -78,8 +78,7 @@ typedef struct pal_monitor pal_monitor;
 
 // events.
 
-typedef enum pal_event_type
-{
+typedef enum pal_event_type {
     PAL_NONE = 0x0,
     PAL_QUIT = 0x100,
 
@@ -279,7 +278,7 @@ typedef struct pal_joy_button_event {
 
 typedef struct pal_joy_battery_event {
     int32_t device_id;
-    uint8_t level;      // 0-100
+    uint8_t level; // 0-100
     uint8_t charging;
 } pal_joy_battery_event;
 
@@ -395,48 +394,47 @@ typedef struct pal_clipboard_event {
     const char* text;
 } pal_clipboard_event;
 
-typedef struct pal_event
-{
-    uint32_t type;                              /**< Event type, shared with all events, Uint32 to cover user events which are not in the pal_event_type enumeration */
-	// Event data:
+typedef struct pal_event {
+    uint32_t type; /**< Event type, shared with all events, Uint32 to cover user events which are not in the pal_event_type enumeration */
+                   // Event data:
     union {
-    pal_common_event common;                  /**< Common event data */
-    pal_display_event display;                /**< Display event data */
-    pal_window_event window;                  /**< Window event data */
-    pal_keyboard_device_event kdevice;       /**< Keyboard device change event data */
-    pal_keyboard_event key;                   /**< Keyboard event data */
-    pal_text_editing_event edit;              /**< Text editing event data */
-    pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
-    pal_text_input_event text;                /**< Text input event data */
-    pal_mouse_device_event mdevice;           /**< Mouse device change event data */
-    pal_mouse_motion_event motion;            /**< Mouse motion event data */
-    pal_mouse_button_event button;            /**< Mouse button event data */
-    pal_mouse_wheel_event wheel;              /**< Mouse wheel event data */
-    pal_joy_device_event jdevice;             /**< Joystick device change event data */
-    pal_joy_axis_event jaxis;                  /**< Joystick axis event data */
-    pal_joy_ball_event jball;                  /**< Joystick ball event data */
-    pal_joy_hat_event jhat;                    /**< Joystick hat event data */
-    pal_joy_button_event jbutton;              /**< Joystick button event data */
-    pal_joy_battery_event jbattery;            /**< Joystick battery event data */
-    pal_gamepad_device_event gdevice;          /**< Gamepad device event data */
-    pal_gamepad_axis_event gaxis;               /**< Gamepad axis event data */
-    pal_gamepad_button_event gbutton;           /**< Gamepad button event data */
-    pal_gamepad_touchpad_event gtouchpad;       /**< Gamepad touchpad event data */
-    pal_gamepad_sensor_event gsensor;           /**< Gamepad sensor event data */
-    pal_audio_device_event adevice;              /**< Audio device event data */
-    pal_camera_device_event cdevice;             /**< Camera device event data */
-    pal_sensor_event sensor;                     /**< Sensor event data */
-    pal_quit_event quit;                         /**< Quit request event data */
-    pal_user_event user;                         /**< Custom event data */
-    pal_touch_finger_event tfinger;             /**< Touch finger event data */
-    pal_pen_proximity_event pproximity;         /**< Pen proximity event data */
-    pal_pen_touch_event ptouch;                   /**< Pen tip touching event data */
-    pal_pen_motion_event pmotion;                 /**< Pen motion event data */
-    pal_pen_button_event pbutton;                 /**< Pen button event data */
-    pal_pen_axis_event paxis;                     /**< Pen axis event data */
-    pal_render_event render;                       /**< Render event data */
-    pal_drop_event drop;                           /**< Drag and drop event data */
-    pal_clipboard_event clipboard;                 /**< Clipboard event data */
+        pal_common_event common;                           /**< Common event data */
+        pal_display_event display;                         /**< Display event data */
+        pal_window_event window;                           /**< Window event data */
+        pal_keyboard_device_event kdevice;                 /**< Keyboard device change event data */
+        pal_keyboard_event key;                            /**< Keyboard event data */
+        pal_text_editing_event edit;                       /**< Text editing event data */
+        pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
+        pal_text_input_event text;                         /**< Text input event data */
+        pal_mouse_device_event mdevice;                    /**< Mouse device change event data */
+        pal_mouse_motion_event motion;                     /**< Mouse motion event data */
+        pal_mouse_button_event button;                     /**< Mouse button event data */
+        pal_mouse_wheel_event wheel;                       /**< Mouse wheel event data */
+        pal_joy_device_event jdevice;                      /**< Joystick device change event data */
+        pal_joy_axis_event jaxis;                          /**< Joystick axis event data */
+        pal_joy_ball_event jball;                          /**< Joystick ball event data */
+        pal_joy_hat_event jhat;                            /**< Joystick hat event data */
+        pal_joy_button_event jbutton;                      /**< Joystick button event data */
+        pal_joy_battery_event jbattery;                    /**< Joystick battery event data */
+        pal_gamepad_device_event gdevice;                  /**< Gamepad device event data */
+        pal_gamepad_axis_event gaxis;                      /**< Gamepad axis event data */
+        pal_gamepad_button_event gbutton;                  /**< Gamepad button event data */
+        pal_gamepad_touchpad_event gtouchpad;              /**< Gamepad touchpad event data */
+        pal_gamepad_sensor_event gsensor;                  /**< Gamepad sensor event data */
+        pal_audio_device_event adevice;                    /**< Audio device event data */
+        pal_camera_device_event cdevice;                   /**< Camera device event data */
+        pal_sensor_event sensor;                           /**< Sensor event data */
+        pal_quit_event quit;                               /**< Quit request event data */
+        pal_user_event user;                               /**< Custom event data */
+        pal_touch_finger_event tfinger;                    /**< Touch finger event data */
+        pal_pen_proximity_event pproximity;                /**< Pen proximity event data */
+        pal_pen_touch_event ptouch;                        /**< Pen tip touching event data */
+        pal_pen_motion_event pmotion;                      /**< Pen motion event data */
+        pal_pen_button_event pbutton;                      /**< Pen button event data */
+        pal_pen_axis_event paxis;                          /**< Pen axis event data */
+        pal_render_event render;                           /**< Render event data */
+        pal_drop_event drop;                               /**< Drag and drop event data */
+        pal_clipboard_event clipboard;                     /**< Clipboard event data */
     };
 
     uint8_t padding[128];
@@ -448,16 +446,16 @@ typedef struct pal_event_queue {
     int front;
     int back;
     pal_event* events;
-}pal_event_queue;
+} pal_event_queue;
 
 #if defined(_WIN32)
 #if defined(__TINYC__)
 #define __declspec(x) __attribute__((x))
 #endif
 #if defined(BUILD_LIBTYPE_SHARED)
-#define PALAPI __declspec(dllexport)     // We are building the library as a Win32 shared library (.dll)
+#define PALAPI __declspec(dllexport) // We are building the library as a Win32 shared library (.dll)
 #elif defined(USE_LIBTYPE_SHARED)
-#define PALAPI __declspec(dllimport)     // We are using the library as a Win32 shared library (.dll)
+#define PALAPI __declspec(dllimport) // We are using the library as a Win32 shared library (.dll)
 #endif
 #else
 #if defined(BUILD_LIBTYPE_SHARED)
@@ -476,50 +474,86 @@ typedef struct pal_event_queue {
 #define PI 3.14159265358979323846f
 #endif
 #ifndef DEG2RAD
-#define DEG2RAD (PI/180.0f)
+#define DEG2RAD (PI / 180.0f)
 #endif
 #ifndef RAD2DEG
-#define RAD2DEG (180.0f/PI)
+#define RAD2DEG (180.0f / PI)
 #endif
 
 typedef struct pal_vec2 {
-    union { float x, r, u, s; };
-    union { float y, g, v, t; };
+    union {
+        float x, r, u, s;
+    };
+    union {
+        float y, g, v, t;
+    };
 } pal_vec2;
 
 typedef struct pal_vec3 {
-    union { float x, r, u, s; };
-    union { float y, g, v, t; };
-    union { float z, b; };
+    union {
+        float x, r, u, s;
+    };
+    union {
+        float y, g, v, t;
+    };
+    union {
+        float z, b;
+    };
 } pal_vec3;
 
 typedef struct pal_vec4 {
-    union { float x, r, u, s; };
-    union { float y, g, v, t; };
-    union { float z, b; };
-    union { float w, a; };
+    union {
+        float x, r, u, s;
+    };
+    union {
+        float y, g, v, t;
+    };
+    union {
+        float z, b;
+    };
+    union {
+        float w, a;
+    };
 } pal_vec4;
 
 typedef struct pal_ivec2 {
-    union { int32_t x, r, u, s; };
-    union { int32_t y, g, v, t; };
+    union {
+        int32_t x, r, u, s;
+    };
+    union {
+        int32_t y, g, v, t;
+    };
 } pal_ivec2;
 
 typedef struct pal_ivec3 {
-    union { int32_t x, r, u, s; };
-    union { int32_t y, g, v, t; };
-    union { int32_t z, b; };
+    union {
+        int32_t x, r, u, s;
+    };
+    union {
+        int32_t y, g, v, t;
+    };
+    union {
+        int32_t z, b;
+    };
 } pal_ivec3;
 
 typedef struct pal_ivec4 {
-    union { int32_t x, r, u, s; };
-    union { int32_t y, g, v, t; };
-    union { int32_t z, b; };
-    union { int32_t w, a; };
+    union {
+        int32_t x, r, u, s;
+    };
+    union {
+        int32_t y, g, v, t;
+    };
+    union {
+        int32_t z, b;
+    };
+    union {
+        int32_t w, a;
+    };
 } pal_ivec4;
 
 //----------------------------------------------------------------------------------
-// Window Flags 
+// Window Flags
 //----------------------------------------------------------------------------------
 #define GL_PROFILE 0x1
 #define GL_VERSION_MAJOR 0x2
@@ -542,7 +576,7 @@ typedef struct pal_ivec4 {
 // graphics APIs
 #define PAL_WINDOW_OPENGL 0x2
 #define PAL_WINDOW_VULKAN 0x100000 // unimplemented
-#define PAL_WINDOW_METAL 0x200000 // unimplemented
+#define PAL_WINDOW_METAL 0x200000  // unimplemented
 
 // window type
 #define PAL_WINDOW_MODAL 0x1000 // unimplemented
@@ -550,12 +584,12 @@ typedef struct pal_ivec4 {
 #define PAL_WINDOW_TOOLTIP 0x20000
 #define PAL_WINDOW_POPUP_MENU 0x40000
 
-#define PAL_WINDOW_INPUT_FOCUS 0x200  // unimplemented
+#define PAL_WINDOW_INPUT_FOCUS 0x200 // unimplemented
 #define PAL_WINDOW_MOUSE_FOCUS 0x400 // unimplemented
 #define PAL_WINDOW_MOUSE_CONFINED 0x100
 #define PAL_WINDOW_KEYBOARD_GRABBED 0x80000 // unimplemented
-#define PAL_WINDOW_NOT_FOCUSABLE 0x800000 // unimplemented
-#define PAL_WINDOW_MOUSE_CAPTURE 0x4000 // unimplemented
+#define PAL_WINDOW_NOT_FOCUSABLE 0x800000   // unimplemented
+#define PAL_WINDOW_MOUSE_CAPTURE 0x4000     // unimplemented
 // unreleated stuff.
 #define PAL_WINDOW_EXTERNAL 0x800
 #define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000 // not implemented
@@ -609,108 +643,108 @@ typedef struct pal_ivec4 {
 // Keys
 //----------------------------------------------------------------------------------
 
-#define PAL_BACKSPACE     0x08
-#define PAL_TAB           0x09
-#define PAL_ENTER         0x0D
-#define PAL_SHIFT         0x10
-#define PAL_CONTROL       0x11
-#define PAL_ALT           0x12
-#define PAL_META          PAL_ALT
-#define PAL_OPTION        PAL_ALT
-#define PAL_PAUSE         0x13
-#define PAL_CAPSLOCK      0x14
-#define PAL_ESCAPE        0x1B
-#define PAL_SPACE         0x20
-#define PAL_PAGEUP        0x21
-#define PAL_PAGEDOWN      0x22
-#define PAL_END           0x23
-#define PAL_HOME          0x24
-#define PAL_LEFT          0x25
-#define PAL_UP            0x26
-#define PAL_RIGHT         0x27
-#define PAL_DOWN          0x28
-#define PAL_PRINTSCREEN   0x2C
-#define PAL_INSERT        0x2D
-#define PAL_DELETE        0x2E
+#define PAL_BACKSPACE 0x08
+#define PAL_TAB 0x09
+#define PAL_ENTER 0x0D
+#define PAL_SHIFT 0x10
+#define PAL_CONTROL 0x11
+#define PAL_ALT 0x12
+#define PAL_META PAL_ALT
+#define PAL_OPTION PAL_ALT
+#define PAL_PAUSE 0x13
+#define PAL_CAPSLOCK 0x14
+#define PAL_ESCAPE 0x1B
+#define PAL_SPACE 0x20
+#define PAL_PAGEUP 0x21
+#define PAL_PAGEDOWN 0x22
+#define PAL_END 0x23
+#define PAL_HOME 0x24
+#define PAL_LEFT 0x25
+#define PAL_UP 0x26
+#define PAL_RIGHT 0x27
+#define PAL_DOWN 0x28
+#define PAL_PRINTSCREEN 0x2C
+#define PAL_INSERT 0x2D
+#define PAL_DELETE 0x2E
 
-#define PAL_0             0x30
-#define PAL_1             0x31
-#define PAL_2             0x32
-#define PAL_3             0x33
-#define PAL_4             0x34
-#define PAL_5             0x35
-#define PAL_6             0x36
-#define PAL_7             0x37
-#define PAL_8             0x38
-#define PAL_9             0x39
+#define PAL_0 0x30
+#define PAL_1 0x31
+#define PAL_2 0x32
+#define PAL_3 0x33
+#define PAL_4 0x34
+#define PAL_5 0x35
+#define PAL_6 0x36
+#define PAL_7 0x37
+#define PAL_8 0x38
+#define PAL_9 0x39
 
-#define PAL_A             0x41
-#define PAL_B             0x42
-#define PAL_C             0x43
-#define PAL_D             0x44
-#define PAL_E             0x45
-#define PAL_F             0x46
-#define PAL_G             0x47
-#define PAL_H             0x48
-#define PAL_I             0x49
-#define PAL_J             0x4A
-#define PAL_K             0x4B
-#define PAL_L             0x4C
-#define PAL_M             0x4D
-#define PAL_N             0x4E
-#define PAL_O             0x4F
-#define PAL_P             0x50
-#define PAL_Q             0x51
-#define PAL_R             0x52
-#define PAL_S             0x53
-#define PAL_T             0x54
-#define PAL_U             0x55
-#define PAL_V             0x56
-#define PAL_W             0x57
-#define PAL_X             0x58
-#define PAL_Y             0x59
-#define PAL_Z             0x5A
+#define PAL_A 0x41
+#define PAL_B 0x42
+#define PAL_C 0x43
+#define PAL_D 0x44
+#define PAL_E 0x45
+#define PAL_F 0x46
+#define PAL_G 0x47
+#define PAL_H 0x48
+#define PAL_I 0x49
+#define PAL_J 0x4A
+#define PAL_K 0x4B
+#define PAL_L 0x4C
+#define PAL_M 0x4D
+#define PAL_N 0x4E
+#define PAL_O 0x4F
+#define PAL_P 0x50
+#define PAL_Q 0x51
+#define PAL_R 0x52
+#define PAL_S 0x53
+#define PAL_T 0x54
+#define PAL_U 0x55
+#define PAL_V 0x56
+#define PAL_W 0x57
+#define PAL_X 0x58
+#define PAL_Y 0x59
+#define PAL_Z 0x5A
 
-#define PAL_LWIN          0x5B 
-#define PAL_RWIN          0x5C
-#define PAL_LSUPER        PAL_LWIN
-#define PAL_RSUPER        PAL_RWIN
-#define PAL_LCOMMAND      PAL_LWIN
-#define PAL_RCOMMAND      PAL_RWIN
-#define PAL_APPS          0x5D
+#define PAL_LWIN 0x5B
+#define PAL_RWIN 0x5C
+#define PAL_LSUPER PAL_LWIN
+#define PAL_RSUPER PAL_RWIN
+#define PAL_LCOMMAND PAL_LWIN
+#define PAL_RCOMMAND PAL_RWIN
+#define PAL_APPS 0x5D
 
-#define PAL_NUMPAD_0      0x60
-#define PAL_NUMPAD_1      0x61
-#define PAL_NUMPAD_2      0x62
-#define PAL_NUMPAD_3      0x63
-#define PAL_NUMPAD_4      0x64
-#define PAL_NUMPAD_5      0x65
-#define PAL_NUMPAD_6      0x66
-#define PAL_NUMPAD_7      0x67
-#define PAL_NUMPAD_8      0x68
-#define PAL_NUMPAD_9      0x69
-#define PAL_MULTIPLY      0x6A
-#define PAL_ADD           0x6B
-#define PAL_SEPARATOR     0x6C // Most modern Keyboards don't have this.
-#define PAL_SUBTRACT      0x6D
-#define PAL_DECIMAL       0x6E
-#define PAL_DIVIDE        0x6F
+#define PAL_NUMPAD_0 0x60
+#define PAL_NUMPAD_1 0x61
+#define PAL_NUMPAD_2 0x62
+#define PAL_NUMPAD_3 0x63
+#define PAL_NUMPAD_4 0x64
+#define PAL_NUMPAD_5 0x65
+#define PAL_NUMPAD_6 0x66
+#define PAL_NUMPAD_7 0x67
+#define PAL_NUMPAD_8 0x68
+#define PAL_NUMPAD_9 0x69
+#define PAL_MULTIPLY 0x6A
+#define PAL_ADD 0x6B
+#define PAL_SEPARATOR 0x6C // Most modern Keyboards don't have this.
+#define PAL_SUBTRACT 0x6D
+#define PAL_DECIMAL 0x6E
+#define PAL_DIVIDE 0x6F
 
-#define PAL_F1            0x70
-#define PAL_F2            0x71
-#define PAL_F3            0x72
-#define PAL_F4            0x73
-#define PAL_F5            0x74
-#define PAL_F6            0x75
-#define PAL_F7            0x76
-#define PAL_F8            0x77
-#define PAL_F9            0x78
-#define PAL_F10           0x79
-#define PAL_F11           0x7A
-#define PAL_F12           0x7B
+#define PAL_F1 0x70
+#define PAL_F2 0x71
+#define PAL_F3 0x72
+#define PAL_F4 0x73
+#define PAL_F5 0x74
+#define PAL_F6 0x75
+#define PAL_F7 0x76
+#define PAL_F8 0x77
+#define PAL_F9 0x78
+#define PAL_F10 0x79
+#define PAL_F11 0x7A
+#define PAL_F12 0x7B
 
-#define PAL_NUMLOCK       0x90
-#define PAL_SCROLLLOCK    0x91
+#define PAL_NUMLOCK 0x90
+#define PAL_SCROLLLOCK 0x91
 
 //---------------------------------------------------------------------------------
 // Modifier Keys
@@ -781,51 +815,51 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_EQUALS 46
 #define PAL_SCAN_LEFTBRACKET 47
 #define PAL_SCAN_RIGHTBRACKET 48
-#define PAL_SCAN_BACKSLASH 49 /**< Located at the lower left of the return
-						   *   key on ISO keyboards and at the right end
-						   *   of the QWERTY row on ANSI keyboards.
-						   *   Produces REVERSE SOLIDUS (backslash) and
-						   *   VERTICAL LINE in a US layout REVERSE
-						   *   SOLIDUS and VERTICAL LINE in a UK Mac
-						   *   layout NUMBER SIGN and TILDE in a UK
-						   *   Windows layout DOLLAR SIGN and POUND SIGN
-						   *   in a Swiss German layout NUMBER SIGN and
-						   *   APOSTROPHE in a German layout GRAVE
-						   *   ACCENT and POUND SIGN in a French Mac
-						   *   layout and ASTERISK and MICRO SIGN in a
-						   *   French Windows layout.
-						   */
-#define PAL_SCAN_NONUSHASH 50 /**< ISO USB keyboards actually use this code
-						   *   instead of 49 for the same key but all
-						   *   OSes I've seen treat the two codes
-						   *   identically. So as an implementor unless
-						   *   your keyboard generates both of those
-						   *   codes and your OS treats them differently
-						   *   you should generate PAL_SCAN_BACKSLASH
-						   *   instead of this code. As a user you
-						   *   should not rely on this code because SDL
-						   *   will never generate it with most (all?)
-						   *   keyboards.
-						   */
+#define PAL_SCAN_BACKSLASH 49 /**< Located at the lower left of the return   \
+                               *   key on ISO keyboards and at the right end \
+                               *   of the QWERTY row on ANSI keyboards.      \
+                               *   Produces REVERSE SOLIDUS (backslash) and  \
+                               *   VERTICAL LINE in a US layout REVERSE      \
+                               *   SOLIDUS and VERTICAL LINE in a UK Mac     \
+                               *   layout NUMBER SIGN and TILDE in a UK      \
+                               *   Windows layout DOLLAR SIGN and POUND SIGN \
+                               *   in a Swiss German layout NUMBER SIGN and  \
+                               *   APOSTROPHE in a German layout GRAVE       \
+                               *   ACCENT and POUND SIGN in a French Mac     \
+                               *   layout and ASTERISK and MICRO SIGN in a   \
+                               *   French Windows layout.                    \
+                               */
+#define PAL_SCAN_NONUSHASH 50 /**< ISO USB keyboards actually use this code  \
+                               *   instead of 49 for the same key but all    \
+                               *   OSes I've seen treat the two codes        \
+                               *   identically. So as an implementor unless  \
+                               *   your keyboard generates both of those     \
+                               *   codes and your OS treats them differently \
+                               *   you should generate PAL_SCAN_BACKSLASH    \
+                               *   instead of this code. As a user you       \
+                               *   should not rely on this code because SDL  \
+                               *   will never generate it with most (all?)   \
+                               *   keyboards.                                \
+                               */
 #define PAL_SCAN_SEMICOLON 51
 #define PAL_SCAN_APOSTROPHE 52
-#define PAL_SCAN_GRAVE 53 /**< Located in the top left corner (on both ANSI
-					   *   and ISO keyboards). Produces GRAVE ACCENT and
-					   *   TILDE in a US Windows layout and in US and UK
-					   *   Mac layouts on ANSI keyboards GRAVE ACCENT
-					   *   and NOT SIGN in a UK Windows layout SECTION
-					   *   SIGN and PLUS-MINUS SIGN in US and UK Mac
-					   *   layouts on ISO keyboards SECTION SIGN and
-					   *   DEGREE SIGN in a Swiss German layout (Mac:
-					   *   only on ISO keyboards) CIRCUMFLEX ACCENT and
-					   *   DEGREE SIGN in a German layout (Mac: only on
-					   *   ISO keyboards) SUPERSCRIPT TWO and TILDE in a
-					   *   French Windows layout COMMERCIAL AT and
-					   *   NUMBER SIGN in a French Mac layout on ISO
-					   *   keyboards and LESS-THAN SIGN and GREATER-THAN
-					   *   SIGN in a Swiss German German or French Mac
-					   *   layout on ANSI keyboards.
-					   */
+#define PAL_SCAN_GRAVE 53 /**< Located in the top left corner (on both ANSI  \
+                           *   and ISO keyboards). Produces GRAVE ACCENT and \
+                           *   TILDE in a US Windows layout and in US and UK \
+                           *   Mac layouts on ANSI keyboards GRAVE ACCENT    \
+                           *   and NOT SIGN in a UK Windows layout SECTION   \
+                           *   SIGN and PLUS-MINUS SIGN in US and UK Mac     \
+                           *   layouts on ISO keyboards SECTION SIGN and     \
+                           *   DEGREE SIGN in a Swiss German layout (Mac:    \
+                           *   only on ISO keyboards) CIRCUMFLEX ACCENT and  \
+                           *   DEGREE SIGN in a German layout (Mac: only on  \
+                           *   ISO keyboards) SUPERSCRIPT TWO and TILDE in a \
+                           *   French Windows layout COMMERCIAL AT and       \
+                           *   NUMBER SIGN in a French Mac layout on ISO     \
+                           *   keyboards and LESS-THAN SIGN and GREATER-THAN \
+                           *   SIGN in a Swiss German German or French Mac   \
+                           *   layout on ANSI keyboards.                     \
+                           */
 #define PAL_SCAN_COMMA 54
 #define PAL_SCAN_PERIOD 55
 #define PAL_SCAN_SLASH 56
@@ -872,20 +906,20 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_KP_9 97
 #define PAL_SCAN_KP_0 98
 #define PAL_SCAN_KP_PERIOD 99
-#define PAL_SCAN_NONUSBACKSLASH 100 /**< This is the additional key that ISO
-								#define *   keyboards have over ANSI ones
-								#define *   located between left shift and Y.
-								#define *   Produces GRAVE ACCENT and TILDE in a
-								#define *   US or UK Mac layout REVERSE SOLIDUS
-								#define *   (backslash) and VERTICAL LINE in a
-								#define *   US or UK Windows layout and
-								#define *   LESS-THAN SIGN and GREATER-THAN SIGN
-								#define *   in a Swiss German German or French
-								#define *   layout. */
-#define PAL_SCAN_APPLICATION 101 /**< windows contextual menu compose */
-#define PAL_SCAN_POWER 102 /**< The USB document says this is a status flag
-					   #define *   not a physical key - but some Mac keyboards
-					   #define *   do have a power key. */
+#define PAL_SCAN_NONUSBACKSLASH 100 /**< This is the additional key that ISO     \
+                                #define *   keyboards have over ANSI ones        \
+                                #define *   located between left shift and Y.    \
+                                #define *   Produces GRAVE ACCENT and TILDE in a \
+                                #define *   US or UK Mac layout REVERSE SOLIDUS  \
+                                #define *   (backslash) and VERTICAL LINE in a   \
+                                #define *   US or UK Windows layout and          \
+                                #define *   LESS-THAN SIGN and GREATER-THAN SIGN \
+                                #define *   in a Swiss German German or French   \
+                                #define *   layout. */
+#define PAL_SCAN_APPLICATION 101    /**< windows contextual menu compose */
+#define PAL_SCAN_POWER 102          /**< The USB document says this is a status flag    \
+                                #define *   not a physical key - but some Mac keyboards \
+                                #define *   do have a power key. */
 #define PAL_SCAN_KP_EQUALS 103
 #define PAL_SCAN_F13 104
 #define PAL_SCAN_F14 105
@@ -900,21 +934,21 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_F23 114
 #define PAL_SCAN_F24 115
 #define PAL_SCAN_EXECUTE 116
-#define PAL_SCAN_HELP 117    /**< AL Integrated Help Center */
-#define PAL_SCAN_MENU 118    /**< Menu (show menu) */
+#define PAL_SCAN_HELP 117 /**< AL Integrated Help Center */
+#define PAL_SCAN_MENU 118 /**< Menu (show menu) */
 #define PAL_SCAN_SELECT 119
-#define PAL_SCAN_STOP 120    /**< AC Stop */
-#define PAL_SCAN_AGAIN 121   /**< AC Redo/Repeat */
-#define PAL_SCAN_UNDO 122    /**< AC Undo */
-#define PAL_SCAN_CUT 123     /**< AC Cut */
-#define PAL_SCAN_COPY 124    /**< AC Copy */
-#define PAL_SCAN_PASTE 125   /**< AC Paste */
-#define PAL_SCAN_FIND 126    /**< AC Find */
+#define PAL_SCAN_STOP 120  /**< AC Stop */
+#define PAL_SCAN_AGAIN 121 /**< AC Redo/Repeat */
+#define PAL_SCAN_UNDO 122  /**< AC Undo */
+#define PAL_SCAN_CUT 123   /**< AC Cut */
+#define PAL_SCAN_COPY 124  /**< AC Copy */
+#define PAL_SCAN_PASTE 125 /**< AC Paste */
+#define PAL_SCAN_FIND 126  /**< AC Find */
 #define PAL_SCAN_MUTE 127
 #define PAL_SCAN_VOLUMEUP 128
 #define PAL_SCAN_VOLUMEDOWN 129
-#define PAL_SCAN_LOCKINGCAPSLOCK 130  
-#define PAL_SCAN_LOCKINGNUMLOCK 131 
+#define PAL_SCAN_LOCKINGCAPSLOCK 130
+#define PAL_SCAN_LOCKINGNUMLOCK 131
 #define PAL_SCAN_LOCKINGSCROLLLOCK 132
 #define PAL_SCAN_KP_COMMA 133
 #define PAL_SCAN_KP_EQUALSAS400 134
@@ -927,18 +961,18 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_INTERNATIONAL7 141
 #define PAL_SCAN_INTERNATIONAL8 142
 #define PAL_SCAN_INTERNATIONAL9 143
-#define PAL_SCAN_LANG1 144 /**< Hangul/English toggle */
-#define PAL_SCAN_LANG2 145 /**< Hanja conversion */
-#define PAL_SCAN_LANG3 146 /**< Katakana */
-#define PAL_SCAN_LANG4 147 /**< Hiragana */
-#define PAL_SCAN_LANG5 148 /**< Zenkaku/Hankaku */
-#define PAL_SCAN_LANG6 149 /**< reserved */
-#define PAL_SCAN_LANG7 150 /**< reserved */
-#define PAL_SCAN_LANG8 151 /**< reserved */
-#define PAL_SCAN_LANG9 152 /**< reserved */
-#define PAL_SCAN_ALTERASE 153    /**< Erase-Eaze */
+#define PAL_SCAN_LANG1 144    /**< Hangul/English toggle */
+#define PAL_SCAN_LANG2 145    /**< Hanja conversion */
+#define PAL_SCAN_LANG3 146    /**< Katakana */
+#define PAL_SCAN_LANG4 147    /**< Hiragana */
+#define PAL_SCAN_LANG5 148    /**< Zenkaku/Hankaku */
+#define PAL_SCAN_LANG6 149    /**< reserved */
+#define PAL_SCAN_LANG7 150    /**< reserved */
+#define PAL_SCAN_LANG8 151    /**< reserved */
+#define PAL_SCAN_LANG9 152    /**< reserved */
+#define PAL_SCAN_ALTERASE 153 /**< Erase-Eaze */
 #define PAL_SCAN_SYSREQ 154
-#define PAL_SCAN_CANCEL 155      /**< AC Cancel */
+#define PAL_SCAN_CANCEL 155 /**< AC Cancel */
 #define PAL_SCAN_CLEAR 156
 #define PAL_SCAN_PRIOR 157
 #define PAL_SCAN_RETURN2 158
@@ -1001,115 +1035,114 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_LGUI 227 /**< windows command (apple) meta */
 #define PAL_SCAN_RCTRL 228
 #define PAL_SCAN_RSHIFT 229
-#define PAL_SCAN_RALT 230 /**< alt gr option */
-#define PAL_SCAN_RGUI 231 /**< windows command (apple) meta */
-#define PAL_SCAN_ALTGR 257    /**< I'm not sure if this is really not covered
-						 *   by any of the above but since there's a
-						  *   special SDL_KMOD_MODE for it I'm adding it here
-						  */
-/* @} *//* Usage page 0x07 */
+#define PAL_SCAN_RALT 230  /**< alt gr option */
+#define PAL_SCAN_RGUI 231  /**< windows command (apple) meta */
+#define PAL_SCAN_ALTGR 257 /**< I'm not sure if this is really not covered      \
+                            *   by any of the above but since there's a         \
+                            *   special SDL_KMOD_MODE for it I'm adding it here \
+                            */
+/* @} */                   /* Usage page 0x07 */
 /**
-*  \name Usage page 0x0C
-*
-*  These values are mapped from usage page 0x0C (USB consumer page).
-*
-*  There are way more keys in the spec than we can represent in the
-*  current scancode range so pick the ones that commonly come up in
-*  real world usage.
-*/
+ *  \name Usage page 0x0C
+ *
+ *  These values are mapped from usage page 0x0C (USB consumer page).
+ *
+ *  There are way more keys in the spec than we can represent in the
+ *  current scancode range so pick the ones that commonly come up in
+ *  real world usage.
+ */
 /* @{ */
-#define PAL_SCAN_SLEEP 258                   /**< Sleep */
-#define PAL_SCAN_WAKE 259                    /**< Wake */
-#define PAL_SCAN_CHANNEL_INCREMENT 260       /**< Channel Increment */
-#define PAL_SCAN_CHANNEL_DECREMENT 261       /**< Channel Decrement */
-#define PAL_SCAN_MEDIA_PLAY 262          /**< Play */
-#define PAL_SCAN_MEDIA_PAUSE 263         /**< Pause */
-#define PAL_SCAN_MEDIA_RECORD 264        /**< Record */
-#define PAL_SCAN_MEDIA_FAST_FORWARD 265  /**< Fast Forward */
-#define PAL_SCAN_MEDIA_REWIND 266        /**< Rewind */
-#define PAL_SCAN_MEDIA_NEXT_TRACK 267    /**< Next Track */
+#define PAL_SCAN_SLEEP 258                /**< Sleep */
+#define PAL_SCAN_WAKE 259                 /**< Wake */
+#define PAL_SCAN_CHANNEL_INCREMENT 260    /**< Channel Increment */
+#define PAL_SCAN_CHANNEL_DECREMENT 261    /**< Channel Decrement */
+#define PAL_SCAN_MEDIA_PLAY 262           /**< Play */
+#define PAL_SCAN_MEDIA_PAUSE 263          /**< Pause */
+#define PAL_SCAN_MEDIA_RECORD 264         /**< Record */
+#define PAL_SCAN_MEDIA_FAST_FORWARD 265   /**< Fast Forward */
+#define PAL_SCAN_MEDIA_REWIND 266         /**< Rewind */
+#define PAL_SCAN_MEDIA_NEXT_TRACK 267     /**< Next Track */
 #define PAL_SCAN_MEDIA_PREVIOUS_TRACK 268 /**< Previous Track */
-#define PAL_SCAN_MEDIA_STOP 269          /**< Stop */
-#define PAL_SCAN_MEDIA_EJECT 270         /**< Eject */
-#define PAL_SCAN_MEDIA_PLAY_PAUSE 271    /**< Play / Pause */
-#define PAL_SCAN_MEDIA_SELECT 272        /* Media Select */
-#define PAL_SCAN_AC_NEW 273              /**< AC New */
-#define PAL_SCAN_AC_OPEN 274             /**< AC Open */
-#define PAL_SCAN_AC_CLOSE 275            /**< AC Close */
-#define PAL_SCAN_AC_EXIT 276             /**< AC Exit */
-#define PAL_SCAN_AC_SAVE 277             /**< AC Save */
-#define PAL_SCAN_AC_PRINT 278            /**< AC Print */
-#define PAL_SCAN_AC_PROPERTIES 279       /**< AC Properties */
-#define PAL_SCAN_AC_SEARCH 280           /**< AC Search */
-#define PAL_SCAN_AC_HOME 281             /**< AC Home */
-#define PAL_SCAN_AC_BACK 282             /**< AC Back */
-#define PAL_SCAN_AC_FORWARD 283          /**< AC Forward */
-#define PAL_SCAN_AC_STOP 284             /**< AC Stop */
-#define PAL_SCAN_AC_REFRESH 285          /**< AC Refresh */
-#define PAL_SCAN_AC_BOOKMARKS 286        /**< AC Bookmarks */
+#define PAL_SCAN_MEDIA_STOP 269           /**< Stop */
+#define PAL_SCAN_MEDIA_EJECT 270          /**< Eject */
+#define PAL_SCAN_MEDIA_PLAY_PAUSE 271     /**< Play / Pause */
+#define PAL_SCAN_MEDIA_SELECT 272         /* Media Select */
+#define PAL_SCAN_AC_NEW 273               /**< AC New */
+#define PAL_SCAN_AC_OPEN 274              /**< AC Open */
+#define PAL_SCAN_AC_CLOSE 275             /**< AC Close */
+#define PAL_SCAN_AC_EXIT 276              /**< AC Exit */
+#define PAL_SCAN_AC_SAVE 277              /**< AC Save */
+#define PAL_SCAN_AC_PRINT 278             /**< AC Print */
+#define PAL_SCAN_AC_PROPERTIES 279        /**< AC Properties */
+#define PAL_SCAN_AC_SEARCH 280            /**< AC Search */
+#define PAL_SCAN_AC_HOME 281              /**< AC Home */
+#define PAL_SCAN_AC_BACK 282              /**< AC Back */
+#define PAL_SCAN_AC_FORWARD 283           /**< AC Forward */
+#define PAL_SCAN_AC_STOP 284              /**< AC Stop */
+#define PAL_SCAN_AC_REFRESH 285           /**< AC Refresh */
+#define PAL_SCAN_AC_BOOKMARKS 286         /**< AC Bookmarks */
 
-/* @} *//* Usage page 0x0C */
-
+/* @} */ /* Usage page 0x0C */
 
 /**
-*  \name Mobile keys
-*
-*  These are values that are often used on mobile phones.
-*/
+ *  \name Mobile keys
+ *
+ *  These are values that are often used on mobile phones.
+ */
 /* @{ */
 
-#define PAL_SCAN_SOFTLEFT 287 /**< Usually situated below the display on phones and
-							  used as a multi-function feature key for selecting
-							  a software defined function shown on the bottom left
-							  of the display. */
-#define PAL_SCAN_SOFTRIGHT 288 /**< Usually situated below the display on phones and
-							   used as a multi-function feature key for selecting
-							   a software defined function shown on the bottom right
-							   of the display. */
-#define PAL_SCAN_CALL 289 /**< Used for accepting phone calls. */
-#define PAL_SCAN_ENDCALL 290 /**< Used for rejecting phone calls. */
+#define PAL_SCAN_SOFTLEFT 287  /**< Usually situated below the display on phones and \
+                               used as a multi-function feature key for selecting    \
+                               a software defined function shown on the bottom left  \
+                               of the display. */
+#define PAL_SCAN_SOFTRIGHT 288 /**< Usually situated below the display on phones and \
+                               used as a multi-function feature key for selecting    \
+                               a software defined function shown on the bottom right \
+                               of the display. */
+#define PAL_SCAN_CALL 289      /**< Used for accepting phone calls. */
+#define PAL_SCAN_ENDCALL 290   /**< Used for rejecting phone calls. */
 
-/* @} *//* Mobile keys */
+/* @} */ /* Mobile keys */
 
 /* Add any other keys here. */
 
-#define PAL_SCAN_RESERVED 400    /**< 400-500 reserved for dynamic keycodes */
+#define PAL_SCAN_RESERVED 400 /**< 400-500 reserved for dynamic keycodes */
 
 #define PAL_SCAN_COUNT 512 /**< not a key just marks the number of scancodes for array bounds */
 
 //----------------------------------------------------------------------------------
 // Controller Buttons
 //----------------------------------------------------------------------------------
-#define GAMEPAD_DPAD_UP       0x0001
-#define GAMEPAD_DPAD_DOWN     0x0002
-#define GAMEPAD_DPAD_LEFT     0x0004
-#define GAMEPAD_DPAD_RIGHT    0x0008
-#define GAMEPAD_START         0x0010
-#define GAMEPAD_BACK          0x0020
-#define GAMEPAD_LEFT_THUMB    0x0040
-#define GAMEPAD_RIGHT_THUMB   0x0080
-#define GAMEPAD_LEFT_BUMPER   0x0100
-#define GAMEPAD_RIGHT_BUMPER  0x0200
-#define GAMEPAD_A              0x1000  // Cross on Playstation Controllers
-#define GAMEPAD_B              0x2000  // Circle on Playstation Controllers
-#define GAMEPAD_X              0x4000  // Square on Playstation Controllers
-#define GAMEPAD_Y              0x8000  // Triangle on Playstation Controllers
-#define GAMEPAD_CROSS          GAMEPAD_A
-#define GAMEPAD_CIRCLE         GAMEPAD_B
-#define GAMEPAD_SQUARE         GAMEPAD_X
-#define GAMEPAD_TRIANGLE       GAMEPAD_Y
+#define GAMEPAD_DPAD_UP 0x0001
+#define GAMEPAD_DPAD_DOWN 0x0002
+#define GAMEPAD_DPAD_LEFT 0x0004
+#define GAMEPAD_DPAD_RIGHT 0x0008
+#define GAMEPAD_START 0x0010
+#define GAMEPAD_BACK 0x0020
+#define GAMEPAD_LEFT_THUMB 0x0040
+#define GAMEPAD_RIGHT_THUMB 0x0080
+#define GAMEPAD_LEFT_BUMPER 0x0100
+#define GAMEPAD_RIGHT_BUMPER 0x0200
+#define GAMEPAD_A 0x1000 // Cross on Playstation Controllers
+#define GAMEPAD_B 0x2000 // Circle on Playstation Controllers
+#define GAMEPAD_X 0x4000 // Square on Playstation Controllers
+#define GAMEPAD_Y 0x8000 // Triangle on Playstation Controllers
+#define GAMEPAD_CROSS GAMEPAD_A
+#define GAMEPAD_CIRCLE GAMEPAD_B
+#define GAMEPAD_SQUARE GAMEPAD_X
+#define GAMEPAD_TRIANGLE GAMEPAD_Y
 
 //----------------------------------------------------------------------------------
 // File Permissions.
 //----------------------------------------------------------------------------------
-#define PAL_READ    0x01
-#define PAL_WRITE   0x02
+#define PAL_READ 0x01
+#define PAL_WRITE 0x02
 #define PAL_EXECUTE 0x04
 
 #if defined(__cplusplus)
-#define CLITERAL(type)      type
+#define CLITERAL(type) type
 #else
-#define CLITERAL(type)      (type)
+#define CLITERAL(type) (type)
 #endif
 
 #ifdef __cplusplus
@@ -1180,7 +1213,7 @@ PALAPI size_t pal_get_file_size(const char* file_path);
 PALAPI uint32_t pal_get_file_permissions(const char* file_path);
 PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags);
 PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
-PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size , char* buffer);
+PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer);
 PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
 
 // Open File I/O
@@ -1190,7 +1223,7 @@ PALAPI pal_bool pal_close_file(pal_file* file);
 
 // Random Number Generation
 PALAPI void pal_srand(uint64_t* state, uint64_t seed);
-PALAPI uint32_t pal_rand(uint64_t * state);
+PALAPI uint32_t pal_rand(uint64_t* state);
 
 // File Parsing
 PALAPI uint8_t pal_is_uppercase(char ch);
@@ -1218,9 +1251,8 @@ PALAPI void* load_dynamic_library(char* dll);
 PALAPI void* load_dynamic_function(void* dll, char* func_name);
 PALAPI uint8_t free_dynamic_library(void* dll);
 
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif //PAL_H
+#endif // PAL_H

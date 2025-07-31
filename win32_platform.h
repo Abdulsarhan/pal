@@ -3,10 +3,10 @@
 
 // Windows system headers
 #include <Windows.h>
-#include <windowsx.h>         // Useful macros (e.g., GET_X_LPARAM)
-#include <xaudio2.h>          // XAudio2
+#include <windowsx.h> // Useful macros (e.g., GET_X_LPARAM)
+#include <xaudio2.h>  // XAudio2
 #include <Xinput.h>
-#include <hidsdi.h>   // Link with hid.lib
+#include <hidsdi.h> // Link with hid.lib
 
 // for file permissions.
 #include <aclapi.h>
@@ -23,10 +23,10 @@
 
 #include "pal_platform.h"
 // Global function pointers
-static DWORD (WINAPI *XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE* pState) = NULL;
-static DWORD (WINAPI *XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration) = NULL;
-static DWORD (WINAPI *XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL;
-static void  (WINAPI *XInputEnable_fn)(BOOL enable) = NULL;
+static DWORD(WINAPI* XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE* pState) = NULL;
+static DWORD(WINAPI* XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration) = NULL;
+static DWORD(WINAPI* XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL;
+static void(WINAPI* XInputEnable_fn)(BOOL enable) = NULL;
 
 typedef unsigned __int64 QWORD;
 
@@ -34,16 +34,16 @@ typedef unsigned __int64 QWORD;
 static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = FALSE;
 
-static HDC s_fakeDC = { 0 };
+static HDC s_fakeDC = {0};
 pal_window* g_current_window;
 
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
 struct pal_window {
-	HWND hwnd;
-	HDC hdc;
-	HGLRC hglrc;
+    HWND hwnd;
+    HDC hdc;
+    HGLRC hglrc;
     LONG windowedStyle;
     pal_event_queue queue;
     pal_bool message_pump_drained;
@@ -53,36 +53,36 @@ struct pal_window {
 };
 
 struct pal_monitor {
-	HMONITOR handle;
+    HMONITOR handle;
 };
 
 struct pal_sound {
     // Core audio data
-    unsigned char* data;        // Raw PCM audio data (initial buffer)
-    size_t data_size;        // Size in bytes of initial buffer
-    int sample_rate;           // Samples per second (e.g., 44100)
-    int channels;              // Number of audio channels (e.g., 2 for stereo)
-    int bits_per_sample;       // Usually 16 or 32
-    int is_float;              // 0 = PCM, 1 = IEEE float
-    
+    unsigned char* data; // Raw PCM audio data (initial buffer)
+    size_t data_size;    // Size in bytes of initial buffer
+    int sample_rate;     // Samples per second (e.g., 44100)
+    int channels;        // Number of audio channels (e.g., 2 for stereo)
+    int bits_per_sample; // Usually 16 or 32
+    int is_float;        // 0 = PCM, 1 = IEEE float
+
     // XAudio2
     IXAudio2SourceVoice* source_voice;
     IXAudio2VoiceCallback* voice_callback;
-    
+
     // Streaming - OGG
-    void* decoder;             // stb_vorbis* (using void* to avoid header dependency)
-    char* filename;            // Filename for reopening OGG decoder
-    
+    void* decoder;  // stb_vorbis* (using void* to avoid header dependency)
+    char* filename; // Filename for reopening OGG decoder
+
     // Streaming - WAV
     FILE* source_file;
-    size_t total_data_size;  // Total size of audio data in file
-    size_t bytes_streamed;   // How many bytes we've read so far
-    size_t data_offset;      // Offset in file where audio data starts
-    
+    size_t total_data_size; // Total size of audio data in file
+    size_t bytes_streamed;  // How many bytes we've read so far
+    size_t data_offset;     // Offset in file where audio data starts
+
     // Streaming control
-    float preload_seconds;     // How many seconds were preloaded
-    int is_streaming;          // 1 if this is a streaming sound
-    int stream_finished;       // 1 when streaming is complete
+    float preload_seconds; // How many seconds were preloaded
+    int is_streaming;      // 1 if this is a streaming sound
+    int stream_finished;   // 1 when streaming is complete
 };
 
 // Keyboard & Mouse Input
@@ -96,14 +96,14 @@ struct pal_sound {
 #define PAL_MAX_MAPPINGS 256
 
 typedef struct pal_input {
-	uint8_t keys[MAX_KEYS];
-	uint8_t keys_processed[MAX_KEYS];
-	uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
-	uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
-	pal_vec2 mouse_position;
-	pal_ivec2 mouse_delta;
-}pal_input;
-pal_input input = { 0 };
+    uint8_t keys[MAX_KEYS];
+    uint8_t keys_processed[MAX_KEYS];
+    uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
+    uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
+    pal_vec2 mouse_position;
+    pal_ivec2 mouse_delta;
+} pal_input;
+pal_input input = {0};
 
 static const uint8_t win32_button_to_pal_button[] = {
     [0] = PAL_MOUSE_LEFT,
@@ -118,10 +118,11 @@ static const uint8_t win32_button_to_pal_button[] = {
     [7] = PAL_MOUSE_MIDDLE,
     [8] = PAL_MOUSE_MIDDLE,
 
-    [9]  = PAL_MOUSE_4,
+    [9] = PAL_MOUSE_4,
     [10] = PAL_MOUSE_5,
 };
 
+// clang-format off
 static const uint16_t win32_key_to_pal_key[] = {
     // unassigned.
     [0x00] = 0x00, [0x01] = 0x00, [0x02] = 0x00, [0x03] = 0x00, [0x04] = 0x00,
@@ -200,112 +201,113 @@ static const uint16_t win32_key_to_pal_key[] = {
     [0x90] = 0x90, [0x91] = 0x91, // NumLock, ScrollLock
 };
 
+// clang-format on
 static const uint16_t win32_scancode_to_pal[256] = {
-	[0x01] = PAL_SCAN_ESCAPE,
-	[0x02] = PAL_SCAN_1,
-	[0x03] = PAL_SCAN_2,
-	[0x04] = PAL_SCAN_3,
-	[0x05] = PAL_SCAN_4,
-	[0x06] = PAL_SCAN_5,
-	[0x07] = PAL_SCAN_6,
-	[0x08] = PAL_SCAN_7,
-	[0x09] = PAL_SCAN_8,
-	[0x0A] = PAL_SCAN_9,
-	[0x0B] = PAL_SCAN_0,
-	[0x0C] = PAL_SCAN_MINUS,
-	[0x0D] = PAL_SCAN_EQUALS,
-	[0x0E] = PAL_SCAN_BACKSPACE,
-	[0x0F] = PAL_SCAN_TAB,
-	[0x10] = PAL_SCAN_Q,
-	[0x11] = PAL_SCAN_W,
-	[0x12] = PAL_SCAN_E,
-	[0x13] = PAL_SCAN_R,
-	[0x14] = PAL_SCAN_T,
-	[0x15] = PAL_SCAN_Y,
-	[0x16] = PAL_SCAN_U,
-	[0x17] = PAL_SCAN_I,
-	[0x18] = PAL_SCAN_O,
-	[0x19] = PAL_SCAN_P,
-	[0x1A] = PAL_SCAN_LEFTBRACKET,
-	[0x1B] = PAL_SCAN_RIGHTBRACKET,
-	[0x1C] = PAL_SCAN_RETURN,
-	[0x1D] = PAL_SCAN_LCTRL,
-	[0x1E] = PAL_SCAN_A,
-	[0x1F] = PAL_SCAN_S,
-	[0x20] = PAL_SCAN_D,
-	[0x21] = PAL_SCAN_F,
-	[0x22] = PAL_SCAN_G,
-	[0x23] = PAL_SCAN_H,
-	[0x24] = PAL_SCAN_J,
-	[0x25] = PAL_SCAN_K,
-	[0x26] = PAL_SCAN_L,
-	[0x27] = PAL_SCAN_SEMICOLON,
-	[0x28] = PAL_SCAN_APOSTROPHE,
-	[0x29] = PAL_SCAN_GRAVE,
-	[0x2A] = PAL_SCAN_LSHIFT,
-	[0x2B] = PAL_SCAN_BACKSLASH,
-	[0x2C] = PAL_SCAN_Z,
-	[0x2D] = PAL_SCAN_X,
-	[0x2E] = PAL_SCAN_C,
-	[0x2F] = PAL_SCAN_V,
-	[0x30] = PAL_SCAN_B,
-	[0x31] = PAL_SCAN_N,
-	[0x32] = PAL_SCAN_M,
-	[0x33] = PAL_SCAN_COMMA,
-	[0x34] = PAL_SCAN_PERIOD,
-	[0x35] = PAL_SCAN_SLASH,
-	[0x36] = PAL_SCAN_RSHIFT,
-	[0x37] = PAL_SCAN_KP_MULTIPLY,
-	[0x38] = PAL_SCAN_LALT,
-	[0x39] = PAL_SCAN_SPACE,
-	[0x3A] = PAL_SCAN_CAPSLOCK,
-	[0x3B] = PAL_SCAN_F1,
-	[0x3C] = PAL_SCAN_F2,
-	[0x3D] = PAL_SCAN_F3,
-	[0x3E] = PAL_SCAN_F4,
-	[0x3F] = PAL_SCAN_F5,
-	[0x40] = PAL_SCAN_F6,
-	[0x41] = PAL_SCAN_F7,
-	[0x42] = PAL_SCAN_F8,
-	[0x43] = PAL_SCAN_F9,
-	[0x44] = PAL_SCAN_F10,
-	[0x45] = PAL_SCAN_NUMCLEAR,
-	[0x46] = PAL_SCAN_SCROLLLOCK,
-	[0x47] = PAL_SCAN_KP_7,
-	[0x48] = PAL_SCAN_KP_8,
-	[0x49] = PAL_SCAN_KP_9,
-	[0x4A] = PAL_SCAN_KP_MINUS,
-	[0x4B] = PAL_SCAN_KP_4,
-	[0x4C] = PAL_SCAN_KP_5,
-	[0x4D] = PAL_SCAN_KP_6,
-	[0x4E] = PAL_SCAN_KP_PLUS,
-	[0x4F] = PAL_SCAN_KP_1,
-	[0x50] = PAL_SCAN_KP_2,
-	[0x51] = PAL_SCAN_KP_3,
-	[0x52] = PAL_SCAN_KP_0,
-	[0x53] = PAL_SCAN_KP_PERIOD,
-	[0x57] = PAL_SCAN_F11,
-	[0x58] = PAL_SCAN_F12,
+    [0x01] = PAL_SCAN_ESCAPE,
+    [0x02] = PAL_SCAN_1,
+    [0x03] = PAL_SCAN_2,
+    [0x04] = PAL_SCAN_3,
+    [0x05] = PAL_SCAN_4,
+    [0x06] = PAL_SCAN_5,
+    [0x07] = PAL_SCAN_6,
+    [0x08] = PAL_SCAN_7,
+    [0x09] = PAL_SCAN_8,
+    [0x0A] = PAL_SCAN_9,
+    [0x0B] = PAL_SCAN_0,
+    [0x0C] = PAL_SCAN_MINUS,
+    [0x0D] = PAL_SCAN_EQUALS,
+    [0x0E] = PAL_SCAN_BACKSPACE,
+    [0x0F] = PAL_SCAN_TAB,
+    [0x10] = PAL_SCAN_Q,
+    [0x11] = PAL_SCAN_W,
+    [0x12] = PAL_SCAN_E,
+    [0x13] = PAL_SCAN_R,
+    [0x14] = PAL_SCAN_T,
+    [0x15] = PAL_SCAN_Y,
+    [0x16] = PAL_SCAN_U,
+    [0x17] = PAL_SCAN_I,
+    [0x18] = PAL_SCAN_O,
+    [0x19] = PAL_SCAN_P,
+    [0x1A] = PAL_SCAN_LEFTBRACKET,
+    [0x1B] = PAL_SCAN_RIGHTBRACKET,
+    [0x1C] = PAL_SCAN_RETURN,
+    [0x1D] = PAL_SCAN_LCTRL,
+    [0x1E] = PAL_SCAN_A,
+    [0x1F] = PAL_SCAN_S,
+    [0x20] = PAL_SCAN_D,
+    [0x21] = PAL_SCAN_F,
+    [0x22] = PAL_SCAN_G,
+    [0x23] = PAL_SCAN_H,
+    [0x24] = PAL_SCAN_J,
+    [0x25] = PAL_SCAN_K,
+    [0x26] = PAL_SCAN_L,
+    [0x27] = PAL_SCAN_SEMICOLON,
+    [0x28] = PAL_SCAN_APOSTROPHE,
+    [0x29] = PAL_SCAN_GRAVE,
+    [0x2A] = PAL_SCAN_LSHIFT,
+    [0x2B] = PAL_SCAN_BACKSLASH,
+    [0x2C] = PAL_SCAN_Z,
+    [0x2D] = PAL_SCAN_X,
+    [0x2E] = PAL_SCAN_C,
+    [0x2F] = PAL_SCAN_V,
+    [0x30] = PAL_SCAN_B,
+    [0x31] = PAL_SCAN_N,
+    [0x32] = PAL_SCAN_M,
+    [0x33] = PAL_SCAN_COMMA,
+    [0x34] = PAL_SCAN_PERIOD,
+    [0x35] = PAL_SCAN_SLASH,
+    [0x36] = PAL_SCAN_RSHIFT,
+    [0x37] = PAL_SCAN_KP_MULTIPLY,
+    [0x38] = PAL_SCAN_LALT,
+    [0x39] = PAL_SCAN_SPACE,
+    [0x3A] = PAL_SCAN_CAPSLOCK,
+    [0x3B] = PAL_SCAN_F1,
+    [0x3C] = PAL_SCAN_F2,
+    [0x3D] = PAL_SCAN_F3,
+    [0x3E] = PAL_SCAN_F4,
+    [0x3F] = PAL_SCAN_F5,
+    [0x40] = PAL_SCAN_F6,
+    [0x41] = PAL_SCAN_F7,
+    [0x42] = PAL_SCAN_F8,
+    [0x43] = PAL_SCAN_F9,
+    [0x44] = PAL_SCAN_F10,
+    [0x45] = PAL_SCAN_NUMCLEAR,
+    [0x46] = PAL_SCAN_SCROLLLOCK,
+    [0x47] = PAL_SCAN_KP_7,
+    [0x48] = PAL_SCAN_KP_8,
+    [0x49] = PAL_SCAN_KP_9,
+    [0x4A] = PAL_SCAN_KP_MINUS,
+    [0x4B] = PAL_SCAN_KP_4,
+    [0x4C] = PAL_SCAN_KP_5,
+    [0x4D] = PAL_SCAN_KP_6,
+    [0x4E] = PAL_SCAN_KP_PLUS,
+    [0x4F] = PAL_SCAN_KP_1,
+    [0x50] = PAL_SCAN_KP_2,
+    [0x51] = PAL_SCAN_KP_3,
+    [0x52] = PAL_SCAN_KP_0,
+    [0x53] = PAL_SCAN_KP_PERIOD,
+    [0x57] = PAL_SCAN_F11,
+    [0x58] = PAL_SCAN_F12,
 };
 
 static const uint16_t win32_scancode_e0_to_pal[256] = {
-	[0x1C] = PAL_SCAN_KP_ENTER,
-	[0x1D] = PAL_SCAN_RCTRL,
-	[0x35] = PAL_SCAN_KP_DIVIDE,
-	[0x38] = PAL_SCAN_RALT,
-	[0x47] = PAL_SCAN_HOME,
-	[0x48] = PAL_SCAN_UP,
-	[0x49] = PAL_SCAN_PAGEUP,
-	[0x4B] = PAL_SCAN_LEFT,
-	[0x4D] = PAL_SCAN_RIGHT,
-	[0x4F] = PAL_SCAN_END,
-	[0x50] = PAL_SCAN_DOWN,
-	[0x51] = PAL_SCAN_PAGEDOWN,
-	[0x52] = PAL_SCAN_INSERT,
-	[0x53] = PAL_SCAN_DELETE,
-	[0x5B] = PAL_SCAN_LGUI,
-	[0x5C] = PAL_SCAN_RGUI,
-	[0x5D] = PAL_SCAN_APPLICATION,
+    [0x1C] = PAL_SCAN_KP_ENTER,
+    [0x1D] = PAL_SCAN_RCTRL,
+    [0x35] = PAL_SCAN_KP_DIVIDE,
+    [0x38] = PAL_SCAN_RALT,
+    [0x47] = PAL_SCAN_HOME,
+    [0x48] = PAL_SCAN_UP,
+    [0x49] = PAL_SCAN_PAGEUP,
+    [0x4B] = PAL_SCAN_LEFT,
+    [0x4D] = PAL_SCAN_RIGHT,
+    [0x4F] = PAL_SCAN_END,
+    [0x50] = PAL_SCAN_DOWN,
+    [0x51] = PAL_SCAN_PAGEDOWN,
+    [0x52] = PAL_SCAN_INSERT,
+    [0x53] = PAL_SCAN_DELETE,
+    [0x5B] = PAL_SCAN_LGUI,
+    [0x5C] = PAL_SCAN_RGUI,
+    [0x5D] = PAL_SCAN_APPLICATION,
 };
 
 typedef struct {
@@ -333,30 +335,30 @@ typedef struct {
 
 typedef struct {
     uint8_t report[64];
-    uint8_t report_size;   
+    uint8_t report_size;
     pal_bool has_report;
     OVERLAPPED overlapped;
 } win32_dualsense_state;
 
 // Global State
-typedef struct hid_device{
-	HANDLE handle;
-	PHIDP_PREPARSED_DATA pp_data;
-	uint16_t vendor_id;
-	uint16_t product_id;
-	char name[128];
-	win32_gamepad_button buttons[PAL_MAX_BUTTONS];
-	uint8_t button_count;
-	win32_gamepad_axis axes[PAL_MAX_AXES];
-	uint8_t axis_count;
-	pal_bool connected;
-}hid_device;
+typedef struct hid_device {
+    HANDLE handle;
+    PHIDP_PREPARSED_DATA pp_data;
+    uint16_t vendor_id;
+    uint16_t product_id;
+    char name[128];
+    win32_gamepad_button buttons[PAL_MAX_BUTTONS];
+    uint8_t button_count;
+    win32_gamepad_axis axes[PAL_MAX_AXES];
+    uint8_t axis_count;
+    pal_bool connected;
+} hid_device;
 
-typedef struct win32_gamepad_context{
+typedef struct win32_gamepad_context {
     uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
     XINPUT_STATE xinput_state[MAX_XINPUT_CONTROLLERS];
 
-    uint8_t raw_input_buffer[1024];  // <-- THIS IS THE BUFFER
+    uint8_t raw_input_buffer[1024]; // <-- THIS IS THE BUFFER
 
     struct hid_device hid_devices[PAL_MAX_GAMEPADS];
     struct { // DualSense/DS4
@@ -372,21 +374,21 @@ typedef struct win32_gamepad_context{
     int mapping_count;
     pal_bool initialized;
     HWND hwnd;
-}win32_gamepad_context;
+} win32_gamepad_context;
 win32_gamepad_context win32_gamepad_ctx = {0};
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t idReserved;   // Must be 0
-    uint16_t idType;       // Must be 1 for icons
-    uint16_t idCount;      // Number of images
+    uint16_t idReserved; // Must be 0
+    uint16_t idType;     // Must be 1 for icons
+    uint16_t idCount;    // Number of images
 } ICONDIR;
 
 typedef struct {
-    uint8_t  bWidth;        // Width in pixels
-    uint8_t  bHeight;       // Height in pixels
-    uint8_t  bColorCount;   // 0 if >= 8bpp
-    uint8_t  bReserved;     // Must be 0
+    uint8_t bWidth;         // Width in pixels
+    uint8_t bHeight;        // Height in pixels
+    uint8_t bColorCount;    // 0 if >= 8bpp
+    uint8_t bReserved;      // Must be 0
     uint16_t wPlanes;       // Should be 1
     uint16_t wBitCount;     // Usually 32
     uint32_t dwBytesInRes;  // Size of PNG data
@@ -410,9 +412,7 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
     }
 
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
-        width, height,
-        SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+    SetWindowPos(window->hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 
     return TRUE;
 }
@@ -434,9 +434,7 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
     }
 
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    SetWindowPos(window->hwnd, HWND_TOP, 0, 0,
-        dm.dmPelsWidth, dm.dmPelsHeight,
-        SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+    SetWindowPos(window->hwnd, HWND_TOP, 0, 0, dm.dmPelsWidth, dm.dmPelsHeight, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 
     return TRUE;
 }
@@ -447,7 +445,7 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
 
     // Get the monitor bounds
     HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi = { .cbSize = sizeof(mi) };
+    MONITORINFO mi = {.cbSize = sizeof(mi)};
     if (!GetMonitorInfo(monitor, &mi)) {
         MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
         return FALSE;
@@ -455,11 +453,7 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
 
     // Set the window to borderless fullscreen
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    if (!SetWindowPos(window->hwnd, HWND_TOP,
-        mi.rcMonitor.left, mi.rcMonitor.top,
-        mi.rcMonitor.right - mi.rcMonitor.left,
-        mi.rcMonitor.bottom - mi.rcMonitor.top,
-        SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
+    if (!SetWindowPos(window->hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
         MessageBoxA(window->hwnd, "Failed to resize window.", "Error", MB_OK);
         return FALSE;
     }
@@ -478,11 +472,7 @@ pal_bool platform_make_window_windowed(pal_window* window) {
     RECT rect;
     GetWindowRect(window->hwnd, &rect);
     // Restore the window's size and position
-    if (!SetWindowPos(window->hwnd, NULL,
-        rect.left, rect.top,
-        rect.right - rect.left,
-        rect.bottom - rect.top,
-        SWP_NOZORDER | SWP_FRAMECHANGED)) {
+    if (!SetWindowPos(window->hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED)) {
         MessageBoxA(window->hwnd, "Failed to restore window position.", "Error", MB_OK);
         return FALSE;
     }
@@ -490,12 +480,14 @@ pal_bool platform_make_window_windowed(pal_window* window) {
     return TRUE;
 }
 
-void platform_set_cursor(pal_window *window, const char *filepath, int size) {
+void platform_set_cursor(pal_window* window, const char* filepath, int size) {
     // Clamp size to reasonable max, e.g. 256 (you can adjust)
-    if (size <= 0) size = 32;
-    if (size > 256) size = 256;
+    if (size <= 0)
+        size = 32;
+    if (size > 256)
+        size = 256;
 
-    FILE *f = fopen(filepath, "rb");
+    FILE* f = fopen(filepath, "rb");
     if (!f) {
         MessageBoxA(window->hwnd, "Failed to open cursor file.", "SetCustomCursor Error", MB_ICONERROR);
         return;
@@ -513,23 +505,21 @@ void platform_set_cursor(pal_window *window, const char *filepath, int size) {
             MessageBoxA(window->hwnd, "Failed to load .ani cursor.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
-    }
-    else if (header[0] == 0x00 && header[1] == 0x00 && header[2] == 0x02 && header[3] == 0x00) {
+    } else if (header[0] == 0x00 && header[1] == 0x00 && header[2] == 0x02 && header[3] == 0x00) {
         hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
         if (!hCursor) {
             MessageBoxA(window->hwnd, "Failed to load .cur cursor.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
-    }
-    else {
+    } else {
         int width, height, channels;
-        unsigned char *pixels = stbi_load(filepath, &width, &height, &channels, 4);
+        unsigned char* pixels = stbi_load(filepath, &width, &height, &channels, 4);
         if (!pixels) {
             MessageBoxA(window->hwnd, "Failed to load image with stb_image.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
 
-        unsigned char *resized = malloc(size * size * 4);
+        unsigned char* resized = malloc(size * size * 4);
         if (!resized) {
             stbi_image_free(pixels);
             MessageBoxA(window->hwnd, "Failed to allocate memory for resized image.", "SetCustomCursor Error", MB_ICONERROR);
@@ -537,10 +527,7 @@ void platform_set_cursor(pal_window *window, const char *filepath, int size) {
         }
 
         stbir_resize_uint8_srgb(
-            pixels, width, height, width * 4,
-            resized, size, size, size * 4,
-            STBIR_RGBA
-        );
+            pixels, width, height, width * 4, resized, size, size, size * 4, STBIR_RGBA);
         stbi_image_free(pixels);
 
         HDC hdc = GetDC(NULL);
@@ -552,13 +539,13 @@ void platform_set_cursor(pal_window *window, const char *filepath, int size) {
         bi.bV5Planes = 1;
         bi.bV5BitCount = 32;
         bi.bV5Compression = BI_BITFIELDS;
-        bi.bV5RedMask   = 0x00FF0000;
+        bi.bV5RedMask = 0x00FF0000;
         bi.bV5GreenMask = 0x0000FF00;
-        bi.bV5BlueMask  = 0x000000FF;
+        bi.bV5BlueMask = 0x000000FF;
         bi.bV5AlphaMask = 0xFF000000;
 
-        void *bitmapData = NULL;
-        HBITMAP hBitmap = CreateDIBSection(hdc, (BITMAPINFO *)&bi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
+        void* bitmapData = NULL;
+        HBITMAP hBitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
         ReleaseDC(NULL, hdc);
 
         if (!hBitmap || !bitmapData) {
@@ -569,8 +556,8 @@ void platform_set_cursor(pal_window *window, const char *filepath, int size) {
 
         for (int y = 0; y < size; ++y) {
             for (int x = 0; x < size; ++x) {
-                unsigned char *src = &resized[(y * size + x) * 4];
-                unsigned char *dst = (unsigned char *)bitmapData + (y * size + x) * 4;
+                unsigned char* src = &resized[(y * size + x) * 4];
+                unsigned char* dst = (unsigned char*)bitmapData + (y * size + x) * 4;
                 dst[0] = src[2]; // B
                 dst[1] = src[1]; // G
                 dst[2] = src[0]; // R
@@ -607,7 +594,8 @@ void platform_set_cursor(pal_window *window, const char *filepath, int size) {
 // and only then can we use it.
 static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     FILE* file = fopen(image_path, "rb");
-    if (!file) return NULL;
+    if (!file)
+        return NULL;
 
     uint8_t header[8];
     if (fread(header, 1, sizeof(header), file) < sizeof(header)) {
@@ -675,9 +663,9 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
             entry->dwBytesInRes,
             TRUE,
             0x00030000,
-            0, 0,
-            LR_DEFAULTCOLOR
-        );
+            0,
+            0,
+            LR_DEFAULTCOLOR);
 
         free(ico_data);
         return hIcon;
@@ -687,7 +675,8 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     fclose(file);
     int width, height, channels;
     uint8_t* rgba = stbi_load(image_path, &width, &height, &channels, 4);
-    if (!rgba) return NULL;
+    if (!rgba)
+        return NULL;
 
     // Convert RGBA to BGRA
     for (int i = 0; i < width * height; ++i) {
@@ -708,9 +697,9 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     bi.bV5Planes = 1;
     bi.bV5BitCount = 32;
     bi.bV5Compression = BI_BITFIELDS;
-    bi.bV5RedMask   = 0x00FF0000;
+    bi.bV5RedMask = 0x00FF0000;
     bi.bV5GreenMask = 0x0000FF00;
-    bi.bV5BlueMask  = 0x000000FF;
+    bi.bV5BlueMask = 0x000000FF;
     bi.bV5AlphaMask = 0xFF000000;
 
     void* dib_pixels = NULL;
@@ -765,7 +754,7 @@ void platform_set_taskbar_icon(pal_window* window, const char* image_path) {
     HICON hIcon = load_icon_from_file(image_path, FALSE);
     if (hIcon) {
         SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
-        SetClassLongPtr(window->hwnd, GCLP_HICON,   (LONG_PTR)hIcon);
+        SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
     } else {
         MessageBoxA(window->hwnd, "Failed to load taskbar icon", "Error", MB_OK | MB_ICONERROR);
     }
@@ -775,24 +764,23 @@ void platform_set_taskbar_icon_legacy(pal_window* window, const char* image_path
     HICON hIcon = load_icon_from_file(image_path, TRUE);
     if (hIcon) {
         SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
-        SetClassLongPtr(window->hwnd, GCLP_HICON,   (LONG_PTR)hIcon);
+        SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
     } else {
         MessageBoxA(window->hwnd, "Failed to load legacy taskbar icon", "Error", MB_OK | MB_ICONERROR);
     }
 }
 
-LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
+LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
 
 void win32_handle_raw_input(HRAWINPUT raw_input) {
-// currently unused. This is for GetRawInputData(). 
+    // currently unused. This is for GetRawInputData().
     // we currently use GetRawInputBuffer(), because it's better for high-polling rate mice.
 }
 
 void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
- }
+}
 
 static void win32_update_xinput() {
 }
@@ -814,7 +802,8 @@ int platform_get_gamepad_count(void) {
 
     int total_count = 0;
     for (int i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
-        if (win32_gamepad_ctx.xinput_connected[i]) total_count++;
+        if (win32_gamepad_ctx.xinput_connected[i])
+            total_count++;
     }
 
     return total_count;
@@ -843,10 +832,10 @@ int platform_init_gamepads() {
         return FALSE;
     }
     // Load function pointers
-    XinputGetstate_fn = (DWORD (WINAPI *)(DWORD, XINPUT_STATE*))GetProcAddress(g_xinput_dll, "XInputGetState");
-    XInputSetState_fn = (DWORD (WINAPI *)(DWORD, XINPUT_VIBRATION*))GetProcAddress(g_xinput_dll, "XInputSetState");
-    XInputGetCapabilities_fn = (DWORD (WINAPI *)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities");
-    XInputEnable_fn = (void (WINAPI *)(BOOL))GetProcAddress(g_xinput_dll, "XInputEnable");
+    XinputGetstate_fn = (DWORD(WINAPI*)(DWORD, XINPUT_STATE*))GetProcAddress(g_xinput_dll, "XInputGetState");
+    XInputSetState_fn = (DWORD(WINAPI*)(DWORD, XINPUT_VIBRATION*))GetProcAddress(g_xinput_dll, "XInputSetState");
+    XInputGetCapabilities_fn = (DWORD(WINAPI*)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities");
+    XInputEnable_fn = (void(WINAPI*)(BOOL))GetProcAddress(g_xinput_dll, "XInputEnable");
 
     // Check if we got the essential functions
     if (!XinputGetstate_fn || !XInputSetState_fn) {
@@ -863,7 +852,7 @@ void platform_shutdown_gamepads(void) {
         FreeLibrary(g_xinput_dll);
         g_xinput_dll = NULL;
     }
-    
+
     XinputGetstate_fn = NULL;
     XInputSetState_fn = NULL;
     XInputGetCapabilities_fn = NULL;
@@ -898,8 +887,8 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
         lx = ly = 0;
     } else {
         // Normalize to remove deadzone
-        float normalized = (left_magnitude - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / 
-                          (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        float normalized = (left_magnitude - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) /
+                           (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
         lx = (lx / left_magnitude) * normalized;
         ly = (ly / left_magnitude) * normalized;
     }
@@ -910,8 +899,8 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
         rx = ry = 0;
     } else {
         // Normalize to remove deadzone
-        float normalized = (right_magnitude - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) / 
-                          (32767.0f - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        float normalized = (right_magnitude - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) /
+                           (32767.0f - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
         rx = (rx / right_magnitude) * normalized;
         ry = (ry / right_magnitude) * normalized;
     }
@@ -922,10 +911,8 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     out_state->axes.right_y = fmaxf(-1.0f, fminf(1.0f, ry));
 
     // Process triggers with deadzone
-    out_state->axes.left_trigger = (pad->bLeftTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 
-                                   0.0f : (pad->bLeftTrigger / 255.0f);
-    out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 
-                                    0.0f : (pad->bRightTrigger / 255.0f);
+    out_state->axes.left_trigger = (pad->bLeftTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bLeftTrigger / 255.0f);
+    out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bRightTrigger / 255.0f);
 
     // Process buttons
     WORD b = pad->wButtons;
@@ -947,8 +934,8 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     // Set controller info
     strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
     out_state->name[sizeof(out_state->name) - 1] = '\0';
-    out_state->vendor_id = 0x045E;  // Microsoft
-    out_state->product_id = (uint16_t)0xDEADBEEF;  // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
+    out_state->vendor_id = 0x045E;                // Microsoft
+    out_state->product_id = (uint16_t)0xDEADBEEF; // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
     out_state->connected = TRUE;
     out_state->is_xinput = TRUE;
 
@@ -956,7 +943,8 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
 }
 
 void platform_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
-    if (!XInputSetState_fn || controller_id > 4) return;
+    if (!XInputSetState_fn || controller_id > 4)
+        return;
 
     if (g_has_trigger_motors) {
         // Extended vibration structure with trigger motors (XInput 1.4+)
@@ -997,75 +985,70 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     switch (msg) {
         case WM_CLOSE:
             event.type = PAL_WINDOW_CLOSE_REQUESTED;
-			event.window = (pal_window_event){
-				.x = LOWORD(lparam),
-				.y = HIWORD(lparam),
-				.width = 0,
-				.height = 0,
-				.focused = 1,
-				.visible = 0
-			};
+            event.window = (pal_window_event){
+                .x = LOWORD(lparam),
+                .y = HIWORD(lparam),
+                .width = 0,
+                .height = 0,
+                .focused = 1,
+                .visible = 0};
             break;
         case WM_DESTROY:
             event.type = PAL_WINDOW_CLOSED;
-			event.window = (pal_window_event){
-				.x = LOWORD(lparam),
-				.y = HIWORD(lparam),
-				.width = 0,
-				.height = 0,
-				.focused = 0,
-				.visible = 0
-			};
+            event.window = (pal_window_event){
+                .x = LOWORD(lparam),
+                .y = HIWORD(lparam),
+                .width = 0,
+                .height = 0,
+                .focused = 0,
+                .visible = 0};
             break;
         case WM_QUIT: // we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing.
             event.type = PAL_QUIT;
-            event.quit = (pal_quit_event){ .code = 0 };
+            event.quit = (pal_quit_event){.code = 0};
             break;
-		case WM_MOVE:
-			event.type = PAL_WINDOW;
-			event.window = (pal_window_event){
-				.x = LOWORD(lparam),
-				.y = HIWORD(lparam),
-				.width = 0,
-				.height = 0,
-				.focused = 1,
-				.visible = 1
-			};
-			break;
-		case WM_SIZE:
-			event.type = PAL_WINDOW;
-			event.window = (pal_window_event){
-				.event_code = WM_SIZE,
-				.x = 0,
-				.y = 0,
-				.width = LOWORD(lparam),
-				.height = HIWORD(lparam),
-				.focused = 1,
-				.visible = 1
-			};
-			break;
+        case WM_MOVE:
+            event.type = PAL_WINDOW;
+            event.window = (pal_window_event){
+                .x = LOWORD(lparam),
+                .y = HIWORD(lparam),
+                .width = 0,
+                .height = 0,
+                .focused = 1,
+                .visible = 1};
+            break;
+        case WM_SIZE:
+            event.type = PAL_WINDOW;
+            event.window = (pal_window_event){
+                .event_code = WM_SIZE,
+                .x = 0,
+                .y = 0,
+                .width = LOWORD(lparam),
+                .height = HIWORD(lparam),
+                .focused = 1,
+                .visible = 1};
+            break;
 
         case WM_MOUSEMOVE: {
 
             if (window->confine_mouse) {
-				TRACKMOUSEEVENT tme = {
-					.cbSize = sizeof(tme),
-					.dwFlags = TME_LEAVE,
-					.hwndTrack = window->hwnd,
-					.dwHoverTime = HOVER_DEFAULT
-				};
-				TrackMouseEvent(&tme);
-				RECT rect;
-				GetClientRect(window->hwnd, &rect);
-				POINT tl = { rect.left, rect.top };
-				POINT br = { rect.right, rect.bottom };
-				ClientToScreen(window->hwnd, &tl);
-				ClientToScreen(window->hwnd, &br);
-				rect.left = tl.x;
-				rect.top = tl.y;
-				rect.right = br.x;
-				rect.bottom = br.y;
-				ClipCursor(&rect);
+                TRACKMOUSEEVENT tme = {
+                    .cbSize = sizeof(tme),
+                    .dwFlags = TME_LEAVE,
+                    .hwndTrack = window->hwnd,
+                    .dwHoverTime = HOVER_DEFAULT};
+                TrackMouseEvent(&tme);
+                RECT rect;
+                GetClientRect(window->hwnd, &rect);
+                POINT tl = {rect.left, rect.top};
+                POINT br = {rect.right, rect.bottom};
+                ClientToScreen(window->hwnd, &tl);
+                ClientToScreen(window->hwnd, &br);
+                rect.left = tl.x;
+                rect.top = tl.y;
+                rect.right = br.x;
+                rect.bottom = br.y;
+                ClipCursor(&rect);
             }
             // Mouse just entered the window
             event.type = PAL_MOUSE_MOTION;
@@ -1074,14 +1057,13 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .y = GET_Y_LPARAM(lparam),
                 .delta_x = input.mouse_delta.x,
                 .delta_y = input.mouse_delta.y,
-                .buttons = wparam
-            };
+                .buttons = wparam};
         }; break;
 
-    case WM_MOUSELEAVE:
-        ClipCursor(NULL); // we unclip the cursor to the window in case it was clipped before.
-        // Mouse just left the window
-        break;
+        case WM_MOUSELEAVE:
+            ClipCursor(NULL); // we unclip the cursor to the window in case it was clipped before.
+            // Mouse just left the window
+            break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
             event.type = PAL_WINDOW;
@@ -1093,12 +1075,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .width = pos->cx,
                 .height = pos->cy,
                 .focused = 1, // This is wrong, fix.
-                .visible = 1
-            };
+                .visible = 1};
             break;
-        case WM_LBUTTONDOWN: 
-        case WM_RBUTTONDOWN: 
-        case WM_MBUTTONDOWN: 
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
         case WM_XBUTTONDOWN: {
             event.type = PAL_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
@@ -1107,8 +1088,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .pressed = 1,
                 .clicks = 1,
                 .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
-            };
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]};
 
             if (msg == WM_XBUTTONDOWN) {
                 WORD xButton = GET_XBUTTON_WPARAM(wparam);
@@ -1135,8 +1115,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .pressed = 1,
                 .clicks = 2,
                 .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
-            };
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]};
 
             if (msg == WM_XBUTTONDBLCLK) {
                 WORD xButton = GET_XBUTTON_WPARAM(wparam);
@@ -1162,8 +1141,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .y = GET_Y_LPARAM(lparam),
                 .pressed = 0,
                 .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
-            };
+                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]};
 
             if (msg == WM_XBUTTONUP) {
                 WORD xButton = GET_XBUTTON_WPARAM(wparam);
@@ -1191,160 +1169,162 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .y = GET_Y_LPARAM(lparam),
                 .delta_x = (msg == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
                 .delta_y = (msg == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .modifiers = GET_KEYSTATE_WPARAM(wparam)
-            };
+                .modifiers = GET_KEYSTATE_WPARAM(wparam)};
             break;
         }
-		case WM_KEYDOWN:
-		case WM_SYSKEYDOWN: {
-			uint32_t vk = (uint32_t)wparam;
-			uint8_t scancode = (lparam >> 16) & 0xFF;
-			uint8_t extended = (lparam >> 24) & 1;
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN: {
+            uint32_t vk = (uint32_t)wparam;
+            uint8_t scancode = (lparam >> 16) & 0xFF;
+            uint8_t extended = (lparam >> 24) & 1;
 
-			uint16_t modifiers = 0;
+            uint16_t modifiers = 0;
 
-			switch (vk) {
-				case VK_SHIFT:
-					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
-						modifiers |= PAL_MOD_LSHIFT;
-					else
-						modifiers |= PAL_MOD_RSHIFT;
-					break;
+            switch (vk) {
+                case VK_SHIFT:
+                    if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
+                        modifiers |= PAL_MOD_LSHIFT;
+                    else
+                        modifiers |= PAL_MOD_RSHIFT;
+                    break;
 
-				case VK_CONTROL:
-					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
-					break;
+                case VK_CONTROL:
+                    modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
+                    break;
 
-				case VK_MENU:
-					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
-					break;
+                case VK_MENU:
+                    modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
+                    break;
 
-				case VK_LWIN:
-					modifiers |= PAL_MOD_LWINDOWS;
-					break;
+                case VK_LWIN:
+                    modifiers |= PAL_MOD_LWINDOWS;
+                    break;
 
-				case VK_RWIN:
-					modifiers |= PAL_MOD_RWINDOWS;
-					break;
+                case VK_RWIN:
+                    modifiers |= PAL_MOD_RWINDOWS;
+                    break;
 
-				case VK_NUMLOCK:
-					modifiers |= PAL_MOD_NUM;
-					break;
+                case VK_NUMLOCK:
+                    modifiers |= PAL_MOD_NUM;
+                    break;
 
-				case VK_SCROLL:
-					modifiers |= PAL_MOD_SCROLL;
-					break;
+                case VK_SCROLL:
+                    modifiers |= PAL_MOD_SCROLL;
+                    break;
 
-				case VK_PROCESSKEY:
-					modifiers |= PAL_MOD_ALTGR;
-					break;
+                case VK_PROCESSKEY:
+                    modifiers |= PAL_MOD_ALTGR;
+                    break;
 
-				case VK_SHIFT | 0x100: // Level 5 shift (user-defined)
-					modifiers |= PAL_MOD_LEVEL5SHIFT;
-					break;
-			}
+                case VK_SHIFT | 0x100: // Level 5 shift (user-defined)
+                    modifiers |= PAL_MOD_LEVEL5SHIFT;
+                    break;
+            }
 
-			// Check toggle states:
-			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
-			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
-			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
+            // Check toggle states:
+            if ((GetKeyState(VK_NUMLOCK) & 1) != 0)
+                modifiers |= PAL_MOD_NUM;
+            if ((GetKeyState(VK_SCROLL) & 1) != 0)
+                modifiers |= PAL_MOD_SCROLL;
+            if ((GetKeyState(VK_CAPITAL) & 1) != 0)
+                modifiers |= PAL_MOD_CAPS;
 
-			// AltGr detection: Right Alt + Ctrl
-			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
-				modifiers |= PAL_MOD_ALTGR;
-			}
-
-            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
-
-			event.type = PAL_KEY_DOWN;
-			event.key = (pal_keyboard_event){
-				.virtual_key = win32_key_to_pal_key[vk],
-				.scancode = pal_scancode,
-				.pressed = 1,
-				.repeat = (lparam >> 30) & 1,
-				.modifiers = modifiers
-			};
-			input.keys[win32_key_to_pal_key[vk]] = 1;
-			break;
-		}
-
-		case WM_KEYUP:
-		case WM_SYSKEYUP: {
-			uint32_t vk = (uint32_t)wparam;
-			uint8_t scancode = (lparam >> 16) & 0xFF;
-			uint8_t extended = (lparam >> 24) & 1;
-
-			uint16_t modifiers = 0;
-
-			switch (vk) {
-				case VK_SHIFT:
-					if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
-						modifiers |= PAL_MOD_LSHIFT;
-					else
-						modifiers |= PAL_MOD_RSHIFT;
-					break;
-
-				case VK_CONTROL:
-					modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
-					break;
-
-				case VK_MENU:
-					modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
-					break;
-
-				case VK_LWIN:
-					modifiers |= PAL_MOD_LWINDOWS;
-					break;
-
-				case VK_RWIN:
-					modifiers |= PAL_MOD_RWINDOWS;
-					break;
-
-				case VK_NUMLOCK:
-					modifiers |= PAL_MOD_NUM;
-					break;
-
-				case VK_SCROLL:
-					modifiers |= PAL_MOD_SCROLL;
-					break;
-
-				case VK_PROCESSKEY:
-					modifiers |= PAL_MOD_ALTGR;
-					break;
-
-				case VK_SHIFT | 0x100:
-					modifiers |= PAL_MOD_LEVEL5SHIFT;
-					break;
-			}
-
-			if ((GetKeyState(VK_NUMLOCK) & 1) != 0)   modifiers |= PAL_MOD_NUM;
-			if ((GetKeyState(VK_SCROLL) & 1) != 0)    modifiers |= PAL_MOD_SCROLL;
-			if ((GetKeyState(VK_CAPITAL) & 1) != 0)   modifiers |= PAL_MOD_CAPS;
-
-			if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
-				modifiers |= PAL_MOD_ALTGR;
-			}
+            // AltGr detection: Right Alt + Ctrl
+            if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+                modifiers |= PAL_MOD_ALTGR;
+            }
 
             uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
 
-			event.type = PAL_KEY_UP;
-			event.key = (pal_keyboard_event){
-				.virtual_key = win32_key_to_pal_key[vk],
-				.scancode = pal_scancode,
-				.pressed = 0,
-				.repeat = 0,
-				.modifiers = modifiers
-			};
-			input.keys[win32_key_to_pal_key[vk]] = 0;
-			input.keys_processed[win32_key_to_pal_key[vk]] = 0;
-			break;
-		}
+            event.type = PAL_KEY_DOWN;
+            event.key = (pal_keyboard_event){
+                .virtual_key = win32_key_to_pal_key[vk],
+                .scancode = pal_scancode,
+                .pressed = 1,
+                .repeat = (lparam >> 30) & 1,
+                .modifiers = modifiers};
+            input.keys[win32_key_to_pal_key[vk]] = 1;
+            break;
+        }
+
+        case WM_KEYUP:
+        case WM_SYSKEYUP: {
+            uint32_t vk = (uint32_t)wparam;
+            uint8_t scancode = (lparam >> 16) & 0xFF;
+            uint8_t extended = (lparam >> 24) & 1;
+
+            uint16_t modifiers = 0;
+
+            switch (vk) {
+                case VK_SHIFT:
+                    if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
+                        modifiers |= PAL_MOD_LSHIFT;
+                    else
+                        modifiers |= PAL_MOD_RSHIFT;
+                    break;
+
+                case VK_CONTROL:
+                    modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
+                    break;
+
+                case VK_MENU:
+                    modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
+                    break;
+
+                case VK_LWIN:
+                    modifiers |= PAL_MOD_LWINDOWS;
+                    break;
+
+                case VK_RWIN:
+                    modifiers |= PAL_MOD_RWINDOWS;
+                    break;
+
+                case VK_NUMLOCK:
+                    modifiers |= PAL_MOD_NUM;
+                    break;
+
+                case VK_SCROLL:
+                    modifiers |= PAL_MOD_SCROLL;
+                    break;
+
+                case VK_PROCESSKEY:
+                    modifiers |= PAL_MOD_ALTGR;
+                    break;
+
+                case VK_SHIFT | 0x100:
+                    modifiers |= PAL_MOD_LEVEL5SHIFT;
+                    break;
+            }
+
+            if ((GetKeyState(VK_NUMLOCK) & 1) != 0)
+                modifiers |= PAL_MOD_NUM;
+            if ((GetKeyState(VK_SCROLL) & 1) != 0)
+                modifiers |= PAL_MOD_SCROLL;
+            if ((GetKeyState(VK_CAPITAL) & 1) != 0)
+                modifiers |= PAL_MOD_CAPS;
+
+            if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+                modifiers |= PAL_MOD_ALTGR;
+            }
+
+            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
+
+            event.type = PAL_KEY_UP;
+            event.key = (pal_keyboard_event){
+                .virtual_key = win32_key_to_pal_key[vk],
+                .scancode = pal_scancode,
+                .pressed = 0,
+                .repeat = 0,
+                .modifiers = modifiers};
+            input.keys[win32_key_to_pal_key[vk]] = 0;
+            input.keys_processed[win32_key_to_pal_key[vk]] = 0;
+            break;
+        }
         case WM_CHAR:
         case WM_UNICHAR:
             event.type = PAL_TEXT_INPUT;
             event.text = (pal_text_input_event){
-                .utf8_text = {0}
-            };
+                .utf8_text = {0}};
             {
                 char utf8[8] = {0};
                 int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&wparam, 1, utf8, sizeof(utf8), NULL, NULL);
@@ -1357,9 +1337,10 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.type = PAL_SENSOR_UPDATE;
             event.sensor = (pal_sensor_event){
                 .device_id = 0,
-                .x = 0, .y = 0, .z = 0,
-                .sensor_type = 0
-            };
+                .x = 0,
+                .y = 0,
+                .z = 0,
+                .sensor_type = 0};
             break;
 
         case WM_DROPFILES: {
@@ -1377,31 +1358,29 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             }
             event.drop = (pal_drop_event){
                 .paths = paths,
-                .count = count
-            };
+                .count = count};
             DragFinish(hDrop);
             break;
         }
 
-		case WM_ACTIVATEAPP:
+        case WM_ACTIVATEAPP:
             event.type = PAL_WINDOW;
-			event.window = (pal_window_event){
-				.event_code = WM_MOVE,
-				.x = LOWORD(lparam),
-				.y = HIWORD(lparam),
-				.width = 0,
-				.height = 0,
-				.visible = 1
-			};
-		    // false means that we lost focus.
-			if ((BOOL)wparam == FALSE) {
-				event.window.focused = 0;
-				ShowWindow(hwnd, SW_MINIMIZE);
-				ChangeDisplaySettingsA(NULL, 0);
-			} else {
-				event.window.focused = 1;
-				platform_make_window_fullscreen(window);
-			}
+            event.window = (pal_window_event){
+                .event_code = WM_MOVE,
+                .x = LOWORD(lparam),
+                .y = HIWORD(lparam),
+                .width = 0,
+                .height = 0,
+                .visible = 1};
+            // false means that we lost focus.
+            if ((BOOL)wparam == FALSE) {
+                event.window.focused = 0;
+                ShowWindow(hwnd, SW_MINIMIZE);
+                ChangeDisplaySettingsA(NULL, 0);
+            } else {
+                event.window.focused = 1;
+                platform_make_window_fullscreen(window);
+            }
             break;
 
             // TODO: Make this return a pal_event of some kind.
@@ -1431,112 +1410,113 @@ static pal_window* platform_create_window(int width, int height, const char* win
     // used when initializing opengl.
     pal_window* fakewindow = NULL;
     HGLRC fakeRC = 0;
-	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
-	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
-	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
+    PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
+    PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
+    PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
     // we default to opengl.
     if (!(window_flags & PAL_WINDOW_OPENGL) || !(window_flags & PAL_WINDOW_VULKAN) || !(window_flags & PAL_WINDOW_METAL)) {
         window_flags |= PAL_WINDOW_OPENGL;
     }
     if (window_flags & PAL_WINDOW_OPENGL) {
-		fakewindow = (pal_window*)malloc(sizeof(pal_window));
-		WNDCLASSEXA fakewc = { 0 };
-		fakewc.cbSize = sizeof(WNDCLASSEXA);
-		fakewc.lpfnWndProc = win32_fake_window_proc;
-		fakewc.hInstance = GetModuleHandleA(0);
-		fakewc.lpszClassName = "Win32 Fake Window Class";
-		fakewc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+        fakewindow = (pal_window*)malloc(sizeof(pal_window));
+        WNDCLASSEXA fakewc = {0};
+        fakewc.cbSize = sizeof(WNDCLASSEXA);
+        fakewc.lpfnWndProc = win32_fake_window_proc;
+        fakewc.hInstance = GetModuleHandleA(0);
+        fakewc.lpszClassName = "Win32 Fake Window Class";
+        fakewc.hCursor = LoadCursorA(NULL, IDC_ARROW);
 
-		RegisterClassExA(&fakewc);
+        RegisterClassExA(&fakewc);
 
-		fakewindow->hwnd = CreateWindowExA(
-			0,                    // Optional window styles.
-			fakewc.lpszClassName, // Window class
-			"Fake Ass Window.",   // Window text
-			WS_OVERLAPPEDWINDOW,  // Window style
+        fakewindow->hwnd = CreateWindowExA(
+            0,                    // Optional window styles.
+            fakewc.lpszClassName, // Window class
+            "Fake Ass Window.",   // Window text
+            WS_OVERLAPPEDWINDOW,  // Window style
 
-			                      // Size and position
-			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            // Size and position
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
 
-			NULL,                 // Parent window    
-			NULL,                 // Menu
-			fakewc.hInstance,     // Instance handle
-			NULL                  // Additional application data
-		);
+            NULL,             // Parent window
+            NULL,             // Menu
+            fakewc.hInstance, // Instance handle
+            NULL              // Additional application data
+        );
 
-		if (fakewindow->hwnd == NULL)
-		{
-			return fakewindow;
-		}
+        if (fakewindow->hwnd == NULL) {
+            return fakewindow;
+        }
 
-		s_fakeDC = GetDC(fakewindow->hwnd);
+        s_fakeDC = GetDC(fakewindow->hwnd);
 
-		PIXELFORMATDESCRIPTOR fakePFD;
-		ZeroMemory(&fakePFD, sizeof(fakePFD));
-		fakePFD.nSize = sizeof(fakePFD);
-		fakePFD.nVersion = 1;
-		fakePFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-		fakePFD.iPixelType = PFD_TYPE_RGBA;
-		fakePFD.cColorBits = 32;
-		fakePFD.cAlphaBits = 8;
-		fakePFD.cDepthBits = 24;
+        PIXELFORMATDESCRIPTOR fakePFD;
+        ZeroMemory(&fakePFD, sizeof(fakePFD));
+        fakePFD.nSize = sizeof(fakePFD);
+        fakePFD.nVersion = 1;
+        fakePFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+        fakePFD.iPixelType = PFD_TYPE_RGBA;
+        fakePFD.cColorBits = 32;
+        fakePFD.cAlphaBits = 8;
+        fakePFD.cDepthBits = 24;
 
-		int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
+        int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
 
-		if (fakePFDID == 0) {
-			MessageBoxA(fakewindow->hwnd, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
-		if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
-			MessageBoxA(fakewindow->hwnd, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
+        if (fakePFDID == 0) {
+            MessageBoxA(fakewindow->hwnd, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
+        if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
+            MessageBoxA(fakewindow->hwnd, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
 
-		fakeRC = wglCreateContext(s_fakeDC);
-		if (fakeRC == 0) {
-			MessageBoxA(fakewindow->hwnd, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
-		if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
-			MessageBoxA(fakewindow->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
-		wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
-		if (wglChoosePixelFormatARB == NULL) {
-			MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
-		wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
-		if (wglCreateContextAttribsARB == NULL) {
-			MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
-		wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
-		if (wglSwapIntervalEXT == NULL) {
-			MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-			return fakewindow;
-		}
-
+        fakeRC = wglCreateContext(s_fakeDC);
+        if (fakeRC == 0) {
+            MessageBoxA(fakewindow->hwnd, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
+        if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
+            MessageBoxA(fakewindow->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
+        wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
+        if (wglChoosePixelFormatARB == NULL) {
+            MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
+        wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
+        if (wglCreateContextAttribsARB == NULL) {
+            MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
+        wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+        if (wglSwapIntervalEXT == NULL) {
+            MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
+            return fakewindow;
+        }
     }
 
     WNDCLASSEXA wc = {0};
 
-	wc.cbSize = sizeof(WNDCLASSEXA);
-	wc.lpfnWndProc = win32_window_proc;
-	wc.hInstance = GetModuleHandleA(0);
-	wc.lpszClassName = "Win32 Window Class";
-	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+    wc.cbSize = sizeof(WNDCLASSEXA);
+    wc.lpfnWndProc = win32_window_proc;
+    wc.hInstance = GetModuleHandleA(0);
+    wc.lpszClassName = "Win32 Window Class";
+    wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
 
-	RegisterClassExA(&wc);
+    RegisterClassExA(&wc);
 
-	pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    pal_window* window = (pal_window*)malloc(sizeof(pal_window));
     window->width = width;
     window->height = height;
     // -- CREATE QUEUE FOR THE WINDOW --
     size_t capacity = 10000;
     pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
 
-    if(events == NULL) {
+    if (events == NULL) {
         fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
     }
 
@@ -1546,15 +1526,14 @@ static pal_window* platform_create_window(int width, int height, const char* win
         .capacity = capacity,
         .front = 0,
         .back = 0,
-        .events = events
-    };
+        .events = events};
 
     window->queue = queue;
 
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
 
-    if(window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
+    if (window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
         ext_window_style |= WS_EX_NOACTIVATE;
     }
     if (window_flags & PAL_WINDOW_ALWAYS_ON_TOP) {
@@ -1565,18 +1544,14 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
         ext_window_style |= WS_EX_TOOLWINDOW;
         window_style |= WS_SYSMENU;
-    }
-    else if (window_flags & PAL_WINDOW_POPUP_MENU) {
+    } else if (window_flags & PAL_WINDOW_POPUP_MENU) {
         window_style |= WS_POPUPWINDOW;
-    }
-    else if (window_flags & PAL_WINDOW_TOOLTIP) {
+    } else if (window_flags & PAL_WINDOW_TOOLTIP) {
         ext_window_style |= WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
-    }
-    else if (window_flags & PAL_WINDOW_RESIZABLE) {
+    } else if (window_flags & PAL_WINDOW_RESIZABLE) {
         window_style |= WS_OVERLAPPEDWINDOW;
 
-    }
-    else {
+    } else {
         window_style |= WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
     }
 
@@ -1586,17 +1561,17 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
     if (window_flags & PAL_WINDOW_FULLSCREEN) {
 
-		DEVMODE dm = {0};
-		dm.dmSize = sizeof(dm);
-		dm.dmPelsWidth = width;
-		dm.dmPelsHeight = height;
-		dm.dmBitsPerPel = 32;
-		dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+        DEVMODE dm = {0};
+        dm.dmSize = sizeof(dm);
+        dm.dmPelsWidth = width;
+        dm.dmPelsHeight = height;
+        dm.dmBitsPerPel = 32;
+        dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
 
-		LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
-		if (result != DISP_CHANGE_SUCCESSFUL) {
-			MessageBox(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
-		}
+        LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
+        if (result != DISP_CHANGE_SUCCESSFUL) {
+            MessageBox(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
+        }
         window_style = WS_POPUP;
     }
     // -- CREATING EVENT QUEUE --
@@ -1608,161 +1583,143 @@ static pal_window* platform_create_window(int width, int height, const char* win
     // we will just crash. - Abdelrahman July 29, 2025
     g_current_window = window;
     // -- CREATING WINDOW --
-	window->hwnd = CreateWindowExA(
-		ext_window_style,           // Optional window styles.
-		wc.lpszClassName,     // Window class
-		window_title,          // Window text
-		window_style,          // Window style
+    window->hwnd = CreateWindowExA(
+        ext_window_style, // Optional window styles.
+        wc.lpszClassName, // Window class
+        window_title,     // Window text
+        window_style,     // Window style
 
-		// Size and position
-		CW_USEDEFAULT, CW_USEDEFAULT, width, height,
+        // Size and position
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        width,
+        height,
 
-		NULL,       // Parent window    
-		NULL,       // Menu
-		wc.hInstance,  // Instance handle
-		NULL        // Additional application data
-	);
+        NULL,         // Parent window
+        NULL,         // Menu
+        wc.hInstance, // Instance handle
+        NULL          // Additional application data
+    );
 
-	if (window->hwnd == NULL) {
-		return window;
-	}
+    if (window->hwnd == NULL) {
+        return window;
+    }
 
-	window->hdc = GetDC(window->hwnd);
+    window->hdc = GetDC(window->hwnd);
 
-	const int pixelAttribs[] = {
-		WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-		WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-		WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-		WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-		WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-		WGL_COLOR_BITS_ARB, 32,
-		WGL_ALPHA_BITS_ARB, 8,
-		WGL_DEPTH_BITS_ARB, 24,
-		WGL_STENCIL_BITS_ARB, 8,
-		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-		WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
-		0
-	};
+    const int pixelAttribs[] = {
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE, WGL_SUPPORT_OPENGL_ARB, GL_TRUE, WGL_DOUBLE_BUFFER_ARB, GL_TRUE, WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB, WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB, WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8, WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8, WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
+        0};
 
-	int pixelFormatID; UINT numFormats;
-	uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
-	if (status == 0 || numFormats == 0) {
-		MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
-		return window;
-	}
+    int pixelFormatID;
+    UINT numFormats;
+    uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
+    if (status == 0 || numFormats == 0) {
+        MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
+        return window;
+    }
 
-	PIXELFORMATDESCRIPTOR PFD;
+    PIXELFORMATDESCRIPTOR PFD;
     if (window_flags & PAL_WINDOW_OPENGL)
         PFD.dwFlags |= PFD_SUPPORT_OPENGL;
 
-	PFD.dwFlags |= PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
-	DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
-	SetPixelFormat(window->hdc, pixelFormatID, &PFD);
+    PFD.dwFlags |= PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
+    DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
+    SetPixelFormat(window->hdc, pixelFormatID, &PFD);
 
-	int contextAttribs[] = {
-		WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-		WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-		WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
-		WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-		0
-	};
+    int contextAttribs[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB, WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0};
 
-	window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
+    window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
 
+    RAWINPUTDEVICE rid[3];
 
-	RAWINPUTDEVICE rid[3];
+    // 1. Keyboard
+    rid[0].usUsagePage = 0x01;                          // Generic desktop controls
+    rid[0].usUsage = 0x06;                              // Keyboard
+    rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
+    rid[0].hwndTarget = window->hwnd;
 
-	// 1. Keyboard
-	rid[0].usUsagePage = 0x01; // Generic desktop controls
-	rid[0].usUsage = 0x06;     // Keyboard
-	rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
-	rid[0].hwndTarget = window->hwnd;
+    // 2. Mouse
+    rid[1].usUsagePage = 0x01; // Generic desktop controls
+    rid[1].usUsage = 0x02;     // Mouse
+    rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+    rid[1].hwndTarget = window->hwnd;
 
-	// 2. Mouse
-	rid[1].usUsagePage = 0x01; // Generic desktop controls
-	rid[1].usUsage = 0x02;     // Mouse
-	rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-	rid[1].hwndTarget = window->hwnd;
+    // 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
+    rid[2].usUsagePage = 0x01; // Generic desktop controls
+    rid[2].usUsage = 0x04;     // Joystick
+    rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+    rid[2].hwndTarget = window->hwnd;
 
-	// 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
-	rid[2].usUsagePage = 0x01; // Generic desktop controls
-	rid[2].usUsage = 0x04;     // Joystick
-	rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-	rid[2].hwndTarget = window->hwnd;
+    if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
+        DWORD error = GetLastError();
+        printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
+    }
 
-	if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
-		DWORD error = GetLastError();
-		printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
-	}
+    if (window->hglrc) {
 
-	if (window->hglrc) {
-
-		wglMakeCurrent(NULL, NULL);
-		wglDeleteContext(fakeRC);
-		ReleaseDC(fakewindow->hwnd, s_fakeDC);
-		DestroyWindow(fakewindow->hwnd);
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(fakeRC);
+        ReleaseDC(fakewindow->hwnd, s_fakeDC);
+        DestroyWindow(fakewindow->hwnd);
         free(fakewindow);
 
-
-
-		if (!(window_flags & PAL_WINDOW_HIDDEN)) {
-			if (window_flags & PAL_WINDOW_FULLSCREEN) {
-				ShowWindow(window->hwnd, SW_SHOW);
-			} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
-				ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
-			} else if (window_flags & PAL_WINDOW_MINIMIZED) {
-				ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
-			} else {
-				ShowWindow(window->hwnd, SW_SHOWNORMAL);
-			}
-		} else {
-			ShowWindow(window->hwnd, SW_HIDE);
-		}
-        if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
-			RECT rect;
-			GetClientRect(window->hwnd, &rect);
-			POINT tl = { rect.left, rect.top };
-			POINT br = { rect.right, rect.bottom };
-			ClientToScreen(window->hwnd, &tl);
-			ClientToScreen(window->hwnd, &br);
-			rect.left   = tl.x;
-			rect.top    = tl.y;
-			rect.right  = br.x;
-			rect.bottom = br.y;
-			ClipCursor(&rect);
-            window->confine_mouse = TRUE;
+        if (!(window_flags & PAL_WINDOW_HIDDEN)) {
+            if (window_flags & PAL_WINDOW_FULLSCREEN) {
+                ShowWindow(window->hwnd, SW_SHOW);
+            } else if (window_flags & PAL_WINDOW_MAXIMIZED) {
+                ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
+            } else if (window_flags & PAL_WINDOW_MINIMIZED) {
+                ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
+            } else {
+                ShowWindow(window->hwnd, SW_SHOWNORMAL);
+            }
+        } else {
+            ShowWindow(window->hwnd, SW_HIDE);
         }
-        else {
+        if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
+            RECT rect;
+            GetClientRect(window->hwnd, &rect);
+            POINT tl = {rect.left, rect.top};
+            POINT br = {rect.right, rect.bottom};
+            ClientToScreen(window->hwnd, &tl);
+            ClientToScreen(window->hwnd, &br);
+            rect.left = tl.x;
+            rect.top = tl.y;
+            rect.right = br.x;
+            rect.bottom = br.y;
+            ClipCursor(&rect);
+            window->confine_mouse = TRUE;
+        } else {
             window->confine_mouse = FALSE;
         }
-		SetForegroundWindow(window->hwnd);
-		SetFocus(window->hwnd);
-		OutputDebugStringA("INFO: Using modern OpenGL Context.");
+        SetForegroundWindow(window->hwnd);
+        SetFocus(window->hwnd);
+        OutputDebugStringA("INFO: Using modern OpenGL Context.");
         // save the window style and the window rect in case the user sets the window to windowed before setting it to fullscreen.
         // The fullscreen function is supposed to save this state whenever the user calls it,
         // but if the user doesn't, the make_window_windowed() function uses a state that's all zeroes
         //, so we have to save it here. - Abdelrahman june 13, 2024
-		window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
-		return window;
-	}
-	else {
+        window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
+        return window;
+    } else {
         // This is supposed to be a fallback in case we can't create the context that we want.
         // Ideally, this should never happen. - Abdelrahman june 13, 2024
-		ShowWindow(fakewindow->hwnd, SW_SHOW);
-		SetForegroundWindow(fakewindow->hwnd);
-		SetFocus(fakewindow->hwnd);
-		OutputDebugStringA("INFO: Using old OpenGL Context.");
-		return fakewindow;
-	}
-
+        ShowWindow(fakewindow->hwnd, SW_SHOW);
+        SetForegroundWindow(fakewindow->hwnd);
+        SetFocus(fakewindow->hwnd);
+        OutputDebugStringA("INFO: Using old OpenGL Context.");
+        return fakewindow;
+    }
 }
 
 static int platform_make_context_current(pal_window* window) {
-	if (!wglMakeCurrent(window->hdc, window->hglrc)) {
-		MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
-		return 1;
-	}
-	return 0;
+    if (!wglMakeCurrent(window->hdc, window->hglrc)) {
+        MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+        return 1;
+    }
+    return 0;
 }
 
 static int platform_show_cursor(void) {
@@ -1791,53 +1748,53 @@ static pal_bool platform_minimize_window(pal_window* window) {
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
     g_current_window = window;
-	MSG msg = {0};
+    MSG msg = {0};
     if (!window->message_pump_drained) {
 
-		platform_get_raw_input_buffer();
-		while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
-			TranslateMessage(&msg);
+        platform_get_raw_input_buffer();
+        while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
+            TranslateMessage(&msg);
             DispatchMessageA(&msg);
-		}
+        }
         window->message_pump_drained = TRUE;
     }
- 
+
     pal_event_queue* queue = &window->queue;
 
     if (queue->size) { // if queue is not empty,
 
-		// peek
-		*event = queue->events[queue->front];
-		
-		// dequeue
-		queue->front = (queue->front + 1) % queue->capacity;
-		queue->size--;
-		return 1;
+        // peek
+        *event = queue->events[queue->front];
+
+        // dequeue
+        queue->front = (queue->front + 1) % queue->capacity;
+        queue->size--;
+        return 1;
     }
     // not putting an else here to avoid unreachable section.
-	window->message_pump_drained = FALSE;
-	input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
-	return 0;
+    window->message_pump_drained = FALSE;
+    input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
+    return 0;
 }
 
 static uint8_t platform_set_window_title(pal_window* window, const char* string) {
-	return SetWindowTextA(window->hwnd, string);
+    return SetWindowTextA(window->hwnd, string);
 }
 
 static pal_monitor* platform_get_primary_monitor(void) {
     // The point (0, 0) is guaranteed to be on the primary monitor
-	pal_monitor* monitor = malloc(sizeof(pal_monitor));
-    POINT pt = { 0, 0 };
+    pal_monitor* monitor = malloc(sizeof(pal_monitor));
+    POINT pt = {0, 0};
     monitor->handle = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
     return monitor;
 }
 
 static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
-    MONITORINFOEX mi = { .cbSize = sizeof(MONITORINFOEX) };
+    MONITORINFOEX mi = {.cbSize = sizeof(MONITORINFOEX)};
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
 
-    DEVMODE dm = { .dmSize = sizeof(DEVMODE) };
+    DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
     if (!EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
         return 0;
     pal_video_mode* mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
@@ -1850,11 +1807,11 @@ static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
 }
 
 static void* platform_gl_get_proc_address(const char* proc) {
-	return wglGetProcAddress(proc);
+    return wglGetProcAddress(proc);
 }
 
 void platform_swap_buffers(pal_window* window) {
-	SwapBuffers(window->hdc);
+    SwapBuffers(window->hdc);
 }
 
 #define MAX_RAW_INPUTS 16
@@ -1885,14 +1842,13 @@ void Win32HandleMouse(const RAWINPUT* raw) {
 }
 
 pal_vec2 platform_get_mouse_position(pal_window* window) {
-    POINT cursor_pos = { 0 };
+    POINT cursor_pos = {0};
     GetCursorPos(&cursor_pos);
 
-    ScreenToClient(window->hwnd, &cursor_pos);     // Convert to client-area coordinates
-    return (pal_vec2) {
+    ScreenToClient(window->hwnd, &cursor_pos); // Convert to client-area coordinates
+    return (pal_vec2){
         (float)cursor_pos.x,
-            (float)cursor_pos.y
-    };
+        (float)cursor_pos.y};
 }
 
 void Win32HandleKeyboard(const RAWINPUT* raw) {
@@ -1905,7 +1861,6 @@ void Win32HandleKeyboard(const RAWINPUT* raw) {
 
 
     */
-
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
@@ -1915,9 +1870,9 @@ void Win32HandleHID(const RAWINPUT* raw) {
 
 // Handler function table indexed by dwType (0 = mouse, 1 = keyboard, 2 = HID)
 RawInputHandler Win32InputHandlers[3] = {
-    Win32HandleMouse,      // RIM_TYPEMOUSE (0)
-    Win32HandleKeyboard,   // RIM_TYPEKEYBOARD (1)
-    Win32HandleHID        // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
+    Win32HandleMouse,    // RIM_TYPEMOUSE (0)
+    Win32HandleKeyboard, // RIM_TYPEKEYBOARD (1)
+    Win32HandleHID       // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
 };
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
@@ -1933,11 +1888,9 @@ static int platform_get_raw_input_buffer(void) {
         UINT type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
             Win32HandleMouse(raw);
-        }
-        else if (type == RIM_TYPEKEYBOARD) {
+        } else if (type == RIM_TYPEKEYBOARD) {
             Win32HandleKeyboard(raw);
-        }
-        else {
+        } else {
             Win32HandleHID(raw);
         }
         raw = NEXTRAWINPUTBLOCK(raw);
@@ -1962,17 +1915,16 @@ size_t platform_get_file_size(const char* file_path) {
         NULL,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
+        NULL);
 
     LARGE_INTEGER file_size;
-    
+
     if (GetFileSizeEx(file, &file_size)) {
         CloseHandle(file);
         return file_size.QuadPart;
     }
-	CloseHandle(file);
-	return 0;
+    CloseHandle(file);
+    return 0;
 }
 
 size_t platform_get_last_write_time(const char* file) {
@@ -1980,8 +1932,8 @@ size_t platform_get_last_write_time(const char* file) {
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
     }
-    return ((uint64_t)fileInfo.ftLastWriteTime.dwHighDateTime << 32) | 
-            fileInfo.ftLastWriteTime.dwLowDateTime;
+    return ((uint64_t)fileInfo.ftLastWriteTime.dwHighDateTime << 32) |
+           fileInfo.ftLastWriteTime.dwLowDateTime;
 }
 
 size_t platform_get_last_read_time(const char* file) {
@@ -1990,7 +1942,7 @@ size_t platform_get_last_read_time(const char* file) {
         return 0; // Error case
     }
     return ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) |
-            fileInfo.ftLastAccessTime.dwLowDateTime;
+           fileInfo.ftLastAccessTime.dwLowDateTime;
 }
 
 uint32_t platform_get_file_permissions(const char* file_path) {
@@ -2011,11 +1963,11 @@ uint32_t platform_get_file_permissions(const char* file_path) {
         NULL,
         &pDacl,
         NULL,
-        &pSD
-    );
+        &pSD);
 
     if (dwRes != ERROR_SUCCESS) {
-        if (pSD) LocalFree(pSD);
+        if (pSD)
+            LocalFree(pSD);
         return 0;
     }
 
@@ -2041,9 +1993,12 @@ uint32_t platform_get_file_permissions(const char* file_path) {
     dwRes = GetEffectiveRightsFromAclA(pDacl, NULL, &accessRights);
 
     if (dwRes == ERROR_SUCCESS) {
-        if (accessRights & FILE_GENERIC_READ)   permissions |= PAL_READ;
-        if (accessRights & FILE_GENERIC_WRITE)  permissions |= PAL_WRITE;
-        if (accessRights & FILE_GENERIC_EXECUTE) permissions |= PAL_EXECUTE;
+        if (accessRights & FILE_GENERIC_READ)
+            permissions |= PAL_READ;
+        if (accessRights & FILE_GENERIC_WRITE)
+            permissions |= PAL_WRITE;
+        if (accessRights & FILE_GENERIC_EXECUTE)
+            permissions |= PAL_EXECUTE;
     }
 
     // Cleanup
@@ -2060,9 +2015,12 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
 
     // Convert permission_flags to Windows-specific access rights
     DWORD dwAccessRights = 0;
-    if (permission_flags & PAL_READ)    dwAccessRights |= GENERIC_READ;
-    if (permission_flags & PAL_WRITE)   dwAccessRights |= GENERIC_WRITE;
-    if (permission_flags & PAL_EXECUTE) dwAccessRights |= GENERIC_EXECUTE;
+    if (permission_flags & PAL_READ)
+        dwAccessRights |= GENERIC_READ;
+    if (permission_flags & PAL_WRITE)
+        dwAccessRights |= GENERIC_WRITE;
+    if (permission_flags & PAL_EXECUTE)
+        dwAccessRights |= GENERIC_EXECUTE;
 
     if (dwAccessRights == 0) {
         return 0; // No valid permissions requested
@@ -2116,8 +2074,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
         NULL,
         &pOldDACL,
         NULL,
-        &pSD
-    );
+        &pSD);
 
     if (dwRes != ERROR_SUCCESS) {
         free(pTokenUser);
@@ -2140,8 +2097,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
         NULL,
         NULL,
         pNewDACL,
-        NULL
-    );
+        NULL);
 
     // Cleanup
     LocalFree(pNewDACL);
@@ -2159,8 +2115,7 @@ uint8_t platform_read_file(const char* file_path, char* buffer) {
         NULL,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
+        NULL);
 
     if (file == INVALID_HANDLE_VALUE) {
         return 1;
@@ -2179,7 +2134,7 @@ uint8_t platform_read_file(const char* file_path, char* buffer) {
         DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
         DWORD bytes_read = 0;
 
-        if (!ReadFile(file, buffer + offset, chunk, &bytes_read, NULL) || 
+        if (!ReadFile(file, buffer + offset, chunk, &bytes_read, NULL) ||
             bytes_read != chunk) {
             CloseHandle(file);
             return 1;
@@ -2201,8 +2156,7 @@ uint8_t platform_write_file(const char* file_path, size_t file_size, const char*
         NULL,
         CREATE_ALWAYS,
         FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
+        NULL);
 
     if (file == INVALID_HANDLE_VALUE) {
         return 1;
@@ -2215,7 +2169,7 @@ uint8_t platform_write_file(const char* file_path, size_t file_size, const char*
         DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
         DWORD bytes_written = 0;
 
-        if (!WriteFile(file, current_pos, chunk, &bytes_written, NULL) || 
+        if (!WriteFile(file, current_pos, chunk, &bytes_written, NULL) ||
             bytes_written != chunk) {
             CloseHandle(file);
             return 1;
@@ -2236,13 +2190,13 @@ uint8_t platform_copy_file(const char* original_path, const char* copy_path) {
 pal_file* platform_open_file(const char* file_path) {
     pal_file* file = (pal_file*)malloc(sizeof(pal_file));
     file->handle = CreateFileA(
-        file_path,              // File name
-        GENERIC_READ,           // Desired access
-        FILE_SHARE_READ,        // Share mode
-        NULL,                   // Security attributes
-        OPEN_EXISTING,          // Creation disposition
-        FILE_ATTRIBUTE_NORMAL,  // Flags and attributes
-        NULL                    // Template file
+        file_path,             // File name
+        GENERIC_READ,          // Desired access
+        FILE_SHARE_READ,       // Share mode
+        NULL,                  // Security attributes
+        OPEN_EXISTING,         // Creation disposition
+        FILE_ATTRIBUTE_NORMAL, // Flags and attributes
+        NULL                   // Template file
     );
 
     if (file->handle == INVALID_HANDLE_VALUE) {
@@ -2271,8 +2225,7 @@ pal_bool platform_read_from_open_file(pal_file* file, size_t offset, size_t byte
     while (total_read < bytes_to_read) {
         if ((DWORD)((bytes_to_read - total_read) > MAXDWORD)) {
             to_read = MAXDWORD;
-        }
-        else {
+        } else {
             to_read = (bytes_to_read - total_read);
         }
         DWORD bytesRead = 0;
@@ -2298,20 +2251,20 @@ pal_bool platform_close_file(pal_file* file) {
 // Random Number Generator.
 //----------------------------------------------------------------------------------
 
-void platform_srand(uint64_t *state, uint64_t seed) {
+void platform_srand(uint64_t* state, uint64_t seed) {
     if (seed == 0) {
         seed = 1; // Avoid zero state which would produce all zeros
     }
     *state = seed;
 }
 
-uint32_t platform_rand(uint64_t *state) {
+uint32_t platform_rand(uint64_t* state) {
     // SDL's well-tested LCG constants:
     // - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs)
     // - Increment: 0x05 (small odd number, generates smaller ARM code)
     // - These constants passed extensive testing with PractRand and TestU01
     *state = *state * 0xff1cd035ul + 0x05;
-    
+
     // Return upper 32 bits - they have better statistical properties
     // and longer period than lower bits in an LCG
     return (uint32_t)(*state >> 32);
@@ -2321,27 +2274,24 @@ uint32_t platform_rand(uint64_t *state) {
 // Sound Functions.
 //----------------------------------------------------------------------------------
 int platform_init_sound(void) {
-	int hr;
+    int hr;
 
-	// Initialize COM (needed for XAudio2)
-	hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-	if (FAILED(hr)) {
-		return hr;
-	}
+    // Initialize COM (needed for XAudio2)
+    hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    if (FAILED(hr)) {
+        return hr;
+    }
 
-	// Initialize XAudio2 engine
-	hr = XAudio2Create(&g_xaudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-	if (FAILED(hr)) {
-		return hr;
-	}
+    // Initialize XAudio2 engine
+    hr = XAudio2Create(&g_xaudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+    if (FAILED(hr)) {
+        return hr;
+    }
 
-	// Create mastering voice
-	hr = g_xaudio2->lpVtbl->CreateMasteringVoice(g_xaudio2, &g_mastering_voice,
-		XAUDIO2_DEFAULT_CHANNELS,
-		XAUDIO2_DEFAULT_SAMPLERATE,
-		0, NULL, NULL, AudioCategory_GameEffects);
+    // Create mastering voice
+    hr = g_xaudio2->lpVtbl->CreateMasteringVoice(g_xaudio2, &g_mastering_voice, XAUDIO2_DEFAULT_CHANNELS, XAUDIO2_DEFAULT_SAMPLERATE, 0, NULL, NULL, AudioCategory_GameEffects);
 
-	return hr;
+    return hr;
 }
 
 // XAudio2 callback for streaming
@@ -2358,60 +2308,67 @@ static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds)
 
 static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
     size_t bytes_read = 0;
-    
+
     if (sound->source_file) {
         size_t remaining = sound->total_data_size - sound->bytes_streamed;
-        
+
         if (remaining == 0) {
             printf("WAV: No remaining data\n");
             return 0;
         }
-        
+
         if (!sound->source_file) {
             printf("ERROR: WAV file handle is NULL!\n");
             return 0;
         }
-        
+
         size_t to_read = (buffer_size < remaining) ? buffer_size : remaining;
         size_t seek_pos = sound->data_offset + sound->bytes_streamed;
-        
-        printf("WAV: Seeking to %zu (data_offset=%zu + bytes_streamed=%zu), reading %zu bytes\n", 
-               seek_pos, sound->data_offset, sound->bytes_streamed, to_read);
-        
+
+        printf("WAV: Seeking to %zu (data_offset=%zu + bytes_streamed=%zu), reading %zu bytes\n",
+               seek_pos,
+               sound->data_offset,
+               sound->bytes_streamed,
+               to_read);
+
         if (fseek(sound->source_file, (long)seek_pos, SEEK_SET) != 0) {
             printf("WAV: Seek failed to position %zu\n", seek_pos);
             return 0;
         }
-        
+
         bytes_read = fread(buffer, 1, to_read, sound->source_file);
-        
+
         if (bytes_read != to_read) {
-            printf("WAV: Read %zu bytes but expected %zu, feof=%d, ferror=%d\n", 
-                   bytes_read, to_read, feof(sound->source_file), ferror(sound->source_file));
+            printf("WAV: Read %zu bytes but expected %zu, feof=%d, ferror=%d\n",
+                   bytes_read,
+                   to_read,
+                   feof(sound->source_file),
+                   ferror(sound->source_file));
         }
-        
+
         sound->bytes_streamed += bytes_read;
         printf("WAV: Read %zu bytes, new bytes_streamed=%zu\n", bytes_read, sound->bytes_streamed);
-        
+
     } else if (sound->decoder) {
         stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
-        
+
         // Calculate how many sample frames we can fit in the buffer
         size_t bytes_per_sample_frame = sound->channels * sizeof(short);
         size_t max_sample_frames = buffer_size / bytes_per_sample_frame;
-        
+
         if (max_sample_frames <= 0) {
             printf("OGG: Buffer too small for samples\n");
             return 0;
         }
-        
+
         // Calculate how many sample frames we should skip
         size_t sample_frames_streamed = sound->bytes_streamed / bytes_per_sample_frame;
         int current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
-        
-        printf("OGG: Loading chunk - streamed %zu sample frames, decoder at %d\n", 
-               sample_frames_streamed, current_decoder_pos);
-        
+
+        printf("OGG: Loading chunk - streamed %zu sample frames, decoder at %d\n",
+               sample_frames_streamed,
+               current_decoder_pos);
+
         // If decoder is behind our streaming position, seek forward
         if (current_decoder_pos < (int)sample_frames_streamed) {
             printf("OGG: Seeking decoder from %d to %zu\n", current_decoder_pos, sample_frames_streamed);
@@ -2423,101 +2380,105 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
                 return 0;
             }
         }
-        
+
         // Allocate temporary float buffers for non-interleaved data
         float** channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
         for (int i = 0; i < sound->channels; i++) {
             channel_buffers[i] = (float*)malloc(max_sample_frames * sizeof(float));
         }
-        
+
         // Read using non-interleaved API
         int total_sample_frames_read = stb_vorbis_get_samples_float(
             vorbis, sound->channels, channel_buffers, (int)max_sample_frames);
-        
+
         if (total_sample_frames_read > 0) {
             // Convert float samples to interleaved 16-bit shorts
             short* output_ptr = (short*)buffer;
-            
+
             for (int sample = 0; sample < total_sample_frames_read; sample++) {
                 for (int ch = 0; ch < sound->channels; ch++) {
                     float f_sample = channel_buffers[ch][sample];
                     // Clamp and convert to 16-bit
-                    if (f_sample > 1.0f) f_sample = 1.0f;
-                    if (f_sample < -1.0f) f_sample = -1.0f;
+                    if (f_sample > 1.0f)
+                        f_sample = 1.0f;
+                    if (f_sample < -1.0f)
+                        f_sample = -1.0f;
                     short s_sample = (short)(f_sample * 32767.0f);
                     output_ptr[sample * sound->channels + ch] = s_sample;
                 }
             }
         }
-        
+
         // Clean up temporary buffers
         for (int i = 0; i < sound->channels; i++) {
             free(channel_buffers[i]);
         }
         free(channel_buffers);
-        
+
         bytes_read = total_sample_frames_read * bytes_per_sample_frame;
-        
+
         // Update bytes_streamed to track total bytes processed
         sound->bytes_streamed += bytes_read;
-        
+
         int after_sample = stb_vorbis_get_sample_offset(vorbis);
-        
+
         printf("OGG: Read %d sample frames (%zu bytes)\n", total_sample_frames_read, bytes_read);
-        printf("OGG: Decoder position: %d -> %u (advanced %d samples)\n", 
-               current_decoder_pos, after_sample, after_sample - current_decoder_pos);
+        printf("OGG: Decoder position: %d -> %u (advanced %d samples)\n",
+               current_decoder_pos,
+               after_sample,
+               after_sample - current_decoder_pos);
         printf("OGG: Total bytes streamed: %zu\n", sound->bytes_streamed);
-        
+
         // Check if we're at the end
         if (total_sample_frames_read == 0) {
             unsigned int total_samples = stb_vorbis_stream_length_in_samples(vorbis);
             printf("OGG: End of stream - position %d of %u total samples\n", after_sample, total_samples);
         }
     }
-    
+
     return bytes_read;
 }
 
 static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
-    
+
     static int buffer_end_count = 0;
     printf("OnBufferEnd %d: buffer=%p\n", buffer_end_count++, pBufferContext);
-    
+
     // Free the buffer that just finished playing
     // pBufferContext contains the buffer pointer we set in buffer.pContext
     if (pBufferContext) {
         free(pBufferContext);
     }
-    
+
     if (!sound->is_streaming || sound->stream_finished) {
         return;
     }
-    
+
     // Check how many buffers are queued
     XAUDIO2_VOICE_STATE state;
     sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
-    
+
     // If we have fewer than 2 buffers queued, queue another one
     if (state.BuffersQueued < 2) {
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
-        
+
         unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
-        
+
         if (chunk_buffer) {
             size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
-            
+
             if (bytes_read > 0) {
                 XAUDIO2_BUFFER buffer = {0};
                 buffer.AudioBytes = (UINT32)bytes_read;
                 buffer.pAudioData = chunk_buffer;
                 buffer.pContext = chunk_buffer; // For OnBufferEnd to free
-                
+
                 HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(
                     sound->source_voice, &buffer, NULL);
-                    
+
                 if (FAILED(hr)) {
                     printf("ERROR: Failed to submit buffer in OnBufferEnd: 0x%08X\n", hr);
                     free(chunk_buffer);
@@ -2538,19 +2499,21 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* ca
     // OnBufferEnd now handles buffer queuing, so this can be much simpler
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
-    
+
     if (!sound->is_streaming || sound->stream_finished) {
         return;
     }
-    
+
     // Just log state for debugging
     XAUDIO2_VOICE_STATE state;
     sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
-    
+
     static int callback_count = 0;
     if (callback_count % 100 == 0) { // Log less frequently
-        printf("ProcessingPass %d: BuffersQueued=%u, SamplesPlayed=%llu\n", 
-               callback_count, state.BuffersQueued, state.SamplesPlayed);
+        printf("ProcessingPass %d: BuffersQueued=%u, SamplesPlayed=%llu\n",
+               callback_count,
+               state.BuffersQueued,
+               state.SamplesPlayed);
     }
     callback_count++;
 }
@@ -2570,9 +2533,9 @@ static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void
     // Called when XAudio2 encounters an error
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
-    
+
     printf("XAudio2 Voice Error: 0x%08X\n", error);
-    
+
     // Stop streaming on error
     sound->stream_finished = 1;
 }
@@ -2582,7 +2545,7 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback* 
     // BytesRequired tells us how much data XAudio2 needs
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
-    
+
     // We can use BytesRequired to be more intelligent about buffer management
     // For now, we'll handle this in OnBufferEnd instead
 }
@@ -2591,12 +2554,12 @@ static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
     // Called when the last buffer with XAUDIO2_END_OF_STREAM finishes playing
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
-    
+
     printf("Audio stream ended\n");
-    
+
     // Mark stream as finished
     sound->stream_finished = 1;
-    
+
     // You could trigger a callback here to notify your game that the music finished
     // or automatically start the next track in a playlist
 }
@@ -2616,50 +2579,53 @@ static int platform_play_music(pal_sound* sound, float volume) {
         printf("ERROR: XAudio2 not initialized\n");
         return E_FAIL;
     }
-    
-    printf("Playing sound: streaming=%s, voice_callback=%p\n", 
-           sound->is_streaming ? "YES" : "NO", sound->voice_callback);
-    
+
+    printf("Playing sound: streaming=%s, voice_callback=%p\n",
+           sound->is_streaming ? "YES" : "NO",
+           sound->voice_callback);
+
     // Set volume
     sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
-    
+
     // Submit initial buffer (the preloaded data)
     XAUDIO2_BUFFER buffer = {0};
     buffer.AudioBytes = (UINT32)sound->data_size;
     buffer.pAudioData = sound->data;
     buffer.pContext = NULL; // Don't free this buffer - it's owned by the sound object
-    
+
     // For non-streaming sounds, set end of stream flag
     // For streaming sounds, let the callback handle subsequent buffers
     buffer.Flags = sound->is_streaming ? 0 : XAUDIO2_END_OF_STREAM;
-    
-    float initial_seconds = (float)sound->data_size / 
-        (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8));
-    
-    printf("Submitting initial buffer: %u bytes (%.3f seconds), flags=0x%x\n", 
-           buffer.AudioBytes, initial_seconds, buffer.Flags);
-    
+
+    float initial_seconds = (float)sound->data_size /
+                            (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8));
+
+    printf("Submitting initial buffer: %u bytes (%.3f seconds), flags=0x%x\n",
+           buffer.AudioBytes,
+           initial_seconds,
+           buffer.Flags);
+
     HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
     if (FAILED(hr)) {
         printf("ERROR: Failed to submit source buffer: 0x%08X\n", hr);
         return hr;
     }
-    
+
     // IMPROVEMENT: For streaming sounds, queue an additional buffer immediately
     if (sound->is_streaming && !sound->stream_finished) {
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
-        
+
         unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
         if (chunk_buffer) {
             size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
-            
+
             if (bytes_read > 0) {
                 XAUDIO2_BUFFER next_buffer = {0};
                 next_buffer.AudioBytes = (UINT32)bytes_read;
                 next_buffer.pAudioData = chunk_buffer;
                 next_buffer.pContext = chunk_buffer; // For OnBufferEnd to free
-                
+
                 hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &next_buffer, NULL);
                 if (FAILED(hr)) {
                     printf("ERROR: Failed to submit second buffer: 0x%08X\n", hr);
@@ -2673,14 +2639,14 @@ static int platform_play_music(pal_sound* sound, float volume) {
             }
         }
     }
-    
+
     // Start playback
     hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
     if (FAILED(hr)) {
         printf("ERROR: Failed to start voice: 0x%08X\n", hr);
         return hr;
     }
-    
+
     printf("Playback started successfully\n");
     return S_OK;
 }
@@ -2706,18 +2672,16 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
         return NULL;
     }
     *sound = (pal_sound){0};
-    
+
     int result = 0;
 
     if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
         fclose(file);
         result = load_wav(filename, sound, seconds);
-    }
-    else if (memcmp(header, "OggS", 4) == 0) {
+    } else if (memcmp(header, "OggS", 4) == 0) {
         fclose(file);
         result = load_ogg(filename, sound, seconds);
-    }
-    else {
+    } else {
         fclose(file);
         free(sound);
         return NULL; // unsupported format
@@ -2730,16 +2694,12 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
     }
 
     static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
-        0x00000001, 0x0000, 0x0010,
-        { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
-    };
+        0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
     static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
-        0x00000003, 0x0000, 0x0010,
-        { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 }
-    };
+        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
-    WAVEFORMATEXTENSIBLE wfex = { 0 };
+    WAVEFORMATEXTENSIBLE wfex = {0};
     wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
     wfex.Format.nChannels = sound->channels;
     wfex.Format.nSamplesPerSec = sound->sample_rate;
@@ -2750,22 +2710,34 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
     wfex.Samples.wValidBitsPerSample = (uint16_t)sound->bits_per_sample;
 
     wfex.SubFormat = (sound->is_float)
-        ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-        : KSDATAFORMAT_SUBTYPE_PCM;
+                         ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+                         : KSDATAFORMAT_SUBTYPE_PCM;
 
     switch (sound->channels) {
-        case 1: wfex.dwChannelMask = SPEAKER_FRONT_CENTER; break;
-        case 2: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT; break;
-        case 4: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
-        case 6: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                     SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
-                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT; break;
-        case 8: wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                     SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
-                                     SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT |
-                                     SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT; break;
-        default: wfex.dwChannelMask = 0; break;
+        case 1:
+            wfex.dwChannelMask = SPEAKER_FRONT_CENTER;
+            break;
+        case 2:
+            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+            break;
+        case 4:
+            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                 SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
+            break;
+        case 6:
+            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                 SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+                                 SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
+            break;
+        case 8:
+            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
+                                 SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+                                 SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT |
+                                 SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT;
+            break;
+        default:
+            wfex.dwChannelMask = 0;
+            break;
     }
 
     sound->source_voice = NULL;
@@ -2780,41 +2752,42 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
         }
         sound->preload_seconds = seconds;
         sound->is_streaming = 1;
-        
+
         if (sound->source_file) {
             // WAV streaming setup
             long current_pos = ftell(sound->source_file);
             fseek(sound->source_file, 0, SEEK_END);
             long file_end = ftell(sound->source_file);
             fseek(sound->source_file, current_pos, SEEK_SET);
-            
+
             sound->total_data_size = file_end - sound->data_offset;
             sound->bytes_streamed = sound->data_size;
-            
+
             printf("WAV streaming setup: total_size=%zu bytes, preloaded=%zu bytes\n",
-                   sound->total_data_size, sound->data_size);
-                   
+                   sound->total_data_size,
+                   sound->data_size);
+
         } else if (sound->decoder) {
             stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
-            
+
             unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
             size_t bytes_per_sample_frame = sound->channels * sizeof(short);
-            
+
             printf("OGG streaming setup - CONTINUOUS APPROACH:\n");
             printf("  - Total sample frames: %u\n", total_sample_frames);
             printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
-            
+
             unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
             printf("  - Decoder position after preload: %u\n", current_position);
-            
+
             sound->total_data_size = total_sample_frames * bytes_per_sample_frame;
-            
+
             // Set bytes_streamed to match what we've already preloaded
             sound->bytes_streamed = sound->data_size;
-            
+
             printf("  - Total estimated size: %zu bytes\n", sound->total_data_size);
             printf("  - Bytes already streamed (preloaded): %zu\n", sound->bytes_streamed);
-            
+
             // Store filename for reopening decoder if needed
             size_t filename_len = strlen(filename);
             sound->filename = (char*)malloc(filename_len + 1);
@@ -2826,14 +2799,13 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
         sound->bytes_streamed = 0;
         sound->total_data_size = 0;
     }
-    
+
     HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
-        g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex,
-        0, XAUDIO2_DEFAULT_FREQ_RATIO,
-        sound->voice_callback, NULL, NULL);
+        g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex, 0, XAUDIO2_DEFAULT_FREQ_RATIO, sound->voice_callback, NULL, NULL);
 
     if (FAILED(hr)) {
-        if (sound->voice_callback) free(sound->voice_callback);
+        if (sound->voice_callback)
+            free(sound->voice_callback);
         free(sound);
         return NULL;
     }
@@ -2845,23 +2817,23 @@ static void platform_free_music(pal_sound* sound) {
     if (sound->is_streaming) {
         sound->stream_finished = 1;
     }
-    
+
     if (sound->source_file) {
         fclose(sound->source_file);
     }
-    
+
     if (sound->decoder) {
         stb_vorbis_close((stb_vorbis*)sound->decoder);
     }
-    
+
     if (sound->source_voice) {
         sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
     }
-    
+
     if (sound->voice_callback) {
         free(sound->voice_callback);
     }
-    
+
     if (sound->filename) {
         free(sound->filename);
     }
@@ -2870,34 +2842,33 @@ static void platform_free_music(pal_sound* sound) {
 }
 
 static int platform_play_sound(pal_sound* sound, float volume) {
-	if (!g_xaudio2 || !g_mastering_voice) {
-		return E_FAIL;
-	}
+    if (!g_xaudio2 || !g_mastering_voice) {
+        return E_FAIL;
+    }
 
-	// Set the volume
-	sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
+    // Set the volume
+    sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
 
-	XAUDIO2_BUFFER buffer = {
-		.AudioBytes = (UINT32)sound->data_size,
-		.pAudioData = sound->data,
-		.Flags = XAUDIO2_END_OF_STREAM 
-	};
+    XAUDIO2_BUFFER buffer = {
+        .AudioBytes = (UINT32)sound->data_size,
+        .pAudioData = sound->data,
+        .Flags = XAUDIO2_END_OF_STREAM};
 
     HRESULT hr;
 
-	hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
-	if (FAILED(hr)) {
-		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-		return hr;
-	}
+    hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
+    if (FAILED(hr)) {
+        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+        return hr;
+    }
 
-	hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
-	if (FAILED(hr)) {
-		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-		return hr;
-	}
+    hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
+    if (FAILED(hr)) {
+        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+        return hr;
+    }
 
-	return S_OK;
+    return S_OK;
 }
 
 void platform_free_sound(pal_sound* sound) {
@@ -2922,17 +2893,17 @@ int platform_stop_sound(pal_sound* sound) {
     HRESULT hr = 0;
     hr = sound->source_voice->lpVtbl->Stop(sound->source_voice, 0, XAUDIO2_COMMIT_NOW);
 
-	if (FAILED(hr)) {
-		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-		return hr;
-	}
+    if (FAILED(hr)) {
+        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+        return hr;
+    }
 
     hr = sound->source_voice->lpVtbl->FlushSourceBuffers(sound->source_voice);
 
-	if (FAILED(hr)) {
-		sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-		return hr;
-	}
+    if (FAILED(hr)) {
+        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
+        return hr;
+    }
     return hr;
 }
 
@@ -2940,9 +2911,9 @@ int platform_stop_sound(pal_sound* sound) {
 // Time Functions.
 //----------------------------------------------------------------------------------
 typedef struct _KSYSTEM_TIME {
-    ULONG LowPart;      // Low 32 bits of the 64-bit time value
-    LONG High1Time;     // High 32 bits (first copy)
-    LONG High2Time;     // High 32 bits (second copy)
+    ULONG LowPart;  // Low 32 bits of the 64-bit time value
+    LONG High1Time; // High 32 bits (first copy)
+    LONG High2Time; // High 32 bits (second copy)
 } KSYSTEM_TIME, *PKSYSTEM_TIME;
 
 typedef struct _KUSER_SHARED_DATA {
@@ -2971,13 +2942,13 @@ static inline pal_time platform_get_system_time_utc(void) {
         time.HighPart = kuser->SystemTime.High1Time;
         time.LowPart = kuser->SystemTime.LowPart;
     } while (time.HighPart != kuser->SystemTime.High2Time);
-    
+
     uint64_t total_100ns = time.QuadPart;
     uint64_t total_days = total_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
     uint64_t remaining_100ns = total_100ns % (10000000ULL * 60 * 60 * 24);
-    
+
     uint32_t year = 1601 + (uint32_t)(total_days / 365.25);
-    
+
     uint64_t days_since_1601 = total_days;
     year = 1601;
     while (1) {
@@ -2985,32 +2956,33 @@ static inline pal_time platform_get_system_time_utc(void) {
         if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
             days_in_year = 366;
         }
-        
-        if (days_since_1601 < days_in_year) break;
+
+        if (days_since_1601 < days_in_year)
+            break;
         days_since_1601 -= days_in_year;
         year++;
     }
-    
+
     uint32_t days_in_months[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    
+
     if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
         days_in_months[1] = 29;
     }
-    
+
     uint32_t month = 1;
     while (month <= 12 && days_since_1601 >= days_in_months[month - 1]) {
         days_since_1601 -= days_in_months[month - 1];
         month++;
     }
-    
+
     uint32_t day = (uint32_t)days_since_1601 + 1;
-    
+
     uint64_t total_seconds = remaining_100ns / 10000000ULL;
     uint32_t hours = (uint32_t)(total_seconds / 3600);
     total_seconds %= 3600;
     uint32_t minutes = (uint32_t)(total_seconds / 60);
     uint32_t seconds = (uint32_t)(total_seconds % 60);
-    
+
     pal_time result = {0};
     result.year = year;
     result.month = month;
@@ -3019,32 +2991,32 @@ static inline pal_time platform_get_system_time_utc(void) {
     result.hours = hours;
     result.minutes = minutes;
     result.seconds = seconds;
-    
+
     return result;
 }
 
 static inline pal_time platform_get_system_time_local(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-    
+
     LARGE_INTEGER system_time = {0};
     do {
         system_time.HighPart = kuser->SystemTime.High1Time;
         system_time.LowPart = kuser->SystemTime.LowPart;
     } while (system_time.HighPart != kuser->SystemTime.High2Time);
-    
+
     LARGE_INTEGER timezone_bias = {0};
     do {
         timezone_bias.HighPart = kuser->TimeZoneBias.High1Time;
         timezone_bias.LowPart = kuser->TimeZoneBias.LowPart;
     } while (timezone_bias.HighPart != kuser->TimeZoneBias.High2Time);
-    
+
     uint64_t local_time_100ns = system_time.QuadPart - timezone_bias.QuadPart;
-    
+
     uint64_t total_days = local_time_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
     uint64_t remaining_100ns = local_time_100ns % (10000000ULL * 60 * 60 * 24);
-    
+
     uint32_t year = 1601 + (uint32_t)(total_days / 365.25);
-    
+
     uint64_t days_since_1601 = total_days;
     year = 1601;
     while (1) {
@@ -3053,32 +3025,33 @@ static inline pal_time platform_get_system_time_local(void) {
         if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
             days_in_year = 366;
         }
-        
-        if (days_since_1601 < days_in_year) break;
+
+        if (days_since_1601 < days_in_year)
+            break;
         days_since_1601 -= days_in_year;
         year++;
     }
-    
+
     uint32_t days_in_months[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    
+
     if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
         days_in_months[1] = 29;
     }
-    
+
     uint32_t month = 1;
     while (month <= 12 && days_since_1601 >= days_in_months[month - 1]) {
         days_since_1601 -= days_in_months[month - 1];
         month++;
     }
-    
+
     uint32_t day = (uint32_t)days_since_1601 + 1;
-    
+
     uint64_t total_seconds = remaining_100ns / 10000000ULL;
     uint32_t hours = (uint32_t)(total_seconds / 3600);
     total_seconds %= 3600;
     uint32_t minutes = (uint32_t)(total_seconds / 60);
     uint32_t seconds = (uint32_t)(total_seconds % 60);
-    
+
     pal_time result = {0};
     result.year = year;
     result.month = month;
@@ -3087,7 +3060,7 @@ static inline pal_time platform_get_system_time_local(void) {
     result.hours = hours;
     result.minutes = minutes;
     result.seconds = seconds;
-    
+
     return result;
 }
 
@@ -3099,31 +3072,31 @@ static inline pal_time platform_get_time_since_boot(void) {
         time.HighPart = kuser->TickCount.High1Time;
         time.LowPart = kuser->TickCount.LowPart;
     } while (time.HighPart != kuser->TickCount.High2Time);
-    
-	uint64_t tick_ms = ((uint64_t)time.QuadPart * kuser->TickCountMultiplier) >> 24;
-	uint64_t total_seconds = tick_ms / 1000;
+
+    uint64_t tick_ms = ((uint64_t)time.QuadPart * kuser->TickCountMultiplier) >> 24;
+    uint64_t total_seconds = tick_ms / 1000;
     uint32_t total_days = (uint32_t)(total_seconds / (24 * 60 * 60));
     uint32_t remaining_seconds = (uint32_t)(total_seconds % (24 * 60 * 60));
-    
+
     uint32_t years = total_days / 365;
     uint32_t remaining_days = total_days % 365;
-    
+
     uint32_t leap_days = years / 4 - years / 100 + years / 400;
     if (remaining_days >= leap_days && years > 0) {
         remaining_days -= leap_days;
     }
-    
+
     uint32_t months = remaining_days / 30;
     remaining_days %= 30;
-    
+
     uint32_t weeks = remaining_days / 7;
     remaining_days %= 7;
-    
+
     uint32_t hours = remaining_seconds / 3600;
     remaining_seconds %= 3600;
     uint32_t minutes = remaining_seconds / 60;
     uint32_t seconds = remaining_seconds % 60;
-    
+
     pal_time result = {0};
     result.year = years;
     result.month = months;
@@ -3132,7 +3105,7 @@ static inline pal_time platform_get_time_since_boot(void) {
     result.hours = hours;
     result.minutes = minutes;
     result.seconds = seconds;
-    
+
     return result;
 }
 
@@ -3146,20 +3119,20 @@ void platform_init_timer(void) {
 static double platform_get_time_since_pal_started(void) {
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
-    
+
     uint64_t elapsed_ticks = counter.QuadPart - g_app_start_time;
-    
+
     // Get frequency from KUSER_SHARED_DATA (Windows 8+) or fall back to API
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
     uint64_t frequency = kuser->QpcFrequency;
-    
+
     // Fallback to API if frequency is 0 (older Windows versions)
     if (frequency == 0) {
         LARGE_INTEGER freq;
         QueryPerformanceFrequency(&freq);
         frequency = freq.QuadPart;
     }
-    
+
     return (double)elapsed_ticks / (double)frequency;
 }
 
@@ -3179,7 +3152,7 @@ static uint64_t platform_get_timer_frequency(void) {
         QueryPerformanceFrequency(&freq);
         frequency = freq.QuadPart;
     }
-    
+
     return frequency;
 }
 
@@ -3187,21 +3160,21 @@ static uint64_t platform_get_timer_frequency(void) {
 // Dynamic Library Functions.
 //----------------------------------------------------------------------------------
 void* platform_load_dynamic_library(char* dll) {
-	HMODULE result = LoadLibraryA(dll);
-	assert(result);
-	return result;
+    HMODULE result = LoadLibraryA(dll);
+    assert(result);
+    return result;
 }
 
 void* platform_load_dynamic_function(void* dll, char* func_name) {
-	FARPROC proc = GetProcAddress(dll, func_name);
-	assert(proc);
-	return (void*)proc;
+    FARPROC proc = GetProcAddress(dll, func_name);
+    assert(proc);
+    return (void*)proc;
 }
 
 uint8_t platform_free_dynamic_library(void* dll) {
-	uint8_t free_result = FreeLibrary(dll);
-	assert(free_result);
-	return (uint8_t)free_result;
+    uint8_t free_result = FreeLibrary(dll);
+    assert(free_result);
+    return (uint8_t)free_result;
 }
 
 #endif // WIN32_PLATFORM_H

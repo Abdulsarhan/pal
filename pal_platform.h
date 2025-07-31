@@ -1,7 +1,7 @@
 #ifndef PAL_PLATFORM_H
 #define PAL_PLATFORM_H
 
-//TODO: THIS WHOLE FILE MIGHT BE A BAD IDEA.
+// TODO: THIS WHOLE FILE MIGHT BE A BAD IDEA.
 #ifdef __cplusplus
 #define extern "C" {
 #endif
@@ -28,9 +28,9 @@ pal_bool platform_make_window_windowed(pal_window* window);
 pal_bool platform_make_window_fullscreen(pal_window* window);
 pal_bool platform_minimize_window(pal_window* window);
 pal_bool platform_maximize_window(pal_window* window);
+
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif // PAL_PLATFORM_H
