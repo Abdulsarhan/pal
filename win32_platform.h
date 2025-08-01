@@ -40,7 +40,6 @@ pal_window* g_current_window;
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
-pal_event_queue g_event_queue;
 // on windows, the message pump is not specific to any window, it's specific to the thread.
 // this is false initially because windows sends messages to the window as soon as 
 // Create_WindowExA() is called.
@@ -1177,15 +1176,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.type = PAL_EVENT_NONE;
             return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
-
-    pal_event_queue* queue = &g_event_queue;
-    if (queue->size == queue->capacity) {
-        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-    }
-    queue->events[queue->back] = event;
-    queue->back = (queue->back + 1) % queue->capacity;
-    queue->size++;
-
+    pal_push_event(&g_event_queue, event);
     return 0;
 }
 
@@ -1746,14 +1737,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         };
     }
 
-    pal_event_queue* queue = &g_event_queue;
-    if (queue->size == queue->capacity) {
-        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-    }
-    queue->events[queue->back] = event;
-    queue->back = (queue->back + 1) % queue->capacity;
-    queue->size++;
-
+    pal_push_event(&g_event_queue, event);
 }
 
 void win32_handle_mouse(const RAWINPUT* raw) {
@@ -1780,13 +1764,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .buttons = g_cached_mouse_buttons,
         };
         // Enqueue motion event
-		pal_event_queue* queue = &g_event_queue;
-		if (queue->size == queue->capacity) {
-			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-		}
-		queue->events[queue->back] = event;
-		queue->back = (queue->back + 1) % queue->capacity;
-		queue->size++;
+        pal_push_event(&g_event_queue, event);
     }
     
     // Handle mouse wheel
@@ -1803,14 +1781,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
         };
         // Enqueue wheel event
-		pal_event_queue* queue = &g_event_queue;
-		if (queue->size == queue->capacity) {
-			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-		}
-		queue->events[queue->back] = event;
-		queue->back = (queue->back + 1) % queue->capacity;
-		queue->size++;
-
+        pal_push_event(&g_event_queue, event);
     }
     
     // Handle horizontal wheel (if supported)
@@ -1827,14 +1798,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
         };
         // Enqueue horizontal wheel event
-		pal_event_queue* queue = &g_event_queue;
-		if (queue->size == queue->capacity) {
-			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-		}
-		queue->events[queue->back] = event;
-		queue->back = (queue->back + 1) % queue->capacity;
-		queue->size++;
-
+        pal_push_event(&g_event_queue, event);
     }
     
     // Handle button events
@@ -1853,15 +1817,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .modifiers = g_cached_modifiers,
                 .button = win32_button_to_pal_button[i]
             };
-            // Enqueue button down event
-		pal_event_queue* queue = &g_event_queue;
-		if (queue->size == queue->capacity) {
-			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-		}
-		queue->events[queue->back] = event;
-		queue->back = (queue->back + 1) % queue->capacity;
-		queue->size++;
-
+			pal_push_event(&g_event_queue, event);
         } else if (up) {
             g_cached_mouse_buttons &= ~(1 << i); // Clear bit
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
@@ -1873,15 +1829,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .modifiers = g_cached_modifiers,
                 .button = win32_button_to_pal_button[i]
             };
-            // Enqueue button up event
-		pal_event_queue* queue = &g_event_queue;
-		if (queue->size == queue->capacity) {
-			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
-		}
-		queue->events[queue->back] = event;
-		queue->back = (queue->back + 1) % queue->capacity;
-		queue->size++;
-
+			pal_push_event(&g_event_queue, event);
         }
     }
 }

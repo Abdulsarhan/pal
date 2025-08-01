@@ -6,13 +6,9 @@
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize2.h"
 
-#ifdef _WIN32
-#include "win32_platform.h"
-#elif __LINUX__
-#include "linux_x11_platform.h"
-#endif
+pal_event_queue g_event_queue = {0};
 
-void pal_init_queue() {
+pal_bool pal_init_queue() {
 
     // -- CREATE QUEUE FOR THE WINDOW --
     size_t capacity = 10000;
@@ -34,6 +30,23 @@ void pal_init_queue() {
 
 	return 1;
 }
+
+// enqueue
+void pal_push_event(pal_event_queue* queue, pal_event event) {
+	if (queue->size == queue->capacity) {
+		fprintf(stderr, "ERROR: pal_eventq_enqueue->): Event queue->size has reached capacity. Not going to enqueue->\n");
+	}
+	queue->events[queue->back] = event;
+	queue->back = (queue->back + 1) % queue->capacity;
+	queue->size++;
+}
+
+#ifdef _WIN32
+#include "win32_platform.h"
+#elif __LINUX__
+#include "linux_x11_platform.h"
+#endif
+
 
 PALAPI void pal_init(void) {
     pal_init_queue();

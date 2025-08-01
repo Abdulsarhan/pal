@@ -90,7 +90,7 @@ int main() {
                     running = FALSE;
                     break;
                 case PAL_EVENT_MOUSE_MOTION:
-                    printf("mouse_motion!\n");
+                    printf("mouse moved!\n");
                     break;
                 case PAL_EVENT_WINDOW_LOST_FOCUS:
                     if (is_fullscreen) {
