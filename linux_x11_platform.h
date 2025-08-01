@@ -95,7 +95,7 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
     xcb_atom_t wm_state = get_atom(window->connection, "_NET_WM_STATE");
     xcb_atom_t fullscreen = get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
     if (wm_state == XCB_ATOM_NONE || fullscreen == XCB_ATOM_NONE)
-        return FALSE;
+        return pal_false;
 
     xcb_client_message_event_t ev = {
         .response_type = XCB_CLIENT_MESSAGE,
@@ -115,7 +115,7 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
     xcb_configure_window(window->connection, window->window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, (uint32_t[]){0, 0, (uint32_t)width, (uint32_t)height});
 
     xcb_flush(window->connection);
-    return TRUE;
+    return pal_true;
 }
 
 // Request fullscreen covering the monitor without changing mode
@@ -123,7 +123,7 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
     xcb_atom_t wm_state = get_atom(window->connection, "_NET_WM_STATE");
     xcb_atom_t fullscreen = get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
     if (wm_state == XCB_ATOM_NONE || fullscreen == XCB_ATOM_NONE)
-        return FALSE;
+        return pal_false;
 
     xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(window->connection)).data;
 
@@ -144,7 +144,7 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
     xcb_configure_window(window->connection, window->window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, (uint32_t[]){0, 0, screen->width_in_pixels, screen->height_in_pixels});
 
     xcb_flush(window->connection);
-    return TRUE;
+    return pal_true;
 }
 
 // Remove fullscreen request (return to windowed mode)
@@ -152,7 +152,7 @@ pal_bool platform_make_window_windowed(pal_window* window) {
     xcb_atom_t wm_state = get_atom(window->connection, "_NET_WM_STATE");
     xcb_atom_t fullscreen = get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
     if (wm_state == XCB_ATOM_NONE || fullscreen == XCB_ATOM_NONE)
-        return FALSE;
+        return pal_false;
 
     xcb_client_message_event_t ev = {
         .response_type = XCB_CLIENT_MESSAGE,
@@ -171,14 +171,14 @@ pal_bool platform_make_window_windowed(pal_window* window) {
 
     // Optionally restore size here (currently no saved state)
     xcb_flush(window->connection);
-    return TRUE;
+    return pal_true;
 }
 
 // Fullscreen using current monitor resolution (like EnumDisplaySettings)
 pal_bool platform_make_window_fullscreen(pal_window* window) {
     xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(window->connection)).data;
     if (!screen)
-        return FALSE;
+        return pal_false;
 
     int width = screen->width_in_pixels;
     int height = screen->height_in_pixels;

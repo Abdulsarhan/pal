@@ -32,7 +32,7 @@ typedef unsigned __int64 QWORD;
 
 // Global state
 static HMODULE g_xinput_dll = NULL;
-static pal_bool g_has_trigger_motors = FALSE;
+static pal_bool g_has_trigger_motors = pal_false;
 
 static HDC s_fakeDC = {0};
 pal_window* g_current_window;
@@ -43,7 +43,7 @@ IXAudio2MasteringVoice* g_mastering_voice = NULL;
 // on windows, the message pump is not specific to any window, it's specific to the thread.
 // this is false initially because windows sends messages to the window as soon as 
 // Create_WindowExA() is called.
-pal_bool g_message_pump_drained = FALSE;
+pal_bool g_message_pump_drained = pal_false;
 struct pal_window {
     HWND hwnd;
     HDC hdc;
@@ -445,13 +445,13 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
 
     if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
         MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
-        return FALSE;
+        return pal_false;
     }
 
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     SetWindowPos(window->hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 
-    return TRUE;
+    return pal_true;
 }
 
 pal_bool platform_make_window_fullscreen(pal_window* window) {
@@ -467,13 +467,13 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
 
     if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
         MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
-        return FALSE;
+        return pal_false;
     }
 
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     SetWindowPos(window->hwnd, HWND_TOP, 0, 0, dm.dmPelsWidth, dm.dmPelsHeight, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 
-    return TRUE;
+    return pal_true;
 }
 
 pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
@@ -485,17 +485,17 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
     MONITORINFO mi = {.cbSize = sizeof(mi)};
     if (!GetMonitorInfo(monitor, &mi)) {
         MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
-        return FALSE;
+        return pal_false;
     }
 
     // Set the window to borderless fullscreen
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     if (!SetWindowPos(window->hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
         MessageBoxA(window->hwnd, "Failed to resize window.", "Error", MB_OK);
-        return FALSE;
+        return pal_false;
     }
 
-    return TRUE;
+    return pal_true;
 }
 pal_bool platform_make_window_windowed(pal_window* window) {
     // Restore display mode (in case exclusive mode was used)
@@ -504,17 +504,17 @@ pal_bool platform_make_window_windowed(pal_window* window) {
     // Restore the window style
     if (SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle) == 0) {
         MessageBoxA(window->hwnd, "Failed to restore window style.", "Error", MB_OK);
-        return FALSE;
+        return pal_false;
     }
     RECT rect;
     GetWindowRect(window->hwnd, &rect);
     // Restore the window's size and position
     if (!SetWindowPos(window->hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED)) {
         MessageBoxA(window->hwnd, "Failed to restore window position.", "Error", MB_OK);
-        return FALSE;
+        return pal_false;
     }
 
-    return TRUE;
+    return pal_true;
 }
 
 void platform_set_cursor(pal_window* window, const char* filepath, int size) {
@@ -605,7 +605,7 @@ void platform_set_cursor(pal_window* window, const char* filepath, int size) {
         free(resized);
 
         ICONINFO ii = {0};
-        ii.fIcon = FALSE;
+        ii.fIcon = pal_false;
         ii.xHotspot = 0;
         ii.yHotspot = 0;
         ii.hbmColor = hBitmap;
@@ -698,7 +698,7 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
         HICON hIcon = CreateIconFromResourceEx(
             ico_data + entry->dwImageOffset,
             entry->dwBytesInRes,
-            TRUE,
+            pal_true,
             0x00030000,
             0,
             0,
@@ -755,7 +755,7 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     HBITMAP mask_bitmap = CreateBitmap(width, height, 1, 1, NULL);
 
     ICONINFO ii = {0};
-    ii.fIcon = TRUE;
+    ii.fIcon = pal_true;
     ii.hbmMask = mask_bitmap;
     ii.hbmColor = color_bitmap;
 
@@ -768,7 +768,7 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
 }
 
 void platform_set_window_icon(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, FALSE);
+    HICON hIcon = load_icon_from_file(image_path, pal_false);
     if (hIcon) {
         SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
@@ -778,7 +778,7 @@ void platform_set_window_icon(pal_window* window, const char* image_path) {
 }
 
 void platform_set_window_icon_legacy(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, TRUE);
+    HICON hIcon = load_icon_from_file(image_path, pal_true);
     if (hIcon) {
         SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
@@ -788,7 +788,7 @@ void platform_set_window_icon_legacy(pal_window* window, const char* image_path)
 }
 
 void platform_set_taskbar_icon(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, FALSE);
+    HICON hIcon = load_icon_from_file(image_path, pal_false);
     if (hIcon) {
         SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
         SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
@@ -798,7 +798,7 @@ void platform_set_taskbar_icon(pal_window* window, const char* image_path) {
 }
 
 void platform_set_taskbar_icon_legacy(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, TRUE);
+    HICON hIcon = load_icon_from_file(image_path, pal_true);
     if (hIcon) {
         SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
         SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
@@ -830,10 +830,10 @@ int platform_get_gamepad_count(void) {
 
         XINPUT_STATE state;
         if (XinputGetstate_fn(i, &state) == ERROR_SUCCESS) {
-            win32_gamepad_ctx.xinput_connected[i] = TRUE;
+            win32_gamepad_ctx.xinput_connected[i] = pal_true;
             win32_gamepad_ctx.xinput_state[i] = state;
         } else {
-            win32_gamepad_ctx.xinput_connected[i] = FALSE;
+            win32_gamepad_ctx.xinput_connected[i] = pal_false;
         }
     }
 
@@ -854,7 +854,7 @@ int platform_init_gamepads() {
     // Try XInput 1.4 first (Windows 8+, has trigger motors)
     g_xinput_dll = LoadLibraryW(L"xinput1_4.dll");
     if (g_xinput_dll) {
-        g_has_trigger_motors = TRUE;
+        g_has_trigger_motors = pal_true;
     } else {
         // Fallback to XInput 1.3 (Windows Vista/7)
         g_xinput_dll = LoadLibraryW(L"xinput1_3.dll");
@@ -862,11 +862,11 @@ int platform_init_gamepads() {
             // Last resort: XInput 9.1.0 (Windows 7 compatibility)
             g_xinput_dll = LoadLibraryW(L"xinput9_1_0.dll");
         }
-        g_has_trigger_motors = FALSE;
+        g_has_trigger_motors = pal_false;
     }
 
     if (!g_xinput_dll) {
-        return FALSE;
+        return pal_false;
     }
     // Load function pointers
     XinputGetstate_fn = (DWORD(WINAPI*)(DWORD, XINPUT_STATE*))GetProcAddress(g_xinput_dll, "XInputGetState");
@@ -878,10 +878,10 @@ int platform_init_gamepads() {
     if (!XinputGetstate_fn || !XInputSetState_fn) {
         FreeLibrary(g_xinput_dll);
         g_xinput_dll = NULL;
-        return FALSE;
+        return pal_false;
     }
 
-    return TRUE;
+    return pal_true;
 }
 
 void platform_shutdown_gamepads(void) {
@@ -894,7 +894,7 @@ void platform_shutdown_gamepads(void) {
     XInputSetState_fn = NULL;
     XInputGetCapabilities_fn = NULL;
     XInputEnable_fn = NULL;
-    g_has_trigger_motors = FALSE;
+    g_has_trigger_motors = pal_false;
 }
 
 pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
@@ -902,12 +902,12 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
 
     // XInput controllers only
     if (index >= MAX_XINPUT_CONTROLLERS) {
-        return FALSE;
+        return pal_false;
     }
 
     // Check if this specific controller slot is connected
     if (!win32_gamepad_ctx.xinput_connected[index]) {
-        return FALSE;
+        return pal_false;
     }
 
     const XINPUT_GAMEPAD* pad = &win32_gamepad_ctx.xinput_state[index].Gamepad;
@@ -973,10 +973,10 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     out_state->name[sizeof(out_state->name) - 1] = '\0';
     out_state->vendor_id = 0x045E;                // Microsoft
     out_state->product_id = (uint16_t)0xDEADBEEF; // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
-    out_state->connected = TRUE;
-    out_state->is_xinput = TRUE;
+    out_state->connected = pal_true;
+    out_state->is_xinput = pal_true;
 
-    return TRUE;
+    return pal_true;
 }
 
 void platform_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
@@ -1155,7 +1155,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .width = 0,
                 .height = 0,
                 .visible = 1};
-            if ((BOOL)wparam == FALSE) {
+            if ((BOOL)wparam == pal_false) {
                 event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
                 event.window.focused = 0;
                 printf("PAL: Lost Focus!\N");
@@ -1459,9 +1459,9 @@ static pal_window* platform_create_window(int width, int height, const char* win
             rect.right = br.x;
             rect.bottom = br.y;
             ClipCursor(&rect);
-            window->confine_mouse = TRUE;
+            window->confine_mouse = pal_true;
         } else {
-            window->confine_mouse = FALSE;
+            window->confine_mouse = pal_false;
         }
         SetForegroundWindow(window->hwnd);
         SetFocus(window->hwnd);
@@ -1494,7 +1494,7 @@ static int platform_make_context_current(pal_window* window) {
 static int platform_show_cursor(void) {
     int result = -1;
     while (result < 0) {
-        result = ShowCursor(TRUE);
+        result = ShowCursor(pal_true);
     }
     return result;
 }
@@ -1502,7 +1502,7 @@ static int platform_show_cursor(void) {
 static int platform_hide_cursor(void) {
     int result = 1;
     while (result >= 0) {
-        result = ShowCursor(FALSE);
+        result = ShowCursor(pal_false);
     }
     return result;
 }
@@ -1524,7 +1524,7 @@ static uint8_t platform_poll_events(pal_event* event) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
-        g_message_pump_drained = TRUE;
+        g_message_pump_drained = pal_true;
     }
 
     pal_event_queue* queue = &g_event_queue;
@@ -1539,7 +1539,7 @@ static uint8_t platform_poll_events(pal_event* event) {
         queue->size--;
         return 1;
     } else {
-		g_message_pump_drained = FALSE;
+		g_message_pump_drained = pal_false;
 		input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
 		return 0;
     }
@@ -1957,7 +1957,7 @@ uint32_t platform_get_file_permissions(const char* file_path) {
 
     PRIVILEGE_SET privileges = {0};
     DWORD privSize = sizeof(privileges);
-    BOOL accessStatus = FALSE;
+    BOOL accessStatus = pal_false;
 
     ACCESS_MASK accessRights = 0;
     dwRes = GetEffectiveRightsFromAclA(pDacl, NULL, &accessRights);
@@ -2154,7 +2154,7 @@ uint8_t platform_write_file(const char* file_path, size_t file_size, const char*
 }
 
 uint8_t platform_copy_file(const char* original_path, const char* copy_path) {
-    return CopyFileA(original_path, copy_path, FALSE) ? 0 : 1;
+    return CopyFileA(original_path, copy_path, pal_false) ? 0 : 1;
 }
 
 pal_file* platform_open_file(const char* file_path) {

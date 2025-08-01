@@ -58,10 +58,10 @@ int main() {
     pal_set_window_icon_legacy(window, "icon.ico");
     pal_set_taskbar_icon(window, "png.png");
     pal_set_cursor(window, "png.png", 16);
-    uint8_t running = TRUE;
+    uint8_t running = pal_true;
     pal_event event;
     pal_gamepad_state state;
-    pal_bool is_fullscreen = TRUE;
+    pal_bool is_fullscreen = pal_true;
     while (running) {
         while (pal_poll_events(&event)) {
 
@@ -79,7 +79,7 @@ int main() {
                     if (event.key.scancode == PAL_SCAN_ESCAPE) {
                         printf("Exited!\n");
                         printf("scancode: %d", event.key.scancode);
-                        running = FALSE;
+                        running = pal_false;
                     }
                     break;
                 case PAL_EVENT_KEY_UP:
@@ -87,7 +87,7 @@ int main() {
                     break;
                 case PAL_EVENT_QUIT:
                     printf("SHOULD HAVE CLOSED THE WINDOW!\n");
-                    running = FALSE;
+                    running = pal_false;
                     break;
                 case PAL_EVENT_MOUSE_MOTION:
                     printf("mouse moved!\n");

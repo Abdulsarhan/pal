@@ -598,12 +598,6 @@ typedef struct pal_ivec4 {
 #define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000 // not implemented
 
 //----------------------------------------------------------------------------------
-// Window Hint Values
-//----------------------------------------------------------------------------------
-#define GL_PROFILE_CORE 0x7
-#define GL_PROFILE_COMPAT 0x8
-
-//----------------------------------------------------------------------------------
 // Mouse Buttons
 //----------------------------------------------------------------------------------
 #define PAL_MOUSE_LEFT 0x0
@@ -1120,26 +1114,10 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_COUNT 512 /**< not a key just marks the number of scancodes for array bounds */
 
 //----------------------------------------------------------------------------------
-// Controller Buttons
+// True and False defines 
 //----------------------------------------------------------------------------------
-#define GAMEPAD_DPAD_UP 0x0001
-#define GAMEPAD_DPAD_DOWN 0x0002
-#define GAMEPAD_DPAD_LEFT 0x0004
-#define GAMEPAD_DPAD_RIGHT 0x0008
-#define GAMEPAD_START 0x0010
-#define GAMEPAD_BACK 0x0020
-#define GAMEPAD_LEFT_THUMB 0x0040
-#define GAMEPAD_RIGHT_THUMB 0x0080
-#define GAMEPAD_LEFT_BUMPER 0x0100
-#define GAMEPAD_RIGHT_BUMPER 0x0200
-#define GAMEPAD_A 0x1000 // Cross on Playstation Controllers
-#define GAMEPAD_B 0x2000 // Circle on Playstation Controllers
-#define GAMEPAD_X 0x4000 // Square on Playstation Controllers
-#define GAMEPAD_Y 0x8000 // Triangle on Playstation Controllers
-#define GAMEPAD_CROSS GAMEPAD_A
-#define GAMEPAD_CIRCLE GAMEPAD_B
-#define GAMEPAD_SQUARE GAMEPAD_X
-#define GAMEPAD_TRIANGLE GAMEPAD_Y
+#define pal_true 1
+#define pal_false 0
 
 //----------------------------------------------------------------------------------
 // File Permissions.
