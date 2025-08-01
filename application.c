@@ -68,11 +68,8 @@ int main() {
             switch (event.type) {
 
                 case PAL_EVENT_MOUSE_BUTTON_DOWN:
-                    if (event.button.button == PAL_MOUSE_LEFT)
-                    printf("App: Mouse Button DOWN!\n");
                     break;
                 case PAL_EVENT_MOUSE_BUTTON_UP:
-                    printf("App: Mouse Button UP!\n");
                     break;
                 case PAL_EVENT_KEY_DOWN:
                     printf("Key down!\n");
@@ -86,11 +83,11 @@ int main() {
                     printf("Keyboard UP!\n");
                     break;
                 case PAL_EVENT_QUIT:
-                    printf("SHOULD HAVE CLOSED THE WINDOW!\n");
+                    printf("Window closed");
                     running = pal_false;
                     break;
                 case PAL_EVENT_MOUSE_MOTION:
-                    printf("mouse moved!\n");
+                    //printf("mouse moved!\n");
                     break;
                 case PAL_EVENT_WINDOW_LOST_FOCUS:
                     if (is_fullscreen) {
@@ -153,6 +150,6 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         pal_swap_buffers(window);
     }
-
+    pal_shutdown();
     return 0;
 }

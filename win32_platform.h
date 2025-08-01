@@ -109,19 +109,10 @@ pal_input input = {0};
 
 static const uint8_t win32_button_to_pal_button[] = {
     [0] = PAL_MOUSE_LEFT,
-    [1] = PAL_MOUSE_LEFT,
-    [2] = PAL_MOUSE_LEFT,
-
-    [3] = PAL_MOUSE_RIGHT,
-    [4] = PAL_MOUSE_RIGHT,
-    [5] = PAL_MOUSE_RIGHT,
-
-    [6] = PAL_MOUSE_MIDDLE,
-    [7] = PAL_MOUSE_MIDDLE,
-    [8] = PAL_MOUSE_MIDDLE,
-
-    [9] = PAL_MOUSE_4,
-    [10] = PAL_MOUSE_5,
+    [1] = PAL_MOUSE_RIGHT,
+    [2] = PAL_MOUSE_MIDDLE,
+    [3] = PAL_MOUSE_4,
+    [4] = PAL_MOUSE_5,
 };
 
 // clang-format off
@@ -497,6 +488,7 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
 
     return pal_true;
 }
+
 pal_bool platform_make_window_windowed(pal_window* window) {
     // Restore display mode (in case exclusive mode was used)
     ChangeDisplaySettings(NULL, 0);
