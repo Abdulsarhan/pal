@@ -1608,7 +1608,7 @@ static pal_bool platform_minimize_window(pal_window* window) {
     return ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
-static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
+static uint8_t platform_poll_events(pal_event* event) {
     MSG msg = {0};
     if (!g_message_pump_drained) {
 

@@ -197,8 +197,8 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
     (void)platform_stop_gamepad_vibration(controller_id);
 }
 
-PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window) {
-    return platform_poll_events(event, window);
+PALAPI uint8_t pal_poll_events(pal_event* event) {
+    return platform_poll_events(event);
 }
 
 PALAPI int pal_make_context_current(pal_window* window) {

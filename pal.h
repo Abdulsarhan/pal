@@ -1172,7 +1172,7 @@ PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
 PALAPI void* pal_gl_get_proc_address(const unsigned char* proc);
-PALAPI uint8_t pal_poll_events(pal_event* event, pal_window* window);
+PALAPI uint8_t pal_poll_events(pal_event* event);
 PALAPI int pal_make_context_current(pal_window* window);
 
 // Keyboard input

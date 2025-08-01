@@ -11,7 +11,7 @@ static pal_video_mode* platform_get_video_mode(pal_monitor* monitor);
 static pal_bool platform_set_video_mode(pal_video_mode* mode);
 static pal_monitor* platform_get_primary_monitor(void);
 static uint8_t platform_set_window_title(pal_window* window, const char* string);
-static uint8_t platform_poll_events(pal_event* event, pal_window* window);
+static uint8_t platform_poll_events(pal_event* event);
 static void* platform_gl_get_proc_address(const char* proc);
 static int platform_init_sound();
 static int platform_make_context_current(pal_window* window);

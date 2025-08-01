@@ -63,7 +63,7 @@ int main() {
     pal_gamepad_state state;
     pal_bool is_fullscreen = TRUE;
     while (running) {
-        while (pal_poll_events(&event, window)) {
+        while (pal_poll_events(&event)) {
 
             switch (event.type) {
 
