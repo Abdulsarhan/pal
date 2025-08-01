@@ -61,13 +61,16 @@ int main() {
     uint8_t running = pal_true;
     pal_event event;
     pal_gamepad_state state;
-    pal_bool is_fullscreen = pal_true;
+    pal_bool is_fullscreen = pal_false;
     while (running) {
         while (pal_poll_events(&event)) {
 
             switch (event.type) {
 
                 case PAL_EVENT_MOUSE_BUTTON_DOWN:
+                    if (event.button.button == PAL_MOUSE_LEFT) {
+                        printf("mouse button left!\n");
+                    }
                     break;
                 case PAL_EVENT_MOUSE_BUTTON_UP:
                     break;
@@ -87,6 +90,7 @@ int main() {
                     running = pal_false;
                     break;
                 case PAL_EVENT_MOUSE_MOTION:
+                    printf("X: %d, Y: %d\n", event.motion.delta_x, event.motion.delta_y);
                     //printf("mouse moved!\n");
                     break;
                 case PAL_EVENT_WINDOW_LOST_FOCUS:

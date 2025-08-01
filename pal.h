@@ -1227,8 +1227,8 @@ PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
 PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2);
 
 // Time functions
-PALAPI pal_time pal_get_system_time_utc(void);
-PALAPI pal_time pal_get_system_time_local(void);
+PALAPI pal_time pal_get_date_and_time_utc(void);
+PALAPI pal_time pal_get_date_and_time_local(void);
 PALAPI pal_time pal_get_time_since_boot(void);
 PALAPI double pal_get_time_since_pal_started(void);
 PALAPI uint64_t pal_get_timer(void);

@@ -2897,7 +2897,7 @@ typedef struct _KUSER_SHARED_DATA {
 #define KUSER_SHARED_DATA_ADDRESS 0x7FFE0000
 static uint64_t g_app_start_time = 0;
 
-static inline pal_time platform_get_system_time_utc(void) {
+static inline pal_time platform_get_date_and_time_utc(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
     LARGE_INTEGER time = {0};
     do {
@@ -2957,7 +2957,7 @@ static inline pal_time platform_get_system_time_utc(void) {
     return result;
 }
 
-static inline pal_time platform_get_system_time_local(void) {
+static inline pal_time platform_get_date_and_time_local(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
 
     LARGE_INTEGER system_time = {0};

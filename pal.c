@@ -564,11 +564,11 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
 
 */
 
-PALAPI pal_time pal_get_system_time_utc(void) {
-    return platform_get_system_time_utc();
+PALAPI pal_time pal_get_date_and_time_utc(void) {
+    return platform_get_date_and_time_utc();
 }
-PALAPI pal_time pal_get_system_time_local(void) {
-    return platform_get_system_time_local();
+PALAPI pal_time pal_get_date_and_time_local(void) {
+    return platform_get_date_and_time_local();
 }
 PALAPI pal_time pal_get_time_since_boot(void) {
     return platform_get_time_since_boot();
