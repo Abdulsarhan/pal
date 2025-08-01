@@ -241,11 +241,12 @@ typedef struct pal_mouse_button_event {
 } pal_mouse_button_event;
 
 typedef struct pal_mouse_wheel_event {
-    int32_t x;
-    int32_t y;
-    float delta_x;
-    float delta_y;
+    int32_t mouse_x;
+    int32_t mouse_y;
+    float x;
+    float y;
     uint32_t modifiers;
+    int wheel_direction; // some weird ahh mice have horizontal scroll wheels
 } pal_mouse_wheel_event;
 
 typedef struct pal_joy_device_event {
@@ -640,6 +641,12 @@ typedef struct pal_ivec4 {
 #define EXTRA_MOUSE_BUTTON28 0x20
 #define EXTRA_MOUSE_BUTTON29 0x21
 #define EXTRA_MOUSE_BUTTON30 0x22
+
+//----------------------------------------------------------------------------------
+// Mouse Wheel
+//----------------------------------------------------------------------------------
+#define PAL_MOUSEWHEEL_VERTICAL 0x0
+#define PAL_MOUSEWHEEL_HORIZONTAL 0x1
 
 //----------------------------------------------------------------------------------
 // Keys

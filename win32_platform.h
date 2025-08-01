@@ -1115,101 +1115,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .focused = 1, // This is wrong, fix.
                 .visible = 1};
             break;
-        case WM_LBUTTONDOWN:
-        case WM_RBUTTONDOWN:
-        case WM_MBUTTONDOWN:
-        case WM_XBUTTONDOWN: {
-            event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lparam),
-                .y = GET_Y_LPARAM(lparam),
-                .pressed = 1,
-                .clicks = 1,
-                .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]};
-
-            if (msg == WM_XBUTTONDOWN) {
-                WORD xButton = GET_XBUTTON_WPARAM(wparam);
-                if (xButton == XBUTTON1) {
-                    event.button.button = PAL_MOUSE_4;
-                    input.mouse_buttons[PAL_MOUSE_4] = 1;
-                } else if (xButton == XBUTTON2) {
-                    event.button.button = PAL_MOUSE_5;
-                    input.mouse_buttons[PAL_MOUSE_5] = 1;
-                }
-            } else {
-                input.mouse_buttons[event.button.button] = 1;
-            }
-        } break;
-
-        case WM_LBUTTONDBLCLK:
-        case WM_RBUTTONDBLCLK:
-        case WM_MBUTTONDBLCLK:
-        case WM_XBUTTONDBLCLK: {
-            event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event) {
-                .x = GET_X_LPARAM(lparam),
-                .y = GET_Y_LPARAM(lparam),
-                .pressed = 1,
-                .clicks = 2,
-                .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]
-            };
-            if (msg == WM_XBUTTONDBLCLK) {
-                WORD xButton = GET_XBUTTON_WPARAM(wparam);
-                if (xButton == XBUTTON1) {
-                    event.button.button = PAL_MOUSE_4;
-                    input.mouse_buttons[PAL_MOUSE_4] = 1;
-                } else if (xButton == XBUTTON2) {
-                    event.button.button = PAL_MOUSE_5;
-                    input.mouse_buttons[PAL_MOUSE_5] = 1;
-                }
-            } else {
-                input.mouse_buttons[event.button.button] = 1;
-            }
-        } break;
-
-        case WM_LBUTTONUP:
-        case WM_RBUTTONUP:
-        case WM_MBUTTONUP:
-        case WM_XBUTTONUP: {
-            event.type = PAL_EVENT_MOUSE_BUTTON_UP;
-            event.button = (pal_mouse_button_event){
-                .x = GET_X_LPARAM(lparam),
-                .y = GET_Y_LPARAM(lparam),
-                .pressed = 0,
-                .modifiers = wparam,
-                .button = win32_button_to_pal_button[msg - WM_LBUTTONDOWN]};
-
-            if (msg == WM_XBUTTONUP) {
-                WORD xButton = GET_XBUTTON_WPARAM(wparam);
-                if (xButton == XBUTTON1) {
-                    event.button.button = PAL_MOUSE_4;
-                    input.mouse_buttons[PAL_MOUSE_4] = 0;
-                    input.mouse_buttons_processed[PAL_MOUSE_4] = 0;
-                } else if (xButton == XBUTTON2) {
-                    event.button.button = PAL_MOUSE_5;
-                    input.mouse_buttons[PAL_MOUSE_5] = 0;
-                    input.mouse_buttons_processed[PAL_MOUSE_5] = 0;
-                }
-            } else {
-                input.mouse_buttons[event.button.button] = 0;
-                input.mouse_buttons_processed[event.button.button] = 0;
-            }
-        } break;
-
-        case WM_MOUSEWHEEL:
-        case WM_MOUSEHWHEEL: {
-            int delta = GET_WHEEL_DELTA_WPARAM(wparam);
-            event.type = PAL_EVENT_MOUSE_WHEEL;
-            event.wheel = (pal_mouse_wheel_event){
-                .x = GET_X_LPARAM(lparam),
-                .y = GET_Y_LPARAM(lparam),
-                .delta_x = (msg == WM_MOUSEHWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .delta_y = (msg == WM_MOUSEWHEEL) ? (float)delta / WHEEL_DELTA : 0.0f,
-                .modifiers = GET_KEYSTATE_WPARAM(wparam)};
-            break;
-        }
 
         case WM_INPUT: {
 
@@ -1470,8 +1375,16 @@ static pal_window* platform_create_window(int width, int height, const char* win
     window->hdc = GetDC(window->hwnd);
 
     const int pixelAttribs[] = {
-        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE, WGL_SUPPORT_OPENGL_ARB, GL_TRUE, WGL_DOUBLE_BUFFER_ARB, GL_TRUE, WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB, WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB, WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8, WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8, WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
-        0};
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+        WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+        WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
+        WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8,
+        WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8,
+        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
+        0 // null terminator for attrib list.
+    };
 
     int pixelFormatID;
     UINT numFormats;
@@ -1490,7 +1403,10 @@ static pal_window* platform_create_window(int width, int height, const char* win
     SetPixelFormat(window->hdc, pixelFormatID, &PFD);
 
     int contextAttribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB, WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0};
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+        WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
+        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0
+    };
 
     window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
 
@@ -1715,8 +1631,6 @@ pal_vec2 platform_get_mouse_position(pal_window* window) {
         (float)cursor_pos.x,
         (float)cursor_pos.y};
 }
-// array of function pointers. Probably not going to go with this.
-// I am not sure if this is faster than an if statement - Abdelrahman sarhan 2025/07/31
 
 // Cache for modifier key states
 static int g_cached_modifiers = PAL_MOD_NONE;
@@ -1724,6 +1638,7 @@ static int g_cached_modifiers = PAL_MOD_NONE;
 // Cache for key states to detect repeats (256 VK codes max)
 static pal_bool g_key_is_down[256] = {0};
 
+uint32_t g_cached_mouse_buttons = 0;
 // Function to update modifier state based on raw input
 static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
     int modifier_flag = 0;
@@ -1842,21 +1757,134 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
 }
 
 void win32_handle_mouse(const RAWINPUT* raw) {
+    pal_event event = {0};
     int32_t dx = raw->data.mouse.lLastX;
     int32_t dy = raw->data.mouse.lLastY;
+    
+    // Update mouse delta
     input.mouse_delta.x += dx;
     input.mouse_delta.y += dy;
-
+    
     USHORT buttons = raw->data.mouse.usButtonFlags;
-    for (int i = 0; i < 16; ++i) {
+    POINT point = {0};
+    GetCursorPos(&point);
+    
+    // Handle motion
+    if (dx || dy) {
+        event.type = PAL_EVENT_MOUSE_MOTION;
+        event.motion = (pal_mouse_motion_event) {
+            .x = point.x,
+            .y = point.y,
+            .delta_x = dx,
+            .delta_y = dy,
+            .buttons = g_cached_mouse_buttons,
+        };
+        // Enqueue motion event
+		pal_event_queue* queue = &g_event_queue;
+		if (queue->size == queue->capacity) {
+			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
+		}
+		queue->events[queue->back] = event;
+		queue->back = (queue->back + 1) % queue->capacity;
+		queue->size++;
+    }
+    
+    // Handle mouse wheel
+    if (buttons & RI_MOUSE_WHEEL) {
+        // Wheel delta is in the high word of usButtonData
+        SHORT wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
+        
+        event.type = PAL_EVENT_MOUSE_WHEEL;
+        event.wheel = (pal_mouse_wheel_event) {
+            .mouse_x = point.x,
+            .mouse_y = point.y,
+            .x = 0,
+            .y = wheel_delta / WHEEL_DELTA, // Normalize to standard units
+            .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
+        };
+        // Enqueue wheel event
+		pal_event_queue* queue = &g_event_queue;
+		if (queue->size == queue->capacity) {
+			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
+		}
+		queue->events[queue->back] = event;
+		queue->back = (queue->back + 1) % queue->capacity;
+		queue->size++;
+
+    }
+    
+    // Handle horizontal wheel (if supported)
+    if (buttons & RI_MOUSE_HWHEEL) {
+        // Horizontal wheel delta is in the high word of usButtonData
+        SHORT hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
+        
+        event.type = PAL_EVENT_MOUSE_WHEEL;
+        event.wheel = (pal_mouse_wheel_event) {
+            .mouse_x = point.x,
+            .mouse_y = point.y,
+            .x = hwheel_delta / WHEEL_DELTA,  // Normalize to standard units
+            .y = 0,
+            .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
+        };
+        // Enqueue horizontal wheel event
+		pal_event_queue* queue = &g_event_queue;
+		if (queue->size == queue->capacity) {
+			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
+		}
+		queue->events[queue->back] = event;
+		queue->back = (queue->back + 1) % queue->capacity;
+		queue->size++;
+
+    }
+    
+    // Handle button events
+    for (int i = 0; i < 5; i++) { // Only check first 5 buttons (left, right, middle, x1, x2)
         uint16_t down = (buttons >> (i * 2)) & 1;
         uint16_t up = (buttons >> (i * 2 + 1)) & 1;
+        
+        if (down) {
+            g_cached_mouse_buttons |= (1 << i);  // Set bit
+            event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
+            event.button = (pal_mouse_button_event){
+                .x = point.x,
+                .y = point.y,
+                .pressed = 1,
+                .clicks = 1,
+                .modifiers = g_cached_modifiers,
+                .button = win32_button_to_pal_button[i]
+            };
+            // Enqueue button down event
+		pal_event_queue* queue = &g_event_queue;
+		if (queue->size == queue->capacity) {
+			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
+		}
+		queue->events[queue->back] = event;
+		queue->back = (queue->back + 1) % queue->capacity;
+		queue->size++;
 
-        // If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
-        input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
+        } else if (up) {
+            g_cached_mouse_buttons &= ~(1 << i); // Clear bit
+            event.type = PAL_EVENT_MOUSE_BUTTON_UP;
+            event.button = (pal_mouse_button_event){
+                .x = point.x,
+                .y = point.y,
+                .pressed = 0,
+                .clicks = 1,
+                .modifiers = g_cached_modifiers,
+                .button = win32_button_to_pal_button[i]
+            };
+            // Enqueue button up event
+		pal_event_queue* queue = &g_event_queue;
+		if (queue->size == queue->capacity) {
+			fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
+		}
+		queue->events[queue->back] = event;
+		queue->back = (queue->back + 1) % queue->capacity;
+		queue->size++;
+
+        }
     }
 }
-
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
 void win32_handle_hid(const RAWINPUT* raw) {
