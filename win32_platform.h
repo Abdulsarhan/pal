@@ -40,13 +40,16 @@ pal_window* g_current_window;
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
+pal_event_queue g_event_queue;
+// on windows, the message pump is not specific to any window, it's specific to the thread.
+// this is false initially because windows sends messages to the window as soon as 
+// Create_WindowExA() is called.
+pal_bool g_message_pump_drained = FALSE;
 struct pal_window {
     HWND hwnd;
     HDC hdc;
     HGLRC hglrc;
     LONG windowedStyle;
-    pal_event_queue queue;
-    pal_bool message_pump_drained;
     pal_bool confine_mouse;
     float width;
     float height;
@@ -201,113 +204,148 @@ static const uint16_t win32_key_to_pal_key[] = {
     [0x90] = 0x90, [0x91] = 0x91, // NumLock, ScrollLock
 };
 
+
 // clang-format on
-static const uint16_t win32_scancode_to_pal[256] = {
-    [0x01] = PAL_SCAN_ESCAPE,
-    [0x02] = PAL_SCAN_1,
-    [0x03] = PAL_SCAN_2,
-    [0x04] = PAL_SCAN_3,
-    [0x05] = PAL_SCAN_4,
-    [0x06] = PAL_SCAN_5,
-    [0x07] = PAL_SCAN_6,
-    [0x08] = PAL_SCAN_7,
-    [0x09] = PAL_SCAN_8,
-    [0x0A] = PAL_SCAN_9,
-    [0x0B] = PAL_SCAN_0,
-    [0x0C] = PAL_SCAN_MINUS,
-    [0x0D] = PAL_SCAN_EQUALS,
-    [0x0E] = PAL_SCAN_BACKSPACE,
-    [0x0F] = PAL_SCAN_TAB,
-    [0x10] = PAL_SCAN_Q,
-    [0x11] = PAL_SCAN_W,
-    [0x12] = PAL_SCAN_E,
-    [0x13] = PAL_SCAN_R,
-    [0x14] = PAL_SCAN_T,
-    [0x15] = PAL_SCAN_Y,
-    [0x16] = PAL_SCAN_U,
-    [0x17] = PAL_SCAN_I,
-    [0x18] = PAL_SCAN_O,
-    [0x19] = PAL_SCAN_P,
-    [0x1A] = PAL_SCAN_LEFTBRACKET,
-    [0x1B] = PAL_SCAN_RIGHTBRACKET,
-    [0x1C] = PAL_SCAN_RETURN,
-    [0x1D] = PAL_SCAN_LCTRL,
-    [0x1E] = PAL_SCAN_A,
-    [0x1F] = PAL_SCAN_S,
-    [0x20] = PAL_SCAN_D,
-    [0x21] = PAL_SCAN_F,
-    [0x22] = PAL_SCAN_G,
-    [0x23] = PAL_SCAN_H,
-    [0x24] = PAL_SCAN_J,
-    [0x25] = PAL_SCAN_K,
-    [0x26] = PAL_SCAN_L,
-    [0x27] = PAL_SCAN_SEMICOLON,
-    [0x28] = PAL_SCAN_APOSTROPHE,
-    [0x29] = PAL_SCAN_GRAVE,
-    [0x2A] = PAL_SCAN_LSHIFT,
-    [0x2B] = PAL_SCAN_BACKSLASH,
-    [0x2C] = PAL_SCAN_Z,
-    [0x2D] = PAL_SCAN_X,
-    [0x2E] = PAL_SCAN_C,
-    [0x2F] = PAL_SCAN_V,
-    [0x30] = PAL_SCAN_B,
-    [0x31] = PAL_SCAN_N,
-    [0x32] = PAL_SCAN_M,
-    [0x33] = PAL_SCAN_COMMA,
-    [0x34] = PAL_SCAN_PERIOD,
-    [0x35] = PAL_SCAN_SLASH,
-    [0x36] = PAL_SCAN_RSHIFT,
-    [0x37] = PAL_SCAN_KP_MULTIPLY,
-    [0x38] = PAL_SCAN_LALT,
-    [0x39] = PAL_SCAN_SPACE,
-    [0x3A] = PAL_SCAN_CAPSLOCK,
-    [0x3B] = PAL_SCAN_F1,
-    [0x3C] = PAL_SCAN_F2,
-    [0x3D] = PAL_SCAN_F3,
-    [0x3E] = PAL_SCAN_F4,
-    [0x3F] = PAL_SCAN_F5,
-    [0x40] = PAL_SCAN_F6,
-    [0x41] = PAL_SCAN_F7,
-    [0x42] = PAL_SCAN_F8,
-    [0x43] = PAL_SCAN_F9,
-    [0x44] = PAL_SCAN_F10,
-    [0x45] = PAL_SCAN_NUMCLEAR,
-    [0x46] = PAL_SCAN_SCROLLLOCK,
-    [0x47] = PAL_SCAN_KP_7,
-    [0x48] = PAL_SCAN_KP_8,
-    [0x49] = PAL_SCAN_KP_9,
-    [0x4A] = PAL_SCAN_KP_MINUS,
-    [0x4B] = PAL_SCAN_KP_4,
-    [0x4C] = PAL_SCAN_KP_5,
-    [0x4D] = PAL_SCAN_KP_6,
-    [0x4E] = PAL_SCAN_KP_PLUS,
-    [0x4F] = PAL_SCAN_KP_1,
-    [0x50] = PAL_SCAN_KP_2,
-    [0x51] = PAL_SCAN_KP_3,
-    [0x52] = PAL_SCAN_KP_0,
-    [0x53] = PAL_SCAN_KP_PERIOD,
-    [0x57] = PAL_SCAN_F11,
-    [0x58] = PAL_SCAN_F12,
+static int win32_makecode_to_pal_scancode[256] = {
+    [0x00] = 0,                    // Invalid
+    [0x01] = PAL_SCAN_ESCAPE,      // Escape
+    [0x02] = PAL_SCAN_1,           // 1
+    [0x03] = PAL_SCAN_2,           // 2
+    [0x04] = PAL_SCAN_3,           // 3
+    [0x05] = PAL_SCAN_4,           // 4
+    [0x06] = PAL_SCAN_5,           // 5
+    [0x07] = PAL_SCAN_6,           // 6
+    [0x08] = PAL_SCAN_7,           // 7
+    [0x09] = PAL_SCAN_8,           // 8
+    [0x0A] = PAL_SCAN_9,           // 9
+    [0x0B] = PAL_SCAN_0,           // 0
+    [0x0C] = PAL_SCAN_MINUS,       // -
+    [0x0D] = PAL_SCAN_EQUALS,      // =
+    [0x0E] = PAL_SCAN_BACKSPACE,   // Backspace
+    [0x0F] = PAL_SCAN_TAB,         // Tab
+    [0x10] = PAL_SCAN_Q,           // Q
+    [0x11] = PAL_SCAN_W,           // W
+    [0x12] = PAL_SCAN_E,           // E
+    [0x13] = PAL_SCAN_R,           // R
+    [0x14] = PAL_SCAN_T,           // T
+    [0x15] = PAL_SCAN_Y,           // Y
+    [0x16] = PAL_SCAN_U,           // U
+    [0x17] = PAL_SCAN_I,           // I
+    [0x18] = PAL_SCAN_O,           // O
+    [0x19] = PAL_SCAN_P,           // P
+    [0x1A] = PAL_SCAN_LEFTBRACKET,     // [
+    [0x1B] = PAL_SCAN_RIGHTBRACKET,    // ]
+    [0x1C] = PAL_SCAN_RETURN,      // Enter
+    [0x1D] = PAL_SCAN_LCTRL,       // Left Ctrl
+    [0x1E] = PAL_SCAN_A,           // A
+    [0x1F] = PAL_SCAN_S,           // S
+    [0x20] = PAL_SCAN_D,           // D
+    [0x21] = PAL_SCAN_F,           // F
+    [0x22] = PAL_SCAN_G,           // G
+    [0x23] = PAL_SCAN_H,           // H
+    [0x24] = PAL_SCAN_J,           // J
+    [0x25] = PAL_SCAN_K,           // K
+    [0x26] = PAL_SCAN_L,           // L
+    [0x27] = PAL_SCAN_SEMICOLON,   // ;
+    [0x28] = PAL_SCAN_APOSTROPHE,  // '
+    [0x29] = PAL_SCAN_GRAVE,       // `
+    [0x2A] = PAL_SCAN_LSHIFT,      // Left Shift
+    [0x2B] = PAL_SCAN_BACKSLASH,   // \ (backslash)
+    [0x2C] = PAL_SCAN_Z,           // Z
+    [0x2D] = PAL_SCAN_X,           // X
+    [0x2E] = PAL_SCAN_C,           // C
+    [0x2F] = PAL_SCAN_V,           // V
+    [0x30] = PAL_SCAN_B,           // B
+    [0x31] = PAL_SCAN_N,           // N
+    [0x32] = PAL_SCAN_M,           // M
+    [0x33] = PAL_SCAN_COMMA,       // ,
+    [0x34] = PAL_SCAN_PERIOD,      // .
+    [0x35] = PAL_SCAN_SLASH,       // /
+    [0x36] = PAL_SCAN_RSHIFT,      // Right Shift
+    [0x37] = PAL_SCAN_KP_MULTIPLY, // Keypad *
+    [0x38] = PAL_SCAN_LALT,        // Left Alt
+    [0x39] = PAL_SCAN_SPACE,       // Space
+    [0x3A] = PAL_SCAN_CAPSLOCK,    // Caps Lock
+    [0x3B] = PAL_SCAN_F1,          // F1
+    [0x3C] = PAL_SCAN_F2,          // F2
+    [0x3D] = PAL_SCAN_F3,          // F3
+    [0x3E] = PAL_SCAN_F4,          // F4
+    [0x3F] = PAL_SCAN_F5,          // F5
+    [0x40] = PAL_SCAN_F6,          // F6
+    [0x41] = PAL_SCAN_F7,          // F7
+    [0x42] = PAL_SCAN_F8,          // F8
+    [0x43] = PAL_SCAN_F9,          // F9
+    [0x44] = PAL_SCAN_F10,         // F10
+    [0x45] = PAL_SCAN_NUMCLEAR,    // Num Lock
+    [0x46] = PAL_SCAN_SCROLLLOCK,  // Scroll Lock
+    [0x47] = PAL_SCAN_KP_7,        // Keypad 7 / Home
+    [0x48] = PAL_SCAN_KP_8,        // Keypad 8 / Up
+    [0x49] = PAL_SCAN_KP_9,        // Keypad 9 / Page Up
+    [0x4A] = PAL_SCAN_KP_MINUS,    // Keypad -
+    [0x4B] = PAL_SCAN_KP_4,        // Keypad 4 / Left
+    [0x4C] = PAL_SCAN_KP_5,        // Keypad 5
+    [0x4D] = PAL_SCAN_KP_6,        // Keypad 6 / Right
+    [0x4E] = PAL_SCAN_KP_PLUS,     // Keypad +
+    [0x4F] = PAL_SCAN_KP_1,        // Keypad 1 / End
+    [0x50] = PAL_SCAN_KP_2,        // Keypad 2 / Down
+    [0x51] = PAL_SCAN_KP_3,        // Keypad 3 / Page Down
+    [0x52] = PAL_SCAN_KP_0,        // Keypad 0 / Insert
+    [0x53] = PAL_SCAN_KP_PERIOD,   // Keypad . / Delete
+    [0x56] = PAL_SCAN_NONUSBACKSLASH, // Non-US backslash (ISO layout)
+    [0x57] = PAL_SCAN_F11,         // F11
+    [0x58] = PAL_SCAN_F12,         // F12
+    [0x64] = PAL_SCAN_F13,         // F13
+    [0x65] = PAL_SCAN_F14,         // F14
+    [0x66] = PAL_SCAN_F15,         // F15
+    [0x67] = PAL_SCAN_F16,         // F16
+    [0x68] = PAL_SCAN_F17,         // F17
+    [0x69] = PAL_SCAN_F18,         // F18
+    [0x6A] = PAL_SCAN_F19,         // F19
+    [0x6B] = PAL_SCAN_F20,         // F20
+    [0x6C] = PAL_SCAN_F21,         // F21
+    [0x6D] = PAL_SCAN_F22,         // F22
+    [0x6E] = PAL_SCAN_F23,         // F23
+    [0x6F] = PAL_SCAN_F24,         // F24
+    [0x70] = PAL_SCAN_INTERNATIONAL2, // Katakana/Hiragana
+    [0x73] = PAL_SCAN_INTERNATIONAL1, // Ro
+    [0x79] = PAL_SCAN_INTERNATIONAL4, // Henkan
+    [0x7B] = PAL_SCAN_INTERNATIONAL5, // Muhenkan
+    [0x7D] = PAL_SCAN_INTERNATIONAL3, // Yen
+    
 };
 
-static const uint16_t win32_scancode_e0_to_pal[256] = {
-    [0x1C] = PAL_SCAN_KP_ENTER,
-    [0x1D] = PAL_SCAN_RCTRL,
-    [0x35] = PAL_SCAN_KP_DIVIDE,
-    [0x38] = PAL_SCAN_RALT,
-    [0x47] = PAL_SCAN_HOME,
-    [0x48] = PAL_SCAN_UP,
-    [0x49] = PAL_SCAN_PAGEUP,
-    [0x4B] = PAL_SCAN_LEFT,
-    [0x4D] = PAL_SCAN_RIGHT,
-    [0x4F] = PAL_SCAN_END,
-    [0x50] = PAL_SCAN_DOWN,
-    [0x51] = PAL_SCAN_PAGEDOWN,
-    [0x52] = PAL_SCAN_INSERT,
-    [0x53] = PAL_SCAN_DELETE,
-    [0x5B] = PAL_SCAN_LGUI,
-    [0x5C] = PAL_SCAN_RGUI,
-    [0x5D] = PAL_SCAN_APPLICATION,
+// Translation table for extended makecodes (E0 prefix keys)
+static int win32_extended_makecode_to_pal_scancode[256] = {
+    [0x1C] = PAL_SCAN_KP_ENTER,      // Keypad Enter
+    [0x1D] = PAL_SCAN_RCTRL,         // Right Ctrl
+    [0x35] = PAL_SCAN_KP_DIVIDE,     // Keypad /
+    [0x37] = PAL_SCAN_PRINTSCREEN,   // Print Screen
+    [0x38] = PAL_SCAN_RALT,          // Right Alt / AltGr
+    [0x46] = PAL_SCAN_PAUSE,         // Pause/Break
+    [0x47] = PAL_SCAN_HOME,          // Home
+    [0x48] = PAL_SCAN_UP,            // Up Arrow
+    [0x49] = PAL_SCAN_PAGEUP,        // Page Up
+    [0x4B] = PAL_SCAN_LEFT,          // Left Arrow
+    [0x4D] = PAL_SCAN_RIGHT,         // Right Arrow
+    [0x4F] = PAL_SCAN_END,           // End
+    [0x50] = PAL_SCAN_DOWN,          // Down Arrow
+    [0x51] = PAL_SCAN_PAGEDOWN,      // Page Down
+    [0x52] = PAL_SCAN_INSERT,        // Insert
+    [0x53] = PAL_SCAN_DELETE,        // Delete
+    [0x5B] = PAL_SCAN_LGUI,          // Left Windows/Super
+    [0x5C] = PAL_SCAN_RGUI,          // Right Windows/Super
+    [0x5D] = PAL_SCAN_APPLICATION,   // Menu/Application
+    [0x5F] = PAL_SCAN_SLEEP,         // Sleep
+    [0x63] = PAL_SCAN_WAKE,          // Wake
+    [0x65] = PAL_SCAN_AC_SEARCH,     // Search
+    [0x66] = PAL_SCAN_AC_BOOKMARKS,  // Favorites
+    [0x67] = PAL_SCAN_AC_REFRESH,    // Refresh
+    [0x68] = PAL_SCAN_AC_STOP,       // Stop
+    [0x69] = PAL_SCAN_AC_FORWARD,    // Forward
+    [0x6A] = PAL_SCAN_AC_BACK,       // Back
+    [0x6B] = PAL_SCAN_AC_HOME,       // My Computer
+    [0x6C] = PAL_SCAN_AC_OPEN,       // Mail
+    [0x6D] = PAL_SCAN_MEDIA_SELECT,  // Media Select
 };
 
 typedef struct {
@@ -1172,165 +1210,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .modifiers = GET_KEYSTATE_WPARAM(wparam)};
             break;
         }
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN: {
-            uint32_t vk = (uint32_t)wparam;
-            uint8_t scancode = (lparam >> 16) & 0xFF;
-            uint8_t extended = (lparam >> 24) & 1;
-
-            uint16_t modifiers = 0;
-
-            switch (vk) {
-                case VK_SHIFT:
-                    if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
-                        modifiers |= PAL_MOD_LSHIFT;
-                    else
-                        modifiers |= PAL_MOD_RSHIFT;
-                    break;
-
-                case VK_CONTROL:
-                    modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
-                    break;
-
-                case VK_MENU:
-                    modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
-                    break;
-
-                case VK_LWIN:
-                    modifiers |= PAL_MOD_LWINDOWS;
-                    break;
-
-                case VK_RWIN:
-                    modifiers |= PAL_MOD_RWINDOWS;
-                    break;
-
-                case VK_NUMLOCK:
-                    modifiers |= PAL_MOD_NUM;
-                    break;
-
-                case VK_SCROLL:
-                    modifiers |= PAL_MOD_SCROLL;
-                    break;
-
-                case VK_PROCESSKEY:
-                    modifiers |= PAL_MOD_ALTGR;
-                    break;
-
-                case VK_SHIFT | 0x100: // Level 5 shift (user-defined)
-                    modifiers |= PAL_MOD_LEVEL5SHIFT;
-                    break;
-            }
-
-            // Check toggle states:
-            if ((GetKeyState(VK_NUMLOCK) & 1) != 0)
-                modifiers |= PAL_MOD_NUM;
-            if ((GetKeyState(VK_SCROLL) & 1) != 0)
-                modifiers |= PAL_MOD_SCROLL;
-            if ((GetKeyState(VK_CAPITAL) & 1) != 0)
-                modifiers |= PAL_MOD_CAPS;
-
-            // AltGr detection: Right Alt + Ctrl
-            if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
-                modifiers |= PAL_MOD_ALTGR;
-            }
-
-            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
-
-            event.type = PAL_EVENT_KEY_DOWN;
-            event.key = (pal_keyboard_event){
-                .virtual_key = win32_key_to_pal_key[vk],
-                .scancode = pal_scancode,
-                .pressed = 1,
-                .repeat = (lparam >> 30) & 1,
-                .modifiers = modifiers};
-            input.keys[win32_key_to_pal_key[vk]] = 1;
-            break;
-        }
-
-        case WM_KEYUP:
-        case WM_SYSKEYUP: {
-            uint32_t vk = (uint32_t)wparam;
-            uint8_t scancode = (lparam >> 16) & 0xFF;
-            uint8_t extended = (lparam >> 24) & 1;
-
-            uint16_t modifiers = 0;
-
-            switch (vk) {
-                case VK_SHIFT:
-                    if (scancode == MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC))
-                        modifiers |= PAL_MOD_LSHIFT;
-                    else
-                        modifiers |= PAL_MOD_RSHIFT;
-                    break;
-
-                case VK_CONTROL:
-                    modifiers |= extended ? PAL_MOD_RCTRL : PAL_MOD_LCTRL;
-                    break;
-
-                case VK_MENU:
-                    modifiers |= extended ? PAL_MOD_RALT : PAL_MOD_LALT;
-                    break;
-
-                case VK_LWIN:
-                    modifiers |= PAL_MOD_LWINDOWS;
-                    break;
-
-                case VK_RWIN:
-                    modifiers |= PAL_MOD_RWINDOWS;
-                    break;
-
-                case VK_NUMLOCK:
-                    modifiers |= PAL_MOD_NUM;
-                    break;
-
-                case VK_SCROLL:
-                    modifiers |= PAL_MOD_SCROLL;
-                    break;
-
-                case VK_PROCESSKEY:
-                    modifiers |= PAL_MOD_ALTGR;
-                    break;
-
-                case VK_SHIFT | 0x100:
-                    modifiers |= PAL_MOD_LEVEL5SHIFT;
-                    break;
-            }
-
-            if ((GetKeyState(VK_NUMLOCK) & 1) != 0)
-                modifiers |= PAL_MOD_NUM;
-            if ((GetKeyState(VK_SCROLL) & 1) != 0)
-                modifiers |= PAL_MOD_SCROLL;
-            if ((GetKeyState(VK_CAPITAL) & 1) != 0)
-                modifiers |= PAL_MOD_CAPS;
-
-            if ((GetKeyState(VK_RMENU) & 0x8000) && (GetKeyState(VK_CONTROL) & 0x8000)) {
-                modifiers |= PAL_MOD_ALTGR;
-            }
-
-            uint16_t pal_scancode = extended ? win32_scancode_e0_to_pal[scancode] : win32_scancode_to_pal[scancode];
-
-            event.type = PAL_EVENT_KEY_UP;
-            event.key = (pal_keyboard_event){
-                .virtual_key = win32_key_to_pal_key[vk],
-                .scancode = pal_scancode,
-                .pressed = 0,
-                .repeat = 0,
-                .modifiers = modifiers};
-            input.keys[win32_key_to_pal_key[vk]] = 0;
-            input.keys_processed[win32_key_to_pal_key[vk]] = 0;
-            break;
-        }
-        case WM_CHAR:
-        case WM_UNICHAR:
-            event.type = PAL_EVENT_TEXT_INPUT;
-            event.text = (pal_text_input_event){
-                .utf8_text = {0}};
-            {
-                char utf8[8] = {0};
-                int len = WideCharToMultiByte(CP_UTF8, 0, (WCHAR*)&wparam, 1, utf8, sizeof(utf8), NULL, NULL);
-                memcpy(event.text.utf8_text, utf8, len);
-            }
-            break;
 
         case WM_INPUT: {
 
@@ -1394,7 +1273,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
-    pal_event_queue* queue = &window->queue;
+    pal_event_queue* queue = &g_event_queue;
     if (queue->size == queue->capacity) {
         fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
     }
@@ -1512,23 +1391,6 @@ static pal_window* platform_create_window(int width, int height, const char* win
     pal_window* window = (pal_window*)malloc(sizeof(pal_window));
     window->width = width;
     window->height = height;
-    // -- CREATE QUEUE FOR THE WINDOW --
-    size_t capacity = 10000;
-    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
-
-    if (events == NULL) {
-        fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
-    }
-
-    pal_event_queue queue = {
-        // size and capacity are measured in pal_events, not bytes.
-        .size = 0,
-        .capacity = capacity,
-        .front = 0,
-        .back = 0,
-        .events = events};
-
-    window->queue = queue;
 
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
@@ -1747,19 +1609,18 @@ static pal_bool platform_minimize_window(pal_window* window) {
 }
 
 static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
-    g_current_window = window;
     MSG msg = {0};
-    if (!window->message_pump_drained) {
+    if (!g_message_pump_drained) {
 
         platform_get_raw_input_buffer();
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
-        window->message_pump_drained = TRUE;
+        g_message_pump_drained = TRUE;
     }
 
-    pal_event_queue* queue = &window->queue;
+    pal_event_queue* queue = &g_event_queue;
 
     if (queue->size) { // if queue is not empty,
 
@@ -1771,7 +1632,7 @@ static uint8_t platform_poll_events(pal_event* event, pal_window* window) {
         queue->size--;
         return 1;
     } else {
-		window->message_pump_drained = FALSE;
+		g_message_pump_drained = FALSE;
 		input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
 		return 0;
     }
@@ -1845,24 +1706,6 @@ typedef void (*RawInputHandler)(const RAWINPUT*);
 #define MAX_BUTTON_CAPS 32
 
 // Helper struct to hold reusable buffers
-void Win32HandleMouse(const RAWINPUT* raw) {
-    int32_t dx = raw->data.mouse.lLastX;
-    int32_t dy = raw->data.mouse.lLastY;
-    input.mouse_delta.x += dx;
-    input.mouse_delta.y += dy;
-
-    /* We don't save mouse buttons
-    USHORT buttons = raw->data.mouse.usButtonFlags;
-    for (int i = 0; i < 16; ++i) {
-        uint16_t down = (buttons >> (i * 2)) & 1;
-        uint16_t up = (buttons >> (i * 2 + 1)) & 1;
-
-        // If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
-        input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
-    }
-    */
-}
-
 pal_vec2 platform_get_mouse_position(pal_window* window) {
     POINT cursor_pos = {0};
     GetCursorPos(&cursor_pos);
@@ -1872,29 +1715,158 @@ pal_vec2 platform_get_mouse_position(pal_window* window) {
         (float)cursor_pos.x,
         (float)cursor_pos.y};
 }
+// array of function pointers. Probably not going to go with this.
+// I am not sure if this is faster than an if statement - Abdelrahman sarhan 2025/07/31
 
-void Win32HandleKeyboard(const RAWINPUT* raw) {
-    /*
-    // we used to save this in the input struct, not anymore.
+// Cache for modifier key states
+static int g_cached_modifiers = PAL_MOD_NONE;
 
-    USHORT key = raw->data.keyboard.VKey;
-    input.keys[key] = ~(raw->data.keyboard.Flags) & RI_KEY_BREAK;
-    printf("Key %u %s\n", key, input.keys[key] ? "up" : "down"); // FOR DEBUGGING NOCHECKIN!
+// Cache for key states to detect repeats (256 VK codes max)
+static pal_bool g_key_is_down[256] = {0};
 
-
-    */
+// Function to update modifier state based on raw input
+static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
+    int modifier_flag = 0;
+    
+    // Map VK codes to modifier flags
+    switch (vk) {
+        case VK_LSHIFT:   modifier_flag = PAL_MOD_LSHIFT; break;
+        case VK_RSHIFT:   modifier_flag = PAL_MOD_RSHIFT; break;
+        case VK_LCONTROL: modifier_flag = PAL_MOD_LCTRL; break;
+        case VK_RCONTROL: modifier_flag = PAL_MOD_RCTRL; break;
+        case VK_LMENU:    modifier_flag = PAL_MOD_LALT; break;
+        case VK_RMENU:    
+            modifier_flag = PAL_MOD_RALT;
+            // Also handle AltGr (right alt)
+            // TODO: Assuming that right alt = altgr is probably wrong.
+            if (is_key_released) {
+                g_cached_modifiers &= ~PAL_MOD_ALTGR;
+            } else {
+                g_cached_modifiers |= PAL_MOD_ALTGR;
+            }
+            break;
+        case VK_LWIN:     modifier_flag = PAL_MOD_LSUPER; break;
+        case VK_RWIN:     modifier_flag = PAL_MOD_RSUPER; break;
+        case VK_CAPITAL:
+            // Toggle caps lock state
+            if (!is_key_released) {
+                g_cached_modifiers ^= PAL_MOD_CAPS;
+            }
+            return; // Don't process as regular modifier
+        case VK_NUMLOCK:
+            // Toggle num lock state
+            if (!is_key_released) {
+                g_cached_modifiers ^= PAL_MOD_NUM;
+            }
+            return; // Don't process as regular modifier
+        case VK_SCROLL:
+            // Toggle scroll lock state
+            if (!is_key_released) {
+                g_cached_modifiers ^= PAL_MOD_SCROLL;
+            }
+            return; // Don't process as regular modifier
+        default:
+            return; // Not a modifier key
+    }
+    
+    // Update the cached modifier state
+    if (is_key_released) {
+        g_cached_modifiers &= ~modifier_flag;
+    } else {
+        g_cached_modifiers |= modifier_flag;
+    }
 }
 
+void win32_handle_keyboard(const RAWINPUT* raw) {
+    USHORT vk = raw->data.keyboard.VKey;
+    USHORT makecode = raw->data.keyboard.MakeCode;
+    USHORT flags = raw->data.keyboard.Flags;
+    pal_event event = {0};
+    
+    pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
+    
+    pal_bool is_extended = (flags & RI_KEY_E0) != 0;
+    
+    pal_bool is_repeat = 0;
+    if (vk < 256) { // ensures that the vk key is within range, probably not necessary.
+        if (!is_key_released && g_key_is_down[vk]) {
+            is_repeat = 1;
+        }
+        
+        g_key_is_down[vk] = !is_key_released;
+    }
+    
+    update_modifier_state(vk, is_key_released);
+    
+    int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
+    
+    int pal_scancode = 0;
+    if (is_extended) {
+        if (makecode < 256) {
+            pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
+        }
+    } else {
+        if (makecode < 256) {
+            pal_scancode = win32_makecode_to_pal_scancode[makecode];
+        }
+    }
+    
+    if (is_key_released) {
+        event.type = PAL_EVENT_KEY_UP;
+        event.key = (pal_keyboard_event){
+            .virtual_key = pal_key,
+            .scancode = pal_scancode,
+            .pressed = 0,  // Key is being released
+            .repeat = 0,   // Key up events are never repeats
+            .modifiers = g_cached_modifiers
+        };
+    } else {
+        event.type = PAL_EVENT_KEY_DOWN;
+        event.key = (pal_keyboard_event){
+            .virtual_key = pal_key,
+            .scancode = pal_scancode,
+            .pressed = 1,  // Key is being pressed
+            .repeat = is_repeat,
+            .modifiers = g_cached_modifiers
+        };
+    }
+
+    pal_event_queue* queue = &g_event_queue;
+    if (queue->size == queue->capacity) {
+        fprintf(stderr, "ERROR: pal_eventq_enqueue(): Event queue size has reached capacity. Not going to enqueue->\n");
+    }
+    queue->events[queue->back] = event;
+    queue->back = (queue->back + 1) % queue->capacity;
+    queue->size++;
+
+}
+
+void win32_handle_mouse(const RAWINPUT* raw) {
+    int32_t dx = raw->data.mouse.lLastX;
+    int32_t dy = raw->data.mouse.lLastY;
+    input.mouse_delta.x += dx;
+    input.mouse_delta.y += dy;
+
+    USHORT buttons = raw->data.mouse.usButtonFlags;
+    for (int i = 0; i < 16; ++i) {
+        uint16_t down = (buttons >> (i * 2)) & 1;
+        uint16_t up = (buttons >> (i * 2 + 1)) & 1;
+
+        // If down is 1, set to 1; if up is 1, set to 0; otherwise leave unchanged
+        input.mouse_buttons[i] = (input.mouse_buttons[i] & ~up) | down;
+    }
+}
+
+
 // Handles Gamepads, Joysticks, Steering wheels, etc...
-void Win32HandleHID(const RAWINPUT* raw) {
+void win32_handle_hid(const RAWINPUT* raw) {
     printf("%d", raw->data.hid.dwCount);
 }
 
-// Handler function table indexed by dwType (0 = mouse, 1 = keyboard, 2 = HID)
 RawInputHandler Win32InputHandlers[3] = {
-    Win32HandleMouse,    // RIM_TYPEMOUSE (0)
-    Win32HandleKeyboard, // RIM_TYPEKEYBOARD (1)
-    Win32HandleHID       // RIM_TYPEHID (2) This is for joysticks, gamepads, and steering wheels.
+    win32_handle_mouse,    
+    win32_handle_keyboard,
+    win32_handle_hid
 };
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
@@ -1909,11 +1881,11 @@ static int platform_get_raw_input_buffer(void) {
     for (UINT i = 0; i < inputEventCount; ++i) {
         UINT type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
-            Win32HandleMouse(raw);
+            win32_handle_mouse(raw);
         } else if (type == RIM_TYPEKEYBOARD) {
-            Win32HandleKeyboard(raw);
+            win32_handle_keyboard(raw);
         } else {
-            Win32HandleHID(raw);
+            win32_handle_hid(raw);
         }
         raw = NEXTRAWINPUTBLOCK(raw);
     }

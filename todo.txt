@@ -1,10 +1,11 @@
 Now:
 
+Make it so that keyboard and mouse input is achieved through buffered raw input rather than win32 window messages.
 Integrate gamepad system into the window events.
 Some functions return 0 on success, others return 1. Audit each function and make sure that all of them return 1 on success and 0 on failure.
 
 Later:
-
+Give each window an ID so that the user of the library can tell them appart when they recieve window events.
 Fully integrate new gamepad system that supports all gamepads.
 Implement linux_x11_platform.h.
 Implement linux_wayland_platform.h

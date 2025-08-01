@@ -75,6 +75,7 @@ int main() {
                     printf("App: Mouse Button UP!\n");
                     break;
                 case PAL_EVENT_KEY_DOWN:
+                    printf("Key down!\n");
                     if (event.key.scancode == PAL_SCAN_ESCAPE) {
                         printf("Exited!\n");
                         printf("scancode: %d", event.key.scancode);

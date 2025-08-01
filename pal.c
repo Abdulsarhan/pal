@@ -12,7 +12,32 @@
 #include "linux_x11_platform.h"
 #endif
 
+void pal_init_queue() {
+
+    // -- CREATE QUEUE FOR THE WINDOW --
+    size_t capacity = 10000;
+    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
+
+    if (events == NULL) {
+        fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
+        return 0;
+    }
+
+    g_event_queue = (pal_event_queue){
+        // size and capacity are measured in pal_events, not bytes.
+        .size = 0,
+        .capacity = capacity,
+        .front = 0,
+        .back = 0,
+        .events = events
+    };
+
+	return 1;
+}
+
 PALAPI void pal_init(void) {
+    pal_init_queue();
+
     platform_init_timer();
     platform_init_sound();
     if (!platform_init_gamepads()) {
@@ -776,15 +801,15 @@ PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* st
 }
 
 // TODO: this should not be here, since this is only used by the platform-specific implementation in the background.
-pal_bool pal_eventq_free(pal_event_queue* queue);
+pal_bool pal_eventq_free(pal_event_queue queue);
 
-pal_bool pal_eventq_free(pal_event_queue* queue) {
-    if (queue->events) {
-        free(queue->events);
+pal_bool pal_eventq_free(pal_event_queue queue) {
+    if (queue.events) {
+        free(queue.events);
         return 1;
     } else {
         fprintf(stderr, "ERROR: pal_eventq_free(): Tried to free a queue that was already freed!\n");
-        queue->events = NULL;
+        queue.events = NULL;
         return 0;
     }
 }
