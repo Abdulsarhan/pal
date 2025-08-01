@@ -1158,11 +1158,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             if ((BOOL)wparam == pal_false) {
                 event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
                 event.window.focused = 0;
-                printf("PAL: Lost Focus!\N");
+                printf("PAL: Lost Focus!\n");
             } else {
                 event.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
                 event.window.focused = 1;
-                printf("PAL: Gained Focus!\N");
+                printf("PAL: Gained Focus!\n");
             }
         }; break;
 
@@ -1176,7 +1176,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.type = PAL_EVENT_NONE;
             return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
-    pal_push_event(&g_event_queue, event);
+    pal_eventq_push(&g_event_queue, event);
     return 0;
 }
 
@@ -1737,7 +1737,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         };
     }
 
-    pal_push_event(&g_event_queue, event);
+    pal_eventq_push(&g_event_queue, event);
 }
 
 void win32_handle_mouse(const RAWINPUT* raw) {
@@ -1764,7 +1764,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .buttons = g_cached_mouse_buttons,
         };
         // Enqueue motion event
-        pal_push_event(&g_event_queue, event);
+        pal_eventq_push(&g_event_queue, event);
     }
     
     // Handle mouse wheel
@@ -1781,7 +1781,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
         };
         // Enqueue wheel event
-        pal_push_event(&g_event_queue, event);
+        pal_eventq_push(&g_event_queue, event);
     }
     
     // Handle horizontal wheel (if supported)
@@ -1798,7 +1798,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
         };
         // Enqueue horizontal wheel event
-        pal_push_event(&g_event_queue, event);
+        pal_eventq_push(&g_event_queue, event);
     }
     
     // Handle button events
@@ -1817,7 +1817,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .modifiers = g_cached_modifiers,
                 .button = win32_button_to_pal_button[i]
             };
-			pal_push_event(&g_event_queue, event);
+			pal_eventq_push(&g_event_queue, event);
         } else if (up) {
             g_cached_mouse_buttons &= ~(1 << i); // Clear bit
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
@@ -1829,7 +1829,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .modifiers = g_cached_modifiers,
                 .button = win32_button_to_pal_button[i]
             };
-			pal_push_event(&g_event_queue, event);
+			pal_eventq_push(&g_event_queue, event);
         }
     }
 }

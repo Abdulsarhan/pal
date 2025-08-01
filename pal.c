@@ -8,7 +8,7 @@
 
 pal_event_queue g_event_queue = {0};
 
-pal_bool pal_init_queue() {
+pal_bool pal_init_eventq() {
 
     // -- CREATE QUEUE FOR THE WINDOW --
     size_t capacity = 10000;
@@ -32,13 +32,24 @@ pal_bool pal_init_queue() {
 }
 
 // enqueue
-void pal_push_event(pal_event_queue* queue, pal_event event) {
+void pal_eventq_push(pal_event_queue* queue, pal_event event) {
 	if (queue->size == queue->capacity) {
 		fprintf(stderr, "ERROR: pal_eventq_enqueue->): Event queue->size has reached capacity. Not going to enqueue->\n");
 	}
 	queue->events[queue->back] = event;
 	queue->back = (queue->back + 1) % queue->capacity;
 	queue->size++;
+}
+
+pal_bool pal_eventq_free(pal_event_queue queue) {
+    if (queue.events) {
+        free(queue.events);
+        return 1;
+    } else {
+        fprintf(stderr, "ERROR: pal_eventq_free(): Tried to free a queue that was already freed!\n");
+        queue.events = NULL;
+        return 0;
+    }
 }
 
 #ifdef _WIN32
@@ -49,7 +60,7 @@ void pal_push_event(pal_event_queue* queue, pal_event event) {
 
 
 PALAPI void pal_init(void) {
-    pal_init_queue();
+    pal_init_eventq();
 
     platform_init_timer();
     platform_init_sound();
@@ -60,6 +71,7 @@ PALAPI void pal_init(void) {
 
 PALAPI void pal_shutdown(void) {
     platform_shutdown_gamepads();
+    pal_eventq_free(g_event_queue);
 }
 
 /*
@@ -811,18 +823,4 @@ PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* st
         }
     }
     return 1;
-}
-
-// TODO: this should not be here, since this is only used by the platform-specific implementation in the background.
-pal_bool pal_eventq_free(pal_event_queue queue);
-
-pal_bool pal_eventq_free(pal_event_queue queue) {
-    if (queue.events) {
-        free(queue.events);
-        return 1;
-    } else {
-        fprintf(stderr, "ERROR: pal_eventq_free(): Tried to free a queue that was already freed!\n");
-        queue.events = NULL;
-        return 0;
-    }
 }
