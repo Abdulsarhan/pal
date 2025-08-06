@@ -1,7 +1,5 @@
 #include "pal.h"
-#define STB_VORBIS_IMPLEMENTATION
 #include "stb_vorbis.h"
-#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize2.h"
@@ -138,8 +136,8 @@ PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_p
     (void)platform_set_taskbar_icon_legacy(taskbar, image_path);
 }
 
-PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size) {
-    (void)platform_set_cursor(window, image_path, size);
+PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size, int hotspot_x, int hotspot_y) {
+    (void)platform_set_cursor(window, image_path, size, hotspot_x, hotspot_y);
 }
 
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
@@ -242,6 +240,9 @@ PALAPI void pal_swap_buffers(pal_window* window) {
     (void)platform_swap_buffers(window);
 }
 
+PALAPI void pal_swap_interval(int interval) {
+    (void)platform_swap_interval(interval);
+}
 /*
 
 ###########################################

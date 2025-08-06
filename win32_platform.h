@@ -509,8 +509,7 @@ pal_bool platform_make_window_windowed(pal_window* window) {
     return pal_true;
 }
 
-void platform_set_cursor(pal_window* window, const char* filepath, int size) {
-    // Clamp size to reasonable max, e.g. 256 (you can adjust)
+void platform_set_cursor(pal_window* window, const char* filepath, int size, int hotspot_x, int hotspot_y) {
     if (size <= 0)
         size = 32;
     if (size > 256)
@@ -598,8 +597,8 @@ void platform_set_cursor(pal_window* window, const char* filepath, int size) {
 
         ICONINFO ii = {0};
         ii.fIcon = pal_false;
-        ii.xHotspot = 0;
-        ii.yHotspot = 0;
+        ii.xHotspot = hotspot_x;
+        ii.yHotspot = hotspot_y;
         ii.hbmColor = hBitmap;
         ii.hbmMask = CreateBitmap(size, size, 1, 1, NULL);
 
@@ -617,7 +616,6 @@ void platform_set_cursor(pal_window* window, const char* filepath, int size) {
     SetClassLongPtr(window->hwnd, GCLP_HCURSOR, (LONG_PTR)hCursor);
     SetCursor(hCursor);
 }
-
 // older windows versions do not support pngs being embedded in .ico
 // files directly, therefore, we have to decode the .png with stb_image
 // and only then can we use it.
@@ -1172,6 +1170,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     return 0;
 }
 
+
+PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
 static pal_window* platform_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
     // these variables are only
     // used when initializing opengl.
@@ -1179,7 +1179,6 @@ static pal_window* platform_create_window(int width, int height, const char* win
     HGLRC fakeRC = 0;
     PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
-    PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
     // we default to opengl.
     if (!(window_flags & PAL_WINDOW_OPENGL) || !(window_flags & PAL_WINDOW_VULKAN) || !(window_flags & PAL_WINDOW_METAL)) {
         window_flags |= PAL_WINDOW_OPENGL;
@@ -1595,6 +1594,9 @@ static void* platform_gl_get_proc_address(const char* proc) {
 void platform_swap_buffers(pal_window* window) {
     SwapBuffers(window->hdc);
 }
+void platform_swap_interval(int interval) {
+    wglSwapIntervalEXT(interval);
+}
 
 #define MAX_RAW_INPUTS 16
 
@@ -1697,7 +1699,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     update_modifier_state(vk, is_key_released);
     
     int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
-    
+   
     int pal_scancode = 0;
     if (is_extended) {
         if (makecode < 256) {
@@ -1718,6 +1720,8 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             .repeat = 0,   // Key up events are never repeats
             .modifiers = g_cached_modifiers
         };
+		input.keys[pal_key] = 0;
+		input.keys_processed[pal_key] = 0;
     } else {
         event.type = PAL_EVENT_KEY_DOWN;
         event.key = (pal_keyboard_event){
@@ -1727,6 +1731,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             .repeat = is_repeat,
             .modifiers = g_cached_modifiers
         };
+        input.keys[pal_key] = 1;
     }
 
     pal_eventq_push(&g_event_queue, event);
@@ -1744,7 +1749,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     USHORT buttons = raw->data.mouse.usButtonFlags;
     POINT point = {0};
     GetCursorPos(&point);
-    
+    ScreenToClient(g_current_window->hwnd, &point); 
     // Handle motion
     if (dx || dy) {
         event.type = PAL_EVENT_MOUSE_MOTION;
@@ -1792,11 +1797,11 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         // Enqueue horizontal wheel event
         pal_eventq_push(&g_event_queue, event);
     }
-    
     // Handle button events
     for (int i = 0; i < 5; i++) { // Only check first 5 buttons (left, right, middle, x1, x2)
         uint16_t down = (buttons >> (i * 2)) & 1;
         uint16_t up = (buttons >> (i * 2 + 1)) & 1;
+        int pal_button = win32_button_to_pal_button[i];
         
         if (down) {
             g_cached_mouse_buttons |= (1 << i);  // Set bit
@@ -1810,6 +1815,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .button = win32_button_to_pal_button[i]
             };
 			pal_eventq_push(&g_event_queue, event);
+            input.mouse_buttons[pal_button] = 1;
         } else if (up) {
             g_cached_mouse_buttons &= ~(1 << i); // Clear bit
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
@@ -1822,6 +1828,8 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .button = win32_button_to_pal_button[i]
             };
 			pal_eventq_push(&g_event_queue, event);
+            input.mouse_buttons[pal_button] = 0;
+            input.mouse_buttons_processed[pal_button] = 0;
         }
     }
 }

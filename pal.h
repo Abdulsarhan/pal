@@ -1,5 +1,5 @@
-#ifndef PAL_H
-#define PAL_H
+#ifndef PAL_INCLUDE_H
+#define PAL_INCLUDE_H
 
 #include <stdint.h>   // For Clearly Defined Types.
 #include <sys/stat.h> // For time_t and stat.
@@ -1152,7 +1152,7 @@ PALAPI void pal_set_window_icon(pal_window* window, const char* image_path);
 PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path);
 PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);
 PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path);
-PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size);
+PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size, int hotspot_x, int hotspot_y);
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
@@ -1181,6 +1181,7 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id);
 
 // Rendering stuff.
 PALAPI void pal_swap_buffers(pal_window* window);
+PALAPI void pal_swap_interval(int interval);
 
 // Sound
 PALAPI pal_sound* pal_load_sound(const char* filename);
@@ -1243,4 +1244,4 @@ PALAPI uint8_t free_dynamic_library(void* dll);
 }
 #endif
 
-#endif // PAL_H
+#endif // PAL_INCLUDE_H
