@@ -1588,26 +1588,28 @@ static pal_bool platform_set_video_mode(pal_video_mode* mode) {
 }
 
 static void* platform_gl_get_proc_address(const char* proc) {
-    void* ptr = (void*)wglGetProcAddress(proc);
+    static HMODULE opengl_module = NULL; // Cached across all calls
 
-    // wglGetProcAddress can return:
-    // NULL, 0x1, 0x2, 0x3, or -1 on failure
-    if (!ptr || ptr == (void*)0x1 || ptr == (void*)0x2 || ptr == (void*)0x3 || ptr == (void*)-1) {
-        static HMODULE module = NULL;
-        if (!module) {
-            module = LoadLibraryA("opengl32.dll");
+    void* p = (void*)wglGetProcAddress(proc);
+    if (p == NULL || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
+        // Load opengl32.dll once on first call, reuse handle afterwards
+        if (opengl_module == NULL) {
+            opengl_module = LoadLibraryA("opengl32.dll");
         }
-        if (module) {
-            ptr = (void*)GetProcAddress(module, proc);
+
+        if (opengl_module != NULL) {
+            p = (void*)GetProcAddress(opengl_module, proc);
+        } else {
+            p = NULL;
         }
     }
-
-    return ptr;
+    return p;
 }
 
 void platform_swap_buffers(pal_window* window) {
     SwapBuffers(window->hdc);
 }
+
 void platform_swap_interval(int interval) {
     wglSwapIntervalEXT(interval);
 }
