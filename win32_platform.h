@@ -1588,7 +1588,21 @@ static pal_bool platform_set_video_mode(pal_video_mode* mode) {
 }
 
 static void* platform_gl_get_proc_address(const char* proc) {
-    return wglGetProcAddress(proc);
+    void* ptr = (void*)wglGetProcAddress(proc);
+
+    // wglGetProcAddress can return:
+    // NULL, 0x1, 0x2, 0x3, or -1 on failure
+    if (!ptr || ptr == (void*)0x1 || ptr == (void*)0x2 || ptr == (void*)0x3 || ptr == (void*)-1) {
+        static HMODULE module = NULL;
+        if (!module) {
+            module = LoadLibraryA("opengl32.dll");
+        }
+        if (module) {
+            ptr = (void*)GetProcAddress(module, proc);
+        }
+    }
+
+    return ptr;
 }
 
 void platform_swap_buffers(pal_window* window) {
