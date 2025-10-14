@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include <Windows.h>
-
+#pragma warning(disable : 4996)
 #include <glad/glad.h>
 #include "application.h"
 #include "pal.h"
@@ -33,7 +32,7 @@ static OpenglInfo get_opengl_info(void) {
             strcat(info.extensions, " ");
         }
     } else {
-        info.extensions[0] = (char*)glGetString(GL_EXTENSIONS);
+        info.extensions[0] = (char)glGetString(GL_EXTENSIONS);
     }
 
     return info;
@@ -52,12 +51,11 @@ int main() {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
 
-    OpenglInfo openglInfo = get_opengl_info();
+    //OpenglInfo openglInfo = get_opengl_info();
     pal_sound* music = pal_load_music("sine_wave.wav");
     pal_play_music(music, 0.1f);
-    pal_set_window_icon_legacy(window, "icon.ico");
-    pal_set_taskbar_icon(window, "png.png");
-    pal_set_cursor(window, "png.png", 16);
+    //pal_set_window_icon_legacy(window, "icon.ico");
+    //pal_set_taskbar_icon(window, "png.png");
     uint8_t running = pal_true;
     pal_event event;
     pal_gamepad_state state;
@@ -111,23 +109,23 @@ int main() {
         }
         // The is_* functions only work after all the events have been polled.
         // do not call this in the message loop.
-        if (is_key_pressed(PAL_W)) {
+        if (pal_is_key_pressed(PAL_W)) {
             printf("PRESSED W!\n");
         }
-        if (is_mouse_pressed(PAL_MOUSE_LEFT)) {
+        if (pal_is_mouse_pressed(PAL_MOUSE_LEFT)) {
             printf("Pressed LMB!\n");
         }
-        if (is_mouse_pressed(PAL_MOUSE_RIGHT)) {
+        if (pal_is_mouse_pressed(PAL_MOUSE_RIGHT)) {
             printf("Pressed LMB!\n");
         }
-        if (is_mouse_pressed(PAL_MOUSE_MIDDLE)) {
+        if (pal_is_mouse_pressed(PAL_MOUSE_MIDDLE)) {
             printf("Pressed LMB!\n");
         }
 
-        if (is_mouse_pressed(PAL_MOUSE_4)) {
+        if (pal_is_mouse_pressed(PAL_MOUSE_4)) {
             printf("Pressed mouse4!\n");
         }
-        if (is_mouse_pressed(PAL_MOUSE_5)) {
+        if (pal_is_mouse_pressed(PAL_MOUSE_5)) {
             printf("Pressed mouse5!\n");
         }
 

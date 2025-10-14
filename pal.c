@@ -1,3 +1,4 @@
+#pragma warning(disable : 4996)
 #include "pal.h"
 #include "stb_vorbis.h"
 #define STB_IMAGE_IMPLEMENTATION
@@ -7,7 +8,7 @@
 
 pal_event_queue g_event_queue = {0};
 
-pal_bool pal_init_eventq() {
+pal_bool pal__init_eventq() {
 
     // -- CREATE QUEUE FOR THE WINDOW --
     size_t capacity = 10000;
@@ -31,21 +32,21 @@ pal_bool pal_init_eventq() {
 }
 
 // enqueue
-void pal_eventq_push(pal_event_queue* queue, pal_event event) {
+void pal__eventq_push(pal_event_queue* queue, pal_event event) {
 	if (queue->size == queue->capacity) {
-		fprintf(stderr, "ERROR: pal_eventq_enqueue->): Event queue->size has reached capacity. Not going to enqueue->\n");
+		fprintf(stderr, "ERROR: %s(): Event queue->size has reached capacity. Not going to enqueue->\n", __func__);
 	}
 	queue->events[queue->back] = event;
 	queue->back = (queue->back + 1) % queue->capacity;
 	queue->size++;
 }
 
-pal_bool pal_eventq_free(pal_event_queue queue) {
+pal_bool pal__eventq_free(pal_event_queue queue) {
     if (queue.events) {
         free(queue.events);
         return 1;
     } else {
-        fprintf(stderr, "ERROR: pal_eventq_free(): Tried to free a queue that was already freed!\n");
+        fprintf(stderr, "ERROR: %s(): Tried to free a queue that was already freed!\n", __func__);
         queue.events = NULL;
         return 0;
     }
@@ -57,20 +58,19 @@ pal_bool pal_eventq_free(pal_event_queue queue) {
 #include "linux_x11_platform.h"
 #endif
 
-
 PALAPI void pal_init(void) {
-    pal_init_eventq();
+    pal__init_eventq();
 
-    platform_init_timer();
-    platform_init_sound();
-    if (!platform_init_gamepads()) {
-        printf("ERROR: %s: platform_init_gamepads failed\n", __func__);
+    win32_init_timer();
+    win32_init_sound();
+    if (!win32_init_gamepads()) {
+        printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
     }
 }
 
 PALAPI void pal_shutdown(void) {
-    platform_shutdown_gamepads();
-    pal_eventq_free(g_event_queue);
+    win32_shutdown_gamepads();
+    pal__eventq_free(g_event_queue);
 }
 
 /*
@@ -81,215 +81,56 @@ PALAPI void pal_shutdown(void) {
 
 */
 
-PALAPI pal_window* pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
-    return platform_create_window(width, height, window_title, window_flags);
-}
-
-PALAPI int pal_show_cursor(void) {
-    return platform_show_cursor();
-}
-
-PALAPI int pal_hide_cursor(void) {
-    return platform_hide_cursor();
-}
-
-PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
-    return platform_set_window_title(window, string);
-}
-
-PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
-    return platform_make_window_fullscreen(window);
-}
-
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
-    return platform_make_window_fullscreen_ex(window, width, height, refresh_rate);
-}
-
-PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
-    return platform_make_window_fullscreen_windowed(window);
-}
-
-PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
-    return platform_make_window_windowed(window);
-}
-
-PALAPI pal_bool pal_maximize_window(pal_window* window) {
-    return platform_maximize_window(window);
-}
-
-PALAPI pal_bool pal_minimize_window(pal_window* window) {
-    return platform_minimize_window(window);
-}
-
-PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
-    (void)platform_set_window_icon(window, image_path);
-}
-
-PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path) {
-    (void)platform_set_window_icon_legacy(window, image_path);
-}
-
-PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path) {
-    (void)platform_set_taskbar_icon(taskbar, image_path);
-}
-
-PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path) {
-    (void)platform_set_taskbar_icon_legacy(taskbar, image_path);
-}
-
-PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size, int hotspot_x, int hotspot_y) {
-    (void)platform_set_cursor(window, image_path, size, hotspot_x, hotspot_y);
-}
-
-PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
-    return platform_get_video_mode(monitor);
-}
-
-PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
-    return platform_set_video_mode(mode);
-}
-
-PALAPI pal_monitor* pal_get_primary_monitor(void) {
-    return platform_get_primary_monitor();
-}
-
-PALAPI void* pal_gl_get_proc_address(const unsigned char* proc) {
-    return platform_gl_get_proc_address(proc);
-}
 
 // Keyboard input
-PALAPI uint8_t is_key_pressed(int key) {
-
-    if (is_key_down(key) && !is_key_processed(key)) {
-        set_key_processed(key);
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-PALAPI uint8_t is_key_down(int key) {
-    return input.keys[key];
-}
-
-PALAPI uint8_t is_key_processed(int key) {
+uint8_t pal__is_key_processed(int key) {
     return input.keys_processed[key];
 }
 
-PALAPI void set_key_processed(int key) {
+void pal__set_key_processed(int key) {
     input.keys_processed[key] = 1; // Mark as processed
 }
 
-// Mouse input
-PALAPI pal_vec2 get_mouse_position(pal_window* window) {
-    return platform_get_mouse_position(window);
-}
+PALAPI uint8_t pal_is_key_pressed(int key) {
 
-PALAPI uint8_t is_mouse_pressed(int button) {
-
-    if (is_mouse_down(button) && !is_mouse_processed(button)) {
-        set_mouse_processed(button);
+    if (pal_is_key_down(key) && !pal__is_key_processed(key)) {
+        pal__set_key_processed(key);
         return 1;
     } else {
         return 0;
     }
 }
 
-PALAPI uint8_t is_mouse_down(int button) {
-    return input.mouse_buttons[button];
+PALAPI uint8_t pal_is_key_down(int key) {
+    return input.keys[key];
 }
 
-PALAPI uint8_t is_mouse_processed(int button) {
+uint8_t pal__is_mouse_processed(int button) {
     return input.mouse_buttons_processed[button];
 }
 
-PALAPI void set_mouse_processed(int button) {
+void pal__set_mouse_processed(int button) {
     input.mouse_buttons_processed[button] = 1; // Mark as processed
 }
 
-PALAPI int pal_get_gamepad_count() {
-    return platform_get_gamepad_count();
-}
-PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
-    return platform_gamepad_get_state(index, out_state);
-}
-PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
-    (void)platform_set_gamepad_vibration(controller_id, left_motor, right_motor, left_trigger, right_trigger);
-}
+PALAPI uint8_t pal_is_mouse_pressed(int button) {
 
-PALAPI void pal_stop_gamepad_vibration(int controller_id) {
-    (void)platform_stop_gamepad_vibration(controller_id);
+    if (pal_is_mouse_down(button) && !pal__is_mouse_processed(button)) {
+        pal__set_mouse_processed(button);
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
-PALAPI uint8_t pal_poll_events(pal_event* event) {
-    return platform_poll_events(event);
+PALAPI uint8_t pal_is_mouse_down(int button) {
+    return input.mouse_buttons[button];
 }
 
-PALAPI int pal_make_context_current(pal_window* window) {
-    return platform_make_context_current(window);
-}
 
-/*
-
-###########################################
-           RENDERING FUNCTIONS.
-###########################################
-
-*/
-
-PALAPI void pal_swap_buffers(pal_window* window) {
-    (void)platform_swap_buffers(window);
-}
-
-PALAPI void pal_swap_interval(int interval) {
-    (void)platform_swap_interval(interval);
-}
-/*
-
-###########################################
-           SOUND FUNCTIONS.
-###########################################
-
-*/
-
-PALAPI pal_sound* pal_load_sound(const char* filename) {
-    return platform_load_sound(filename, 0.0f);
-}
-
-PALAPI int pal_play_sound(pal_sound* sound, float volume) {
-    return platform_play_sound(sound, volume);
-}
-
-PALAPI int pal_stop_sound(pal_sound* sound) {
-    return platform_stop_sound(sound);
-}
-
-PALAPI void pal_free_sound(pal_sound* sound) {
-    platform_free_sound(sound);
-}
-
-PALAPI pal_sound* pal_load_music(const char* filename) {
-    // every loaded buffer will be this long.
-    const float buffer_length_in_seconds = 2.0f;
-    return platform_load_sound(filename, buffer_length_in_seconds);
-}
-
-PALAPI int pal_play_music(pal_sound* sound, float volume) {
-    return platform_play_music(sound, volume);
-}
-
-/*
-PALAPI int pal_stop_music(pal_sound* sound) {
-    return platform_stop_music(sound);
-}
-
-*/
-PALAPI void pal_free_music(pal_sound* sound) {
-    platform_free_music(sound);
-}
 
 // TODO: @fix This loads uncompressed .wav files only!
-static int load_wav(const char* filename, pal_sound* out, float seconds) {
+static int pal__load_wav(const char* filename, pal_sound* out, float seconds) {
     FILE* file = fopen(filename, "rb");
     static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
     static const uint8_t SUBFORMAT_PCM[16] = {
@@ -441,7 +282,7 @@ static int load_wav(const char* filename, pal_sound* out, float seconds) {
     return 1;
 }
 
-static int load_ogg(const char* filename, pal_sound* out, float seconds) {
+static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
     int channels, sample_rate;
     int error;
     stb_vorbis* vorbis = stb_vorbis_open_filename(filename, &error, NULL);
@@ -557,136 +398,6 @@ static int load_ogg(const char* filename, pal_sound* out, float seconds) {
 
     return 1;
 }
-
-/*
-
-###########################################
-              Time Functions.
-###########################################
-
-*/
-
-PALAPI pal_time pal_get_date_and_time_utc(void) {
-    return platform_get_date_and_time_utc();
-}
-PALAPI pal_time pal_get_date_and_time_local(void) {
-    return platform_get_date_and_time_local();
-}
-PALAPI pal_time pal_get_time_since_boot(void) {
-    return platform_get_time_since_boot();
-}
-
-PALAPI double pal_get_time_since_pal_started(void) {
-    return platform_get_time_since_pal_started();
-}
-
-PALAPI uint64_t pal_get_timer(void) {
-    return platform_get_timer();
-}
-
-PALAPI uint64_t pal_get_timer_frequency(void) {
-    return platform_get_timer_frequency();
-}
-
-/*
-
-###########################################
-         LIBRARY LOADING FUNCTIONS
-###########################################
-
-*/
-
-PALAPI void* load_dynamic_library(char* dll) {
-    return platform_load_dynamic_library(dll);
-}
-
-PALAPI void* load_dynamic_function(void* dll, char* func_name) {
-    return platform_load_dynamic_function(dll, func_name);
-}
-
-PALAPI uint8_t free_dynamic_library(void* dll) {
-    return platform_free_dynamic_library(dll);
-}
-
-/*
-
-###########################################
-                 File I/O
-###########################################
-
-*/
-
-PALAPI uint8_t pal_does_file_exist(const char* file_path) {
-    return platform_does_file_exist(file_path);
-}
-
-PALAPI size_t pal_get_last_read_time(const char* file_path) {
-    return platform_get_last_read_time(file_path);
-}
-
-PALAPI size_t pal_get_last_write_time(const char* file_path) {
-    return platform_get_last_write_time(file_path);
-}
-
-PALAPI size_t pal_get_file_size(const char* file_path) {
-    return platform_get_file_size(file_path);
-}
-
-PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
-    return platform_get_file_permissions(file_path);
-}
-
-PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
-    return platform_change_file_permissions(file_path, permission_flags);
-}
-
-PALAPI uint8_t pal_read_file(const char* file_path, char* buffer) {
-    return platform_read_file(file_path, buffer);
-}
-
-PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer) {
-    return platform_write_file(file_path, file_size, buffer);
-}
-
-PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
-    return platform_copy_file(original_path, copy_path);
-}
-
-PALAPI pal_file* pal_open_file(const char* file_path) {
-    return platform_open_file(file_path);
-}
-
-PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
-    return platform_read_from_open_file(file, offset, bytes_to_read, buffer);
-}
-
-PALAPI pal_bool pal_close_file(pal_file* file) {
-    return platform_close_file(file);
-}
-
-/*
-
-###########################################
-          Random Number Generator
-###########################################
-
-*/
-
-PALAPI void pal_srand(uint64_t* state, uint64_t seed) {
-    (void)platform_srand(state, seed);
-}
-
-PALAPI uint32_t pal_rand(uint64_t* state) {
-    return platform_rand(state);
-}
-
-/*
-
-###########################################
-           STRING PARSING HELPERS
-###########################################
-
-*/
 
 // clang-format off
 enum {

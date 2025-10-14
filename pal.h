@@ -452,18 +452,20 @@ typedef struct pal_event_queue {
 } pal_event_queue;
 
 #if defined(_WIN32)
-#if defined(__TINYC__)
-#define __declspec(x) __attribute__((x))
-#endif
-#if defined(BUILD_LIBTYPE_SHARED)
-#define PALAPI __declspec(dllexport) // We are building the library as a Win32 shared library (.dll)
-#elif defined(USE_LIBTYPE_SHARED)
-#define PALAPI __declspec(dllimport) // We are using the library as a Win32 shared library (.dll)
-#endif
-#else
-#if defined(BUILD_LIBTYPE_SHARED)
-#define PALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
-#endif
+	#if defined(__TINYC__)
+		#define __declspec(x) __attribute__((x))
+	#endif
+
+	#if defined(PAL_BUILD_SHARED)
+		#define PALAPI __declspec(dllexport) // We are building the library as a Win32 shared library (.dll)
+	#elif defined(PAL_USE_SHARED)
+		#define PALAPI __declspec(dllimport) // We are using the library as a Win32 shared library (.dll)
+	#endif
+
+	#else
+		#if defined(PAL_BUILD_SHARED)
+			#define PALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
+	#endif
 #endif
 
 #ifndef PALAPI
@@ -473,15 +475,9 @@ typedef struct pal_event_queue {
 //----------------------------------------------------------------------------------
 // Math Defines
 //----------------------------------------------------------------------------------
-#ifndef PI
-#define PI 3.14159265358979323846f
-#endif
-#ifndef DEG2RAD
-#define DEG2RAD (PI / 180.0f)
-#endif
-#ifndef RAD2DEG
-#define RAD2DEG (180.0f / PI)
-#endif
+#define PAL_PI 3.14159265358979323846f
+#define PAL_DEG2RAD (PAL_PI / 180.0f)
+#define PAL_RAD2DEG (180.0f / PAL_PI)
 
 typedef struct pal_vec2 {
     union {
@@ -1156,22 +1152,18 @@ PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size,
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
 PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode);
 PALAPI pal_monitor* pal_get_primary_monitor(void);
-PALAPI void* pal_gl_get_proc_address(const unsigned char* proc);
+PALAPI void* pal_gl_get_proc_address(const char* proc);
 PALAPI uint8_t pal_poll_events(pal_event* event);
 PALAPI int pal_make_context_current(pal_window* window);
 
 // Keyboard input
-PALAPI uint8_t is_key_pressed(int key);
-PALAPI uint8_t is_key_down(int key);
-PALAPI uint8_t is_key_processed(int key);
-PALAPI void set_key_processed(int key);
+PALAPI uint8_t pal_is_key_pressed(int key);
+PALAPI uint8_t pal_is_key_down(int key);
 
 // Mouse input
-PALAPI uint8_t is_mouse_pressed(int button);
-PALAPI uint8_t is_mouse_down(int button);
-PALAPI uint8_t is_mouse_processed(int button);
-PALAPI void set_mouse_processed(int button);
-PALAPI pal_vec2 get_mouse_position(pal_window* window);
+PALAPI uint8_t pal_is_mouse_pressed(int button);
+PALAPI uint8_t pal_is_mouse_down(int button);
+PALAPI pal_vec2 pal_get_mouse_position(pal_window* window);
 
 // Gamepad Input
 PALAPI int pal_get_gamepad_count(void);
@@ -1236,9 +1228,9 @@ PALAPI uint64_t pal_get_timer(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
 
 // .dll/.so/.dylib loading
-PALAPI void* load_dynamic_library(char* dll);
-PALAPI void* load_dynamic_function(void* dll, char* func_name);
-PALAPI uint8_t free_dynamic_library(void* dll);
+PALAPI void* pal_load_dynamic_library(const char* dll);
+PALAPI void* pal_load_dynamic_function(void* dll, char* func_name);
+PALAPI uint8_t pal_free_dynamic_library(void* dll);
 
 #ifdef __cplusplus
 }

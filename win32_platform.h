@@ -1,6 +1,7 @@
 ﻿#ifndef WIN32_PLATFORM_H
 #define WIN32_PLATFORM_H
 
+#define _CRT_SECURE_NO_WARNINGS
 // Windows system headers
 #include <Windows.h>
 #include <windowsx.h> // Useful macros (e.g., GET_X_LPARAM)
@@ -21,7 +22,6 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include "pal_platform.h"
 // Global function pointers
 static DWORD(WINAPI* XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE* pState) = NULL;
 static DWORD(WINAPI* XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration) = NULL;
@@ -424,10 +424,10 @@ typedef struct {
 } ICONDIRENTRY;
 #pragma pack(pop)
 
-pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
+PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
 
-    DEVMODE dm = {0};
+    DEVMODEA dm = {0};
     dm.dmSize = sizeof(dm);
     dm.dmPelsWidth = width;
     dm.dmPelsHeight = height;
@@ -445,15 +445,15 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
     return pal_true;
 }
 
-pal_bool platform_make_window_fullscreen(pal_window* window) {
+PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
-    int width = window->width;
-    int height = window->height;
-    DEVMODE dm = {0};
+    int width = (int)window->width;
+    int height = (int)window->height;
+    DEVMODEA dm = {0};
     EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
     dm.dmSize = sizeof(dm);
-    dm.dmPelsWidth = window->width;
-    dm.dmPelsHeight = window->height;
+    dm.dmPelsWidth = (DWORD)window->width;
+    dm.dmPelsHeight = (DWORD)window->height;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
     if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
@@ -467,7 +467,7 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
     return pal_true;
 }
 
-pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
+PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
     // Save the current window style and rect
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
 
@@ -489,7 +489,7 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
     return pal_true;
 }
 
-pal_bool platform_make_window_windowed(pal_window* window) {
+PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
     // Restore display mode (in case exclusive mode was used)
     ChangeDisplaySettings(NULL, 0);
 
@@ -509,7 +509,7 @@ pal_bool platform_make_window_windowed(pal_window* window) {
     return pal_true;
 }
 
-void platform_set_cursor(pal_window* window, const char* filepath, int size, int hotspot_x, int hotspot_y) {
+PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, int hotspot_x, int hotspot_y) {
     if (size <= 0)
         size = 32;
     if (size > 256)
@@ -619,7 +619,7 @@ void platform_set_cursor(pal_window* window, const char* filepath, int size, int
 // older windows versions do not support pngs being embedded in .ico
 // files directly, therefore, we have to decode the .png with stb_image
 // and only then can we use it.
-static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
+static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     FILE* file = fopen(image_path, "rb");
     if (!file)
         return NULL;
@@ -757,8 +757,8 @@ static HICON load_icon_from_file(const char* image_path, BOOL legacy) {
     return hIcon;
 }
 
-void platform_set_window_icon(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, pal_false);
+PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
+    HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
     if (hIcon) {
         SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
@@ -767,8 +767,8 @@ void platform_set_window_icon(pal_window* window, const char* image_path) {
     }
 }
 
-void platform_set_window_icon_legacy(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, pal_true);
+PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path) {
+    HICON hIcon = win32_load_icon_from_file(image_path, pal_true);
     if (hIcon) {
         SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
@@ -777,8 +777,8 @@ void platform_set_window_icon_legacy(pal_window* window, const char* image_path)
     }
 }
 
-void platform_set_taskbar_icon(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, pal_false);
+PALAPI void pal_set_taskbar_icon(pal_window* window, const char* image_path) {
+    HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
     if (hIcon) {
         SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
         SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
@@ -787,8 +787,8 @@ void platform_set_taskbar_icon(pal_window* window, const char* image_path) {
     }
 }
 
-void platform_set_taskbar_icon_legacy(pal_window* window, const char* image_path) {
-    HICON hIcon = load_icon_from_file(image_path, pal_true);
+PALAPI void pal_set_taskbar_icon_legacy(pal_window* window, const char* image_path) {
+    HICON hIcon = win32_load_icon_from_file(image_path, pal_true);
     if (hIcon) {
         SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
         SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
@@ -812,9 +812,9 @@ void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
 static void win32_update_xinput() {
 }
 
-// --- platform_get_gamepad_count ---
+// --- pal_get_gamepad_count ---
 
-int platform_get_gamepad_count(void) {
+PALAPI int pal_get_gamepad_count(void) {
     // Poll remaining XInput slots
     for (DWORD i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
 
@@ -836,7 +836,7 @@ int platform_get_gamepad_count(void) {
     return total_count;
 }
 
-int platform_init_gamepads() {
+int win32_init_gamepads() {
     //---------------
     //     Xinput
     //---------------
@@ -874,7 +874,7 @@ int platform_init_gamepads() {
     return pal_true;
 }
 
-void platform_shutdown_gamepads(void) {
+void win32_shutdown_gamepads(void) {
     if (g_xinput_dll) {
         FreeLibrary(g_xinput_dll);
         g_xinput_dll = NULL;
@@ -887,7 +887,7 @@ void platform_shutdown_gamepads(void) {
     g_has_trigger_motors = pal_false;
 }
 
-pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
+PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
     memset(out_state, 0, sizeof(pal_gamepad_state));
 
     // XInput controllers only
@@ -969,7 +969,7 @@ pal_bool platform_gamepad_get_state(int index, pal_gamepad_state* out_state) {
     return pal_true;
 }
 
-void platform_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
+PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
     if (!XInputSetState_fn || controller_id > 4)
         return;
 
@@ -998,11 +998,11 @@ void platform_set_gamepad_vibration(int controller_id, float left_motor, float r
     }
 }
 
-void platform_stop_gamepad_vibration(int controller_id) {
-    platform_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
+PALAPI void pal_stop_gamepad_vibration(int controller_id) {
+    pal_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-pal_bool platform_close_window(pal_window* window) {
+PALAPI pal_bool pal_close_window(pal_window* window) {
     return (pal_bool)DestroyWindow(window->hwnd);
 }
 
@@ -1084,7 +1084,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .y = GET_Y_LPARAM(lparam),
                 .delta_x = input.mouse_delta.x,
                 .delta_y = input.mouse_delta.y,
-                .buttons = wparam};
+                .buttons = (uint32_t)wparam};
         }; break;
 
         case WM_MOUSELEAVE:
@@ -1166,13 +1166,12 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.type = PAL_EVENT_NONE;
             return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
-    pal_eventq_push(&g_event_queue, event);
+    pal__eventq_push(&g_event_queue, event);
     return 0;
 }
 
-
-PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
-static pal_window* platform_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
+static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
+PALAPI pal_window* pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
     // these variables are only
     // used when initializing opengl.
     pal_window* fakewindow = NULL;
@@ -1190,7 +1189,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
         fakewc.lpfnWndProc = win32_fake_window_proc;
         fakewc.hInstance = GetModuleHandleA(0);
         fakewc.lpszClassName = "Win32 Fake Window Class";
-        fakewc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+        fakewc.hCursor = LoadCursorW(NULL, IDC_ARROW);
 
         RegisterClassExA(&fakewc);
 
@@ -1271,13 +1270,13 @@ static pal_window* platform_create_window(int width, int height, const char* win
     wc.lpfnWndProc = win32_window_proc;
     wc.hInstance = GetModuleHandleA(0);
     wc.lpszClassName = "Win32 Window Class";
-    wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
 
     RegisterClassExA(&wc);
 
     pal_window* window = (pal_window*)malloc(sizeof(pal_window));
-    window->width = width;
-    window->height = height;
+    window->width = (float)width;
+    window->height = (float)height;
 
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
@@ -1319,7 +1318,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
 
         LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
         if (result != DISP_CHANGE_SUCCESSFUL) {
-            MessageBox(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
+            MessageBoxA(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
         }
         window_style = WS_POPUP;
     }
@@ -1474,7 +1473,7 @@ static pal_window* platform_create_window(int width, int height, const char* win
     }
 }
 
-static int platform_make_context_current(pal_window* window) {
+PALAPI int pal_make_context_current(pal_window* window) {
     if (!wglMakeCurrent(window->hdc, window->hglrc)) {
         MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
         return 1;
@@ -1482,7 +1481,7 @@ static int platform_make_context_current(pal_window* window) {
     return 0;
 }
 
-static int platform_show_cursor(void) {
+PALAPI int pal_show_cursor(void) {
     int result = -1;
     while (result < 0) {
         result = ShowCursor(pal_true);
@@ -1490,7 +1489,7 @@ static int platform_show_cursor(void) {
     return result;
 }
 
-static int platform_hide_cursor(void) {
+PALAPI int pal_hide_cursor(void) {
     int result = 1;
     while (result >= 0) {
         result = ShowCursor(pal_false);
@@ -1498,19 +1497,20 @@ static int platform_hide_cursor(void) {
     return result;
 }
 
-static pal_bool platform_maximize_window(pal_window* window) {
+PALAPI pal_bool pal_maximize_window(pal_window* window) {
     return ShowWindow(window->hwnd, SW_MAXIMIZE);
 }
 
-static pal_bool platform_minimize_window(pal_window* window) {
+PALAPI pal_bool pal_minimize_window(pal_window* window) {
     return ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
-static uint8_t platform_poll_events(pal_event* event) {
+static int win32_get_raw_input_buffer(void);
+PALAPI uint8_t pal_poll_events(pal_event* event) {
     MSG msg = {0};
     if (!g_message_pump_drained) {
 
-        platform_get_raw_input_buffer();
+        win32_get_raw_input_buffer();
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
@@ -1536,11 +1536,11 @@ static uint8_t platform_poll_events(pal_event* event) {
     }
 }
 
-static uint8_t platform_set_window_title(pal_window* window, const char* string) {
+PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
     return SetWindowTextA(window->hwnd, string);
 }
 
-static pal_monitor* platform_get_primary_monitor(void) {
+PALAPI pal_monitor* pal_get_primary_monitor(void) {
     // The point (0, 0) is guaranteed to be on the primary monitor
     pal_monitor* monitor = malloc(sizeof(pal_monitor));
     POINT pt = {0, 0};
@@ -1548,7 +1548,7 @@ static pal_monitor* platform_get_primary_monitor(void) {
     return monitor;
 }
 
-static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
+PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     MONITORINFOEX mi = {.cbSize = sizeof(MONITORINFOEX)};
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
@@ -1565,8 +1565,8 @@ static pal_video_mode* platform_get_video_mode(pal_monitor* monitor) {
     return mode;
 }
 
-static pal_bool platform_set_video_mode(pal_video_mode* mode) {
-    DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
+PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
+    DEVMODEA dm = {.dmSize = sizeof(DEVMODEA)};
     if (mode == NULL) {
 		if (ChangeDisplaySettingsA(NULL, 0)) {
 			return 1; 
@@ -1587,7 +1587,7 @@ static pal_bool platform_set_video_mode(pal_video_mode* mode) {
 
 }
 
-static void* platform_gl_get_proc_address(const char* proc) {
+PALAPI void* pal_gl_get_proc_address(const char* proc) {
     static HMODULE opengl_module = NULL; // Cached across all calls
 
     void* p = (void*)wglGetProcAddress(proc);
@@ -1606,11 +1606,11 @@ static void* platform_gl_get_proc_address(const char* proc) {
     return p;
 }
 
-void platform_swap_buffers(pal_window* window) {
+PALAPI void pal_swap_buffers(pal_window* window) {
     SwapBuffers(window->hdc);
 }
 
-void platform_swap_interval(int interval) {
+PALAPI void pal_swap_interval(int interval) {
     wglSwapIntervalEXT(interval);
 }
 
@@ -1623,7 +1623,7 @@ typedef void (*RawInputHandler)(const RAWINPUT*);
 #define MAX_BUTTON_CAPS 32
 
 // Helper struct to hold reusable buffers
-pal_vec2 platform_get_mouse_position(pal_window* window) {
+PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
     POINT cursor_pos = {0};
     GetCursorPos(&cursor_pos);
 
@@ -1750,7 +1750,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         input.keys[pal_key] = 1;
     }
 
-    pal_eventq_push(&g_event_queue, event);
+    pal__eventq_push(&g_event_queue, event);
 }
 
 void win32_handle_mouse(const RAWINPUT* raw) {
@@ -1777,7 +1777,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .buttons = g_cached_mouse_buttons,
         };
         // Enqueue motion event
-        pal_eventq_push(&g_event_queue, event);
+        pal__eventq_push(&g_event_queue, event);
     }
     
     // Handle mouse wheel
@@ -1790,11 +1790,11 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .mouse_x = point.x,
             .mouse_y = point.y,
             .x = 0,
-            .y = wheel_delta / WHEEL_DELTA, // Normalize to standard units
+            .y = (float)(wheel_delta / WHEEL_DELTA), // Normalize to standard units
             .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
         };
         // Enqueue wheel event
-        pal_eventq_push(&g_event_queue, event);
+        pal__eventq_push(&g_event_queue, event);
     }
     
     // Handle horizontal wheel (if supported)
@@ -1806,12 +1806,12 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.wheel = (pal_mouse_wheel_event) {
             .mouse_x = point.x,
             .mouse_y = point.y,
-            .x = hwheel_delta / WHEEL_DELTA,  // Normalize to standard units
+            .x = (float)(hwheel_delta / WHEEL_DELTA),  // Normalize to standard units
             .y = 0,
             .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
         };
         // Enqueue horizontal wheel event
-        pal_eventq_push(&g_event_queue, event);
+        pal__eventq_push(&g_event_queue, event);
     }
     // Handle button events
     for (int i = 0; i < 5; i++) { // Only check first 5 buttons (left, right, middle, x1, x2)
@@ -1830,7 +1830,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .modifiers = g_cached_modifiers,
                 .button = win32_button_to_pal_button[i]
             };
-			pal_eventq_push(&g_event_queue, event);
+			pal__eventq_push(&g_event_queue, event);
             input.mouse_buttons[pal_button] = 1;
         } else if (up) {
             g_cached_mouse_buttons &= ~(1 << i); // Clear bit
@@ -1843,7 +1843,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .modifiers = g_cached_modifiers,
                 .button = win32_button_to_pal_button[i]
             };
-			pal_eventq_push(&g_event_queue, event);
+			pal__eventq_push(&g_event_queue, event);
             input.mouse_buttons[pal_button] = 0;
             input.mouse_buttons_processed[pal_button] = 0;
         }
@@ -1863,13 +1863,13 @@ RawInputHandler Win32InputHandlers[3] = {
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
-static BYTE g_rawInputBuffer[RAW_INPUT_BUFFER_CAPACITY];
+static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
 
-static int platform_get_raw_input_buffer(void) {
+static int win32_get_raw_input_buffer(void) {
     UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
-    UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_rawInputBuffer, &bufferSize, sizeof(RAWINPUTHEADER));
+    UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &bufferSize, sizeof(RAWINPUTHEADER));
 
-    PRAWINPUT raw = (PRAWINPUT)g_rawInputBuffer;
+    PRAWINPUT raw = (PRAWINPUT)g_raw_input_buffer;
     for (UINT i = 0; i < inputEventCount; ++i) {
         UINT type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
@@ -1888,12 +1888,12 @@ static int platform_get_raw_input_buffer(void) {
 // File Functions.
 //----------------------------------------------------------------------------------
 
-uint8_t platform_does_file_exist(const char* file_path) {
+PALAPI uint8_t pal_does_file_exist(const char* file_path) {
     DWORD attrs = GetFileAttributesA(file_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-size_t platform_get_file_size(const char* file_path) {
+PALAPI size_t pal_get_file_size(const char* file_path) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -1913,7 +1913,7 @@ size_t platform_get_file_size(const char* file_path) {
     return 0;
 }
 
-size_t platform_get_last_write_time(const char* file) {
+PALAPI size_t pal_get_last_write_time(const char* file) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
@@ -1922,7 +1922,7 @@ size_t platform_get_last_write_time(const char* file) {
            fileInfo.ftLastWriteTime.dwLowDateTime;
 }
 
-size_t platform_get_last_read_time(const char* file) {
+PALAPI size_t pal_get_last_read_time(const char* file) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
@@ -1931,7 +1931,7 @@ size_t platform_get_last_read_time(const char* file) {
            fileInfo.ftLastAccessTime.dwLowDateTime;
 }
 
-uint32_t platform_get_file_permissions(const char* file_path) {
+PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     if (!file_path) {
         return 0;
     }
@@ -1994,7 +1994,7 @@ uint32_t platform_get_file_permissions(const char* file_path) {
     return permissions;
 }
 
-uint8_t platform_change_file_permissions(const char* file_path, uint32_t permission_flags) {
+PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
     if (!file_path) {
         return 0; // Invalid path
     }
@@ -2040,7 +2040,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
     CloseHandle(hToken);
 
     // Initialize an EXPLICIT_ACCESS structure for the new permissions
-    EXPLICIT_ACCESS ea = {0};
+    EXPLICIT_ACCESSA ea = {0};
     ea.grfAccessPermissions = dwAccessRights;
     ea.grfAccessMode = SET_ACCESS;
     ea.grfInheritance = NO_INHERITANCE;
@@ -2052,7 +2052,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
     PACL pOldDACL = NULL, pNewDACL = NULL;
     PSECURITY_DESCRIPTOR pSD = NULL;
 
-    DWORD dwRes = GetNamedSecurityInfo(
+    DWORD dwRes = GetNamedSecurityInfoA(
         (LPSTR)file_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
@@ -2068,7 +2068,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
     }
 
     // Create a new DACL with the updated permissions
-    dwRes = SetEntriesInAcl(1, &ea, pOldDACL, &pNewDACL);
+    dwRes = SetEntriesInAclA(1, &ea, pOldDACL, &pNewDACL);
     if (dwRes != ERROR_SUCCESS) {
         LocalFree(pSD);
         free(pTokenUser);
@@ -2076,7 +2076,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
     }
 
     // Apply the new DACL to the file
-    dwRes = SetNamedSecurityInfo(
+    dwRes = SetNamedSecurityInfoA(
         (LPSTR)file_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
@@ -2093,7 +2093,7 @@ uint8_t platform_change_file_permissions(const char* file_path, uint32_t permiss
     return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
-uint8_t platform_read_file(const char* file_path, char* buffer) {
+PALAPI uint8_t pal_read_file(const char* file_path, char* buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -2134,7 +2134,8 @@ uint8_t platform_read_file(const char* file_path, char* buffer) {
     return 0;
 }
 
-uint8_t platform_write_file(const char* file_path, size_t file_size, const char* buffer) {
+
+PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_WRITE,
@@ -2169,11 +2170,11 @@ uint8_t platform_write_file(const char* file_path, size_t file_size, const char*
     return 0;
 }
 
-uint8_t platform_copy_file(const char* original_path, const char* copy_path) {
+PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
     return CopyFileA(original_path, copy_path, pal_false) ? 0 : 1;
 }
 
-pal_file* platform_open_file(const char* file_path) {
+PALAPI pal_file* pal_open_file(const char* file_path) {
     pal_file* file = (pal_file*)malloc(sizeof(pal_file));
     file->handle = CreateFileA(
         file_path,             // File name
@@ -2194,7 +2195,7 @@ pal_file* platform_open_file(const char* file_path) {
     return file;
 }
 
-pal_bool platform_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
+PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
     if (!file || file->handle == INVALID_HANDLE_VALUE || !buffer) {
         return 0;
     }
@@ -2212,7 +2213,7 @@ pal_bool platform_read_from_open_file(pal_file* file, size_t offset, size_t byte
         if ((DWORD)((bytes_to_read - total_read) > MAXDWORD)) {
             to_read = MAXDWORD;
         } else {
-            to_read = (bytes_to_read - total_read);
+            to_read = (DWORD)(bytes_to_read - total_read);
         }
         DWORD bytesRead = 0;
         BOOL success = ReadFile(file->handle, buffer + total_read, to_read, &bytesRead, NULL);
@@ -2225,7 +2226,7 @@ pal_bool platform_read_from_open_file(pal_file* file, size_t offset, size_t byte
     return 1;
 }
 
-pal_bool platform_close_file(pal_file* file) {
+PALAPI pal_bool pal_close_file(pal_file* file) {
     if (!CloseHandle(file->handle)) {
         return 0;
     }
@@ -2237,14 +2238,14 @@ pal_bool platform_close_file(pal_file* file) {
 // Random Number Generator.
 //----------------------------------------------------------------------------------
 
-void platform_srand(uint64_t* state, uint64_t seed) {
+PALAPI void pal_srand(uint64_t* state, uint64_t seed) {
     if (seed == 0) {
         seed = 1; // Avoid zero state which would produce all zeros
     }
     *state = seed;
 }
 
-uint32_t platform_rand(uint64_t* state) {
+PALAPI uint32_t pal_rand(uint64_t* state) {
     // SDL's well-tested LCG constants:
     // - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs)
     // - Increment: 0x05 (small odd number, generates smaller ARM code)
@@ -2259,7 +2260,7 @@ uint32_t platform_rand(uint64_t* state) {
 //----------------------------------------------------------------------------------
 // Sound Functions.
 //----------------------------------------------------------------------------------
-int platform_init_sound(void) {
+int win32_init_sound(void) {
     int hr;
 
     // Initialize COM (needed for XAudio2)
@@ -2560,7 +2561,7 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnVoiceError,
 };
 
-static int platform_play_music(pal_sound* sound, float volume) {
+PALAPI int pal_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
         return E_FAIL;
@@ -2637,9 +2638,21 @@ static int platform_play_music(pal_sound* sound, float volume) {
     return S_OK;
 }
 
-static int load_wav(const char* filename, pal_sound* out, float seconds);
-static int load_ogg(const char* filename, pal_sound* out, float seconds);
-pal_sound* platform_load_sound(const char* filename, float seconds) {
+static int pal__load_wav(const char* filename, pal_sound* out, float seconds);
+static int pal__load_ogg(const char* filename, pal_sound* out, float seconds);
+
+pal_sound* win32_load_sound(const char* filename, float seconds);
+PALAPI pal_sound* pal_load_music(const char* filename) {
+    // every loaded buffer will be this long.
+    const float buffer_length_in_seconds = 2.0f;
+    return win32_load_sound(filename, buffer_length_in_seconds);
+}
+
+PALAPI pal_sound* pal_load_sound(const char* filename) {
+    return win32_load_sound(filename, 0.0f);
+}
+
+pal_sound* win32_load_sound(const char* filename, float seconds) {
     FILE* file = fopen(filename, "rb");
 
     if (!file)
@@ -2663,17 +2676,17 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
 
     if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
         fclose(file);
-        result = load_wav(filename, sound, seconds);
+        result = pal__load_wav(filename, sound, seconds);
     } else if (memcmp(header, "OggS", 4) == 0) {
         fclose(file);
-        result = load_ogg(filename, sound, seconds);
+        result = pal__load_ogg(filename, sound, seconds);
     } else {
         fclose(file);
         free(sound);
         return NULL; // unsupported format
     }
 
-    // we expect load_wav and load_ogg to return 1 for success.
+    // we expect pal__load_wav and pal__load_ogg to return 1 for success.
     if (result != 1) {
         free(sound);
         return NULL;
@@ -2799,7 +2812,7 @@ pal_sound* platform_load_sound(const char* filename, float seconds) {
     return sound;
 }
 
-static void platform_free_music(pal_sound* sound) {
+PALAPI void pal_free_music(pal_sound* sound) {
     if (sound->is_streaming) {
         sound->stream_finished = 1;
     }
@@ -2827,7 +2840,7 @@ static void platform_free_music(pal_sound* sound) {
     free(sound);
 }
 
-static int platform_play_sound(pal_sound* sound, float volume) {
+PALAPI int pal_play_sound(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         return E_FAIL;
     }
@@ -2857,7 +2870,7 @@ static int platform_play_sound(pal_sound* sound, float volume) {
     return S_OK;
 }
 
-void platform_free_sound(pal_sound* sound) {
+PALAPI void pal_free_sound(pal_sound* sound) {
     if (sound) {
         if (sound->source_voice) {
             sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
@@ -2875,7 +2888,7 @@ void platform_free_sound(pal_sound* sound) {
     }
 }
 
-int platform_stop_sound(pal_sound* sound) {
+PALAPI int pal_stop_sound(pal_sound* sound) {
     HRESULT hr = 0;
     hr = sound->source_voice->lpVtbl->Stop(sound->source_voice, 0, XAUDIO2_COMMIT_NOW);
 
@@ -2921,7 +2934,7 @@ typedef struct _KUSER_SHARED_DATA {
 #define KUSER_SHARED_DATA_ADDRESS 0x7FFE0000
 static uint64_t g_app_start_time = 0;
 
-static inline pal_time platform_get_date_and_time_utc(void) {
+PALAPI pal_time pal_get_date_and_time_utc(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
     LARGE_INTEGER time = {0};
     do {
@@ -2981,7 +2994,7 @@ static inline pal_time platform_get_date_and_time_utc(void) {
     return result;
 }
 
-static inline pal_time platform_get_date_and_time_local(void) {
+PALAPI pal_time pal_get_date_and_time_local(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
 
     LARGE_INTEGER system_time = {0};
@@ -3050,7 +3063,7 @@ static inline pal_time platform_get_date_and_time_local(void) {
     return result;
 }
 
-static inline pal_time platform_get_time_since_boot(void) {
+PALAPI pal_time pal_get_time_since_boot(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
     LARGE_INTEGER time = {0};
 
@@ -3095,14 +3108,14 @@ static inline pal_time platform_get_time_since_boot(void) {
     return result;
 }
 
-void platform_init_timer(void) {
+void win32_init_timer(void) {
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
     g_app_start_time = counter.QuadPart;
     assert(g_app_start_time != 0);
 }
 
-static double platform_get_time_since_pal_started(void) {
+PALAPI double pal_get_time_since_pal_started(void) {
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
 
@@ -3122,14 +3135,15 @@ static double platform_get_time_since_pal_started(void) {
     return (double)elapsed_ticks / (double)frequency;
 }
 
-static uint64_t platform_get_timer(void) {
+PALAPI uint64_t pal_get_timer(void) {
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
     return counter.QuadPart;
 }
+
 // Gets the frequency of the raw timer that is used by pal, not including any time the computer
 // is sleeping while pal is running.
-static uint64_t platform_get_timer_frequency(void) {
+PALAPI uint64_t pal_get_timer_frequency(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
     uint64_t frequency = kuser->QpcFrequency;
     // Fallback to API if frequency is 0 (older Windows versions)
@@ -3145,19 +3159,19 @@ static uint64_t platform_get_timer_frequency(void) {
 //----------------------------------------------------------------------------------
 // Dynamic Library Functions.
 //----------------------------------------------------------------------------------
-void* platform_load_dynamic_library(char* dll) {
+PALAPI void* pal_load_dynamic_library(const char* dll) {
     HMODULE result = LoadLibraryA(dll);
     assert(result);
     return result;
 }
 
-void* platform_load_dynamic_function(void* dll, char* func_name) {
+PALAPI void* pal_load_dynamic_function(void* dll, char* func_name) {
     FARPROC proc = GetProcAddress(dll, func_name);
     assert(proc);
     return (void*)proc;
 }
 
-uint8_t platform_free_dynamic_library(void* dll) {
+PALAPI uint8_t pal_free_dynamic_library(void* dll) {
     uint8_t free_result = FreeLibrary(dll);
     assert(free_result);
     return (uint8_t)free_result;

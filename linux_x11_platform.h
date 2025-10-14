@@ -21,7 +21,7 @@
 // dlopen/dlsym/dlclose
 #include <dlfcn.h>
 
-pal_window platform_create_window() {
+pal_window pal_create_window() {
     pal_window window = {0};
     // 1. Connect to X11 and get the XCB connection
     window.display = XOpenDisplay(NULL);
@@ -79,7 +79,7 @@ pal_window platform_create_window() {
 }
 
 // Helper to intern an atom
-static xcb_atom_t get_atom(xcb_connection_t* connection, const char* name) {
+static xcb_atom_t linux_x11_get_atom(xcb_connection_t* connection, const char* name) {
     xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 0, strlen(name), name);
     xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, NULL);
     if (!reply)
@@ -90,10 +90,10 @@ static xcb_atom_t get_atom(xcb_connection_t* connection, const char* name) {
 }
 
 // Request fullscreen at a specific resolution (doesn't change refresh rate)
-pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
+pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
     (void)refresh_rate; // Ignored unless using XRandR
-    xcb_atom_t wm_state = get_atom(window->connection, "_NET_WM_STATE");
-    xcb_atom_t fullscreen = get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
+    xcb_atom_t wm_state = linux_x11_get_atom(window->connection, "_NET_WM_STATE");
+    xcb_atom_t fullscreen = linux_x11_get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
     if (wm_state == XCB_ATOM_NONE || fullscreen == XCB_ATOM_NONE)
         return pal_false;
 
@@ -119,9 +119,9 @@ pal_bool platform_make_window_fullscreen_ex(pal_window* window, int width, int h
 }
 
 // Request fullscreen covering the monitor without changing mode
-pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
-    xcb_atom_t wm_state = get_atom(window->connection, "_NET_WM_STATE");
-    xcb_atom_t fullscreen = get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
+pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
+    xcb_atom_t wm_state = linux_x11_get_atom(window->connection, "_NET_WM_STATE");
+    xcb_atom_t fullscreen = linux_x11_get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
     if (wm_state == XCB_ATOM_NONE || fullscreen == XCB_ATOM_NONE)
         return pal_false;
 
@@ -148,9 +148,9 @@ pal_bool platform_make_window_fullscreen_windowed(pal_window* window) {
 }
 
 // Remove fullscreen request (return to windowed mode)
-pal_bool platform_make_window_windowed(pal_window* window) {
-    xcb_atom_t wm_state = get_atom(window->connection, "_NET_WM_STATE");
-    xcb_atom_t fullscreen = get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
+pal_bool pal_make_window_windowed(pal_window* window) {
+    xcb_atom_t wm_state = linux_x11_get_atom(window->connection, "_NET_WM_STATE");
+    xcb_atom_t fullscreen = linux_x11_get_atom(window->connection, "_NET_WM_STATE_FULLSCREEN");
     if (wm_state == XCB_ATOM_NONE || fullscreen == XCB_ATOM_NONE)
         return pal_false;
 
@@ -175,7 +175,7 @@ pal_bool platform_make_window_windowed(pal_window* window) {
 }
 
 // Fullscreen using current monitor resolution (like EnumDisplaySettings)
-pal_bool platform_make_window_fullscreen(pal_window* window) {
+pal_bool pal_make_window_fullscreen(pal_window* window) {
     xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(window->connection)).data;
     if (!screen)
         return pal_false;
@@ -183,17 +183,17 @@ pal_bool platform_make_window_fullscreen(pal_window* window) {
     int width = screen->width_in_pixels;
     int height = screen->height_in_pixels;
 
-    return platform_make_window_fullscreen_ex(window, width, height, 0);
+    return pal_make_window_fullscreen_ex(window, width, height, 0);
 }
-void platform_make_context_current(pal_window window) {
+void pal_make_context_current(pal_window window) {
     glXMakeCurrent(window.display, window.window, window.ctx);
 }
 
-void platform_swap_buffers(pal_window* window) {
+void pal_swap_buffers(pal_window* window) {
     glXSwapBuffers(window->display, window->window);
 }
 
-static int platform_make_context_current(pal_window* window) {
+static int pal_make_context_current(pal_window* window) {
     if (!glXMakeCurrent(window->display, window->window, window->context)) {
         fprintf(stderr, "glXMakeCurrent() failed.\n");
         return 1;
@@ -201,7 +201,7 @@ static int platform_make_context_current(pal_window* window) {
     return 0;
 }
 
-static int platform_show_cursor(pal_window* window) {
+static int pal_show_cursor(pal_window* window) {
     int event_base, error_base;
     if (!XFixesQueryExtension(window->display, &event_base, &error_base)) {
         fprintf(stderr, "XFixes extension not available.\n");
@@ -213,7 +213,7 @@ static int platform_show_cursor(pal_window* window) {
     return 0;
 }
 
-static int platform_hide_cursor(pal_window* window) {
+static int pal_hide_cursor(pal_window* window) {
     int event_base, error_base;
     if (!XFixesQueryExtension(window->display, &event_base, &error_base)) {
         fprintf(stderr, "XFixes extension not available.\n");
@@ -225,7 +225,7 @@ static int platform_hide_cursor(pal_window* window) {
     return 0;
 }
 
-uint8_t platform_poll_events(pal_event* event, pal_window* window) {
+uint8_t pal_poll_events(pal_event* event, pal_window* window) {
     xcb_generic_event_t* event;
     while ((event = xcb_poll_for_event(window->xcb_conn))) {
         switch (event->response_type & ~0x80) {
@@ -237,14 +237,14 @@ uint8_t platform_poll_events(pal_event* event, pal_window* window) {
 }
 
 uint8_t pal_poll_events(pal_window* window) {
-    platform_poll_events(window);
+    pal_poll_events(window);
 }
 
-void* platform_gl_get_proc_address(const char* procname) {
+void* pal_gl_get_proc_address(const char* procname) {
     return glXGetProcAddress(procname);
 }
 
-void* platform_load_dynamic_library(const char* so_name) {
+void* pal_load_dynamic_library(const char* so_name) {
     void* lib = dlopen(so_name, RTLD_NOW | RTLD_LOCAL);
     if (!lib) {
         fprintf(stderr, "dlopen failed: %s\n", dlerror());
@@ -253,7 +253,7 @@ void* platform_load_dynamic_library(const char* so_name) {
     return lib;
 }
 
-void* platform_load_dynamic_function(void* so_handle, const char* func_name) {
+void* pal_load_dynamic_function(void* so_handle, const char* func_name) {
     dlerror(); // Clear existing errors
     void* symbol = dlsym(so_handle, func_name);
     const char* error = dlerror();
@@ -264,7 +264,7 @@ void* platform_load_dynamic_function(void* so_handle, const char* func_name) {
     return symbol;
 }
 
-uint8_t platform_free_dynamic_library(void* so_handle) {
+uint8_t pal_free_dynamic_library(void* so_handle) {
     int result = dlclose(so_handle);
     if (result != 0) {
         fprintf(stderr, "dlclose failed: %s\n", dlerror());
