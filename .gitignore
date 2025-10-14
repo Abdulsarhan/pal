@@ -8,6 +8,8 @@
 *.vcxproj.filters
 *.hint
 
+#unfinished documentation
+docs/*
 # User-specific files
 *.rsuser
 *.suo

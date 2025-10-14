@@ -13,7 +13,7 @@ typedef struct pal_video_mode {
 } pal_video_mode;
 
 typedef struct pal_file {
-    void* handle;
+    void *handle;
 } pal_file;
 
 typedef struct {
@@ -342,8 +342,8 @@ typedef struct pal_quit_event {
 
 typedef struct pal_user_event {
     int32_t code;
-    void* data1;
-    void* data2;
+    void *data1;
+    void *data2;
 } pal_user_event;
 
 typedef struct pal_touch_finger_event {
@@ -389,12 +389,12 @@ typedef struct pal_render_event {
 } pal_render_event;
 
 typedef struct pal_drop_event {
-    const char** paths;
+    const char **paths;
     int32_t count;
 } pal_drop_event;
 
 typedef struct pal_clipboard_event {
-    const char* text;
+    const char *text;
 } pal_clipboard_event;
 
 typedef struct pal_event {
@@ -1134,27 +1134,27 @@ extern "C" {
 
 PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
-PALAPI pal_window* pal_create_window(int width, int height, const char* windowTitle, uint64_t window_flags);
+PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
 PALAPI int pal_show_cursor(void);
 PALAPI int pal_hide_cursor(void);
-PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string);
-PALAPI pal_bool pal_make_window_fullscreen(pal_window* window);
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate);
-PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window);
-PALAPI pal_bool pal_make_window_windowed(pal_window* window);
-PALAPI pal_bool pal_maximize_window(pal_window* window);
-PALAPI pal_bool pal_minimize_window(pal_window* window);
-PALAPI void pal_set_window_icon(pal_window* window, const char* image_path);
-PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path);
-PALAPI void pal_set_taskbar_icon(pal_window* taskbar, const char* image_path);
-PALAPI void pal_set_taskbar_icon_legacy(pal_window* taskbar, const char* image_path);
-PALAPI void pal_set_cursor(pal_window* window, const char* image_path, int size, int hotspot_x, int hotspot_y);
-PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor);
-PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode);
-PALAPI pal_monitor* pal_get_primary_monitor(void);
-PALAPI void* pal_gl_get_proc_address(const char* proc);
-PALAPI uint8_t pal_poll_events(pal_event* event);
-PALAPI int pal_make_context_current(pal_window* window);
+PALAPI uint8_t pal_set_window_title(pal_window *window, const char *string);
+PALAPI pal_bool pal_make_window_fullscreen(pal_window *window);
+PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
+PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window);
+PALAPI pal_bool pal_make_window_windowed(pal_window *window);
+PALAPI pal_bool pal_maximize_window(pal_window *window);
+PALAPI pal_bool pal_minimize_window(pal_window *window);
+PALAPI void pal_set_window_icon(pal_window *window, const char *image_path);
+PALAPI void pal_set_window_icon_legacy(pal_window *window, const char *image_path);
+PALAPI void pal_set_taskbar_icon(pal_window *taskbar, const char *image_path);
+PALAPI void pal_set_taskbar_icon_legacy(pal_window *taskbar, const char *image_path);
+PALAPI void pal_set_cursor(pal_window *window, const char *image_path, int size, int hotspot_x, int hotspot_y);
+PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor);
+PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode);
+PALAPI pal_monitor *pal_get_primary_monitor(void);
+PALAPI void *pal_gl_get_proc_address(const char *proc);
+PALAPI uint8_t pal_poll_events(pal_event *event);
+PALAPI int pal_make_context_current(pal_window *window);
 
 // Keyboard input
 PALAPI uint8_t pal_is_key_pressed(int key);
@@ -1163,48 +1163,65 @@ PALAPI uint8_t pal_is_key_down(int key);
 // Mouse input
 PALAPI uint8_t pal_is_mouse_pressed(int button);
 PALAPI uint8_t pal_is_mouse_down(int button);
-PALAPI pal_vec2 pal_get_mouse_position(pal_window* window);
+PALAPI pal_vec2 pal_get_mouse_position(pal_window *window);
 
 // Gamepad Input
 PALAPI int pal_get_gamepad_count(void);
-PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state);
+PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state);
 PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger);
 PALAPI void pal_stop_gamepad_vibration(int controller_id);
 
 // Rendering stuff.
-PALAPI void pal_swap_buffers(pal_window* window);
+PALAPI void pal_swap_buffers(pal_window *window);
 PALAPI void pal_swap_interval(int interval);
 
 // Sound
-PALAPI pal_sound* pal_load_sound(const char* filename);
-PALAPI int pal_play_sound(pal_sound* sound, float volume);
-PALAPI int pal_stop_sound(pal_sound* sound);
-PALAPI void pal_free_sound(pal_sound* sound);
+PALAPI pal_sound *pal_load_sound(const char *filename);
+PALAPI int pal_play_sound(pal_sound *sound, float volume);
+PALAPI int pal_stop_sound(pal_sound *sound);
+PALAPI void pal_free_sound(pal_sound *sound);
 
-PALAPI pal_sound* pal_load_music(const char* filename);
-PALAPI int pal_play_music(pal_sound* sound, float volume);
-PALAPI int pal_stop_music(pal_sound* sound);
-PALAPI void pal_free_music(pal_sound* sound);
+PALAPI pal_sound *pal_load_music(const char *filename);
+PALAPI int pal_play_music(pal_sound *sound, float volume);
+PALAPI int pal_stop_music(pal_sound *sound); // unimplemented
+PALAPI void pal_free_music(pal_sound *sound);
 
 // File I/O
-PALAPI uint8_t pal_does_file_exist(const char* file_path);
-PALAPI size_t pal_get_last_write_time(const char* file);
-PALAPI size_t pal_get_last_read_time(const char* file);
-PALAPI size_t pal_get_file_size(const char* file_path);
-PALAPI uint32_t pal_get_file_permissions(const char* file_path);
-PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags);
-PALAPI uint8_t pal_read_file(const char* file_path, char* buffer);
-PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer);
-PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path);
+PALAPI uint8_t pal_does_file_exist(const char *file_path);
+PALAPI size_t pal_get_last_write_time(const char *file);
+PALAPI size_t pal_get_last_read_time(const char *file);
+PALAPI size_t pal_get_file_size(const char *file_path);
+PALAPI uint32_t pal_get_file_permissions(const char *file_path);
+PALAPI uint8_t pal_change_file_permissions(const char *file_path, uint32_t permission_flags);
+PALAPI uint8_t pal_read_file(const char *file_path, char *buffer);
+PALAPI uint8_t pal_write_file(const char *file_path, size_t file_size, char *buffer);
+PALAPI uint8_t pal_copy_file(const char *original_path, const char *copy_path);
 
 // Open File I/O
-PALAPI pal_file* pal_open_file(const char* file_path);
-PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer);
-PALAPI pal_bool pal_close_file(pal_file* file);
+PALAPI pal_file *pal_open_file(const char *file_path);
+PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer);
+PALAPI pal_bool pal_close_file(pal_file *file);
 
 // Random Number Generation
-PALAPI void pal_srand(uint64_t* state, uint64_t seed);
-PALAPI uint32_t pal_rand(uint64_t* state);
+PALAPI void pal_srand(uint64_t *state, uint64_t seed);
+PALAPI uint32_t pal_rand(uint64_t *state);
+
+// Clip board
+PALAPI void pal_clipboard_set(const char *text);
+PALAPI char *pal_clipboard_get(void);
+
+// File Requester
+PALAPI void pal_requester_save(char **types, uint32_t type_count, void *id);
+PALAPI void pal_requester_load(char **types, uint32_t type_count, void *id);
+PALAPI char *pal_requester_save_get(void *id);
+PALAPI char *pal_requester_load_get(void *id);
+
+// URL launch
+PALAPI void pal_url_launch(char *url);
+
+// Mouse Warp
+void pal_mouse_warp(int x, int y);
+void pal_mouse_warp_relative(int dx, int dy);
 
 // File Parsing
 PALAPI uint8_t pal_is_uppercase(char ch);
@@ -1217,7 +1234,7 @@ PALAPI uint8_t pal_is_underscore(char ch);
 PALAPI uint8_t pal_is_hyphen(char ch);
 PALAPI uint8_t pal_is_dot(char ch);
 PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
-PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2);
+PALAPI uint8_t pal_are_strings_equal(int count, const char *str1, const char *str2);
 
 // Time functions
 PALAPI pal_time pal_get_date_and_time_utc(void);
@@ -1228,9 +1245,9 @@ PALAPI uint64_t pal_get_timer(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
 
 // .dll/.so/.dylib loading
-PALAPI void* pal_load_dynamic_library(const char* dll);
-PALAPI void* pal_load_dynamic_function(void* dll, char* func_name);
-PALAPI uint8_t pal_free_dynamic_library(void* dll);
+PALAPI void *pal_load_dynamic_library(const char *dll);
+PALAPI void *pal_load_dynamic_function(void *dll, char *func_name);
+PALAPI pal_bool pal_free_dynamic_library(void *dll);
 
 #ifdef __cplusplus
 }

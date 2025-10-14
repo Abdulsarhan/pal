@@ -1171,10 +1171,10 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 }
 
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
-PALAPI pal_window* pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
+PALAPI pal_window *pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
     // these variables are only
     // used when initializing opengl.
-    pal_window* fakewindow = NULL;
+    pal_window *fakewindow = NULL;
     HGLRC fakeRC = 0;
     PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
@@ -1274,7 +1274,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
 
     RegisterClassExA(&wc);
 
-    pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    pal_window *window = (pal_window*)malloc(sizeof(pal_window));
     window->width = (float)width;
     window->height = (float)height;
 
@@ -1473,7 +1473,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
     }
 }
 
-PALAPI int pal_make_context_current(pal_window* window) {
+PALAPI int pal_make_context_current(pal_window *window) {
     if (!wglMakeCurrent(window->hdc, window->hglrc)) {
         MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
         return 1;
@@ -1497,16 +1497,16 @@ PALAPI int pal_hide_cursor(void) {
     return result;
 }
 
-PALAPI pal_bool pal_maximize_window(pal_window* window) {
+PALAPI pal_bool pal_maximize_window(pal_window *window) {
     return ShowWindow(window->hwnd, SW_MAXIMIZE);
 }
 
-PALAPI pal_bool pal_minimize_window(pal_window* window) {
+PALAPI pal_bool pal_minimize_window(pal_window *window) {
     return ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
 static int win32_get_raw_input_buffer(void);
-PALAPI uint8_t pal_poll_events(pal_event* event) {
+PALAPI uint8_t pal_poll_events(pal_event *event) {
     MSG msg = {0};
     if (!g_message_pump_drained) {
 
@@ -1518,7 +1518,7 @@ PALAPI uint8_t pal_poll_events(pal_event* event) {
         g_message_pump_drained = pal_true;
     }
 
-    pal_event_queue* queue = &g_event_queue;
+    pal_event_queue *queue = &g_event_queue;
 
     if (queue->size) { // if queue is not empty,
 
@@ -1536,19 +1536,19 @@ PALAPI uint8_t pal_poll_events(pal_event* event) {
     }
 }
 
-PALAPI uint8_t pal_set_window_title(pal_window* window, const char* string) {
+PALAPI uint8_t pal_set_window_title(pal_window *window, const char *string) {
     return SetWindowTextA(window->hwnd, string);
 }
 
-PALAPI pal_monitor* pal_get_primary_monitor(void) {
+PALAPI pal_monitor *pal_get_primary_monitor(void) {
     // The point (0, 0) is guaranteed to be on the primary monitor
-    pal_monitor* monitor = malloc(sizeof(pal_monitor));
+    pal_monitor *monitor = malloc(sizeof(pal_monitor));
     POINT pt = {0, 0};
     monitor->handle = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
     return monitor;
 }
 
-PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
+PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
     MONITORINFOEX mi = {.cbSize = sizeof(MONITORINFOEX)};
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
@@ -1556,7 +1556,7 @@ PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
     if (!EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
         return 0;
-    pal_video_mode* mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
+    pal_video_mode *mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
     mode->width = dm.dmPelsWidth;
     mode->height = dm.dmPelsHeight;
     mode->refresh_rate = dm.dmDisplayFrequency;
@@ -1565,7 +1565,7 @@ PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     return mode;
 }
 
-PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
+PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
     DEVMODEA dm = {.dmSize = sizeof(DEVMODEA)};
     if (mode == NULL) {
 		if (ChangeDisplaySettingsA(NULL, 0)) {
@@ -1587,10 +1587,10 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
 
 }
 
-PALAPI void* pal_gl_get_proc_address(const char* proc) {
+PALAPI void *pal_gl_get_proc_address(const char *proc) {
     static HMODULE opengl_module = NULL; // Cached across all calls
 
-    void* p = (void*)wglGetProcAddress(proc);
+    void *p = (void*)wglGetProcAddress(proc);
     if (p == NULL || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
         // Load opengl32.dll once on first call, reuse handle afterwards
         if (opengl_module == NULL) {
@@ -1606,7 +1606,7 @@ PALAPI void* pal_gl_get_proc_address(const char* proc) {
     return p;
 }
 
-PALAPI void pal_swap_buffers(pal_window* window) {
+PALAPI void pal_swap_buffers(pal_window *window) {
     SwapBuffers(window->hdc);
 }
 
@@ -1623,7 +1623,7 @@ typedef void (*RawInputHandler)(const RAWINPUT*);
 #define MAX_BUTTON_CAPS 32
 
 // Helper struct to hold reusable buffers
-PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
+PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
     POINT cursor_pos = {0};
     GetCursorPos(&cursor_pos);
 
@@ -1693,7 +1693,7 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
     }
 }
 
-void win32_handle_keyboard(const RAWINPUT* raw) {
+void win32_handle_keyboard(const RAWINPUT *raw) {
     USHORT vk = raw->data.keyboard.VKey;
     USHORT makecode = raw->data.keyboard.MakeCode;
     USHORT flags = raw->data.keyboard.Flags;
@@ -1753,7 +1753,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     pal__eventq_push(&g_event_queue, event);
 }
 
-void win32_handle_mouse(const RAWINPUT* raw) {
+void win32_handle_mouse(const RAWINPUT *raw) {
     pal_event event = {0};
     int32_t dx = raw->data.mouse.lLastX;
     int32_t dy = raw->data.mouse.lLastY;
@@ -1851,7 +1851,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
-void win32_handle_hid(const RAWINPUT* raw) {
+void win32_handle_hid(const RAWINPUT *raw) {
     printf("%d", raw->data.hid.dwCount);
 }
 
@@ -1888,12 +1888,12 @@ static int win32_get_raw_input_buffer(void) {
 // File Functions.
 //----------------------------------------------------------------------------------
 
-PALAPI uint8_t pal_does_file_exist(const char* file_path) {
+PALAPI uint8_t pal_does_file_exist(const char *file_path) {
     DWORD attrs = GetFileAttributesA(file_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-PALAPI size_t pal_get_file_size(const char* file_path) {
+PALAPI size_t pal_get_file_size(const char *file_path) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -1913,7 +1913,7 @@ PALAPI size_t pal_get_file_size(const char* file_path) {
     return 0;
 }
 
-PALAPI size_t pal_get_last_write_time(const char* file) {
+PALAPI size_t pal_get_last_write_time(const char *file) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
@@ -1922,7 +1922,7 @@ PALAPI size_t pal_get_last_write_time(const char* file) {
            fileInfo.ftLastWriteTime.dwLowDateTime;
 }
 
-PALAPI size_t pal_get_last_read_time(const char* file) {
+PALAPI size_t pal_get_last_read_time(const char *file) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
@@ -1931,7 +1931,7 @@ PALAPI size_t pal_get_last_read_time(const char* file) {
            fileInfo.ftLastAccessTime.dwLowDateTime;
 }
 
-PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
+PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     if (!file_path) {
         return 0;
     }
@@ -1994,7 +1994,7 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     return permissions;
 }
 
-PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
+PALAPI uint8_t pal_change_file_permissions(const char *file_path, uint32_t permission_flags) {
     if (!file_path) {
         return 0; // Invalid path
     }
@@ -2093,7 +2093,7 @@ PALAPI uint8_t pal_change_file_permissions(const char* file_path, uint32_t permi
     return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
-PALAPI uint8_t pal_read_file(const char* file_path, char* buffer) {
+PALAPI uint8_t pal_read_file(const char *file_path, char *buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -2135,7 +2135,7 @@ PALAPI uint8_t pal_read_file(const char* file_path, char* buffer) {
 }
 
 
-PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buffer) {
+PALAPI uint8_t pal_write_file(const char *file_path, size_t file_size, char *buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_WRITE,
@@ -2150,7 +2150,7 @@ PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buf
     }
 
     size_t remaining = file_size;
-    const char* current_pos = buffer;
+    const char *current_pos = buffer;
 
     while (remaining > 0) {
         DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
@@ -2170,12 +2170,12 @@ PALAPI uint8_t pal_write_file(const char* file_path, size_t file_size, char* buf
     return 0;
 }
 
-PALAPI uint8_t pal_copy_file(const char* original_path, const char* copy_path) {
+PALAPI uint8_t pal_copy_file(const char *original_path, const char *copy_path) {
     return CopyFileA(original_path, copy_path, pal_false) ? 0 : 1;
 }
 
-PALAPI pal_file* pal_open_file(const char* file_path) {
-    pal_file* file = (pal_file*)malloc(sizeof(pal_file));
+PALAPI pal_file *pal_open_file(const char *file_path) {
+    pal_file *file = (pal_file*)malloc(sizeof(pal_file));
     file->handle = CreateFileA(
         file_path,             // File name
         GENERIC_READ,          // Desired access
@@ -2195,7 +2195,7 @@ PALAPI pal_file* pal_open_file(const char* file_path) {
     return file;
 }
 
-PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
+PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer) {
     if (!file || file->handle == INVALID_HANDLE_VALUE || !buffer) {
         return 0;
     }
@@ -2226,7 +2226,7 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
     return 1;
 }
 
-PALAPI pal_bool pal_close_file(pal_file* file) {
+PALAPI pal_bool pal_close_file(pal_file *file) {
     if (!CloseHandle(file->handle)) {
         return 0;
     }
@@ -2238,14 +2238,14 @@ PALAPI pal_bool pal_close_file(pal_file* file) {
 // Random Number Generator.
 //----------------------------------------------------------------------------------
 
-PALAPI void pal_srand(uint64_t* state, uint64_t seed) {
+PALAPI void pal_srand(uint64_t *state, uint64_t seed) {
     if (seed == 0) {
         seed = 1; // Avoid zero state which would produce all zeros
     }
     *state = seed;
 }
 
-PALAPI uint32_t pal_rand(uint64_t* state) {
+PALAPI uint32_t pal_rand(uint64_t *state) {
     // SDL's well-tested LCG constants:
     // - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs)
     // - Increment: 0x05 (small odd number, generates smaller ARM code)
@@ -2283,17 +2283,17 @@ int win32_init_sound(void) {
 
 // XAudio2 callback for streaming
 typedef struct {
-    IXAudio2VoiceCallbackVtbl* lpVtbl;
-    pal_sound* sound;
+    IXAudio2VoiceCallbackVtbl *lpVtbl;
+    pal_sound *sound;
 } StreamingVoiceCallback;
 
-static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds) {
+static size_t calculate_buffer_size_for_seconds(pal_sound *sound, float seconds) {
     // bytes_per_second = sample_rate * channels * (bits_per_sample / 8)
     size_t bytes_per_second = sound->sample_rate * sound->channels * (sound->bits_per_sample / 8);
     return (size_t)(bytes_per_second * seconds);
 }
 
-static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
+static size_t load_next_chunk(pal_sound *sound, unsigned char *buffer, size_t buffer_size) {
     size_t bytes_read = 0;
 
     if (sound->source_file) {
@@ -2337,7 +2337,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         printf("WAV: Read %zu bytes, new bytes_streamed=%zu\n", bytes_read, sound->bytes_streamed);
 
     } else if (sound->decoder) {
-        stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
+        stb_vorbis *vorbis = (stb_vorbis*)sound->decoder;
 
         // Calculate how many sample frames we can fit in the buffer
         size_t bytes_per_sample_frame = sound->channels * sizeof(short);
@@ -2369,7 +2369,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
         }
 
         // Allocate temporary float buffers for non-interleaved data
-        float** channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
+        float **channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
         for (int i = 0; i < sound->channels; i++) {
             channel_buffers[i] = (float*)malloc(max_sample_frames * sizeof(float));
         }
@@ -2380,7 +2380,7 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
 
         if (total_sample_frames_read > 0) {
             // Convert float samples to interleaved 16-bit shorts
-            short* output_ptr = (short*)buffer;
+            short *output_ptr = (short*)buffer;
 
             for (int sample = 0; sample < total_sample_frames_read; sample++) {
                 for (int ch = 0; ch < sound->channels; ch++) {
@@ -2426,9 +2426,9 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
     return bytes_read;
 }
 
-static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
+static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback *callback, void *pBufferContext) {
+    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
+    pal_sound *sound = cb->sound;
 
     static int buffer_end_count = 0;
     printf("OnBufferEnd %d: buffer=%p\n", buffer_end_count++, pBufferContext);
@@ -2452,7 +2452,7 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void*
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
 
-        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
+        unsigned char *chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
 
         if (chunk_buffer) {
             size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
@@ -2482,10 +2482,10 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void*
     }
 }
 
-static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
+static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback *callback) {
     // OnBufferEnd now handles buffer queuing, so this can be much simpler
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
+    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
+    pal_sound *sound = cb->sound;
 
     if (!sound->is_streaming || sound->stream_finished) {
         return;
@@ -2505,21 +2505,21 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* ca
     callback_count++;
 }
 
-static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback* callback, void* pBufferContext) {
+static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback *callback, void *pBufferContext) {
     // Called when XAudio2 starts processing a buffer
     // pBufferContext contains the buffer we passed in SubmitSourceBuffer
     // For streaming, we don't need to do anything special here
 }
 
-static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
+static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback *callback, void *pBufferContext) {
     // Called when a buffer with XAUDIO2_LOOP_INFINITE completes a loop
     // We don't use looping buffers in streaming, so this stays empty
 }
 
-static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void* pBufferContext, HRESULT error) {
+static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback *callback, void *pBufferContext, HRESULT error) {
     // Called when XAudio2 encounters an error
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
+    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
+    pal_sound *sound = cb->sound;
 
     printf("XAudio2 Voice Error: 0x%08X\n", error);
 
@@ -2527,20 +2527,20 @@ static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void
     sound->stream_finished = 1;
 }
 
-static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback* callback, UINT32 BytesRequired) {
+static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback *callback, UINT32 BytesRequired) {
     // Called when XAudio2 starts processing audio for this voice
     // BytesRequired tells us how much data XAudio2 needs
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
+    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
+    pal_sound *sound = cb->sound;
 
     // We can use BytesRequired to be more intelligent about buffer management
     // For now, we'll handle this in OnBufferEnd instead
 }
 
-static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
+static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback *callback) {
     // Called when the last buffer with XAUDIO2_END_OF_STREAM finishes playing
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
+    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
+    pal_sound *sound = cb->sound;
 
     printf("Audio stream ended\n");
 
@@ -2561,7 +2561,7 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnVoiceError,
 };
 
-PALAPI int pal_play_music(pal_sound* sound, float volume) {
+PALAPI int pal_play_music(pal_sound *sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
         return E_FAIL;
@@ -2603,7 +2603,7 @@ PALAPI int pal_play_music(pal_sound* sound, float volume) {
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
 
-        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
+        unsigned char *chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
         if (chunk_buffer) {
             size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
 
@@ -2638,22 +2638,22 @@ PALAPI int pal_play_music(pal_sound* sound, float volume) {
     return S_OK;
 }
 
-static int pal__load_wav(const char* filename, pal_sound* out, float seconds);
-static int pal__load_ogg(const char* filename, pal_sound* out, float seconds);
+static int pal__load_wav(const char *filename, pal_sound *out, float seconds);
+static int pal__load_ogg(const char *filename, pal_sound *out, float seconds);
 
-pal_sound* win32_load_sound(const char* filename, float seconds);
-PALAPI pal_sound* pal_load_music(const char* filename) {
+pal_sound *win32_load_sound(const char *filename, float seconds);
+PALAPI pal_sound *pal_load_music(const char* filename) {
     // every loaded buffer will be this long.
     const float buffer_length_in_seconds = 2.0f;
     return win32_load_sound(filename, buffer_length_in_seconds);
 }
 
-PALAPI pal_sound* pal_load_sound(const char* filename) {
+PALAPI pal_sound *pal_load_sound(const char* filename) {
     return win32_load_sound(filename, 0.0f);
 }
 
-pal_sound* win32_load_sound(const char* filename, float seconds) {
-    FILE* file = fopen(filename, "rb");
+pal_sound *win32_load_sound(const char *filename, float seconds) {
+    FILE *file = fopen(filename, "rb");
 
     if (!file)
         return NULL;
@@ -2664,7 +2664,7 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
         return NULL;
     }
 
-    pal_sound* sound = (pal_sound*)malloc(sizeof(pal_sound));
+    pal_sound *sound = (pal_sound*)malloc(sizeof(pal_sound));
     if (!sound) {
         fclose(file);
         printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
@@ -2743,7 +2743,7 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
 
     // Create streaming callback if this is a streaming sound
     if (seconds > 0.0f) {
-        StreamingVoiceCallback* callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
+        StreamingVoiceCallback *callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
         if (callback) {
             callback->lpVtbl = &StreamingCallbackVtbl;
             callback->sound = sound;
@@ -2767,7 +2767,7 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
                    sound->data_size);
 
         } else if (sound->decoder) {
-            stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
+            stb_vorbis *vorbis = (stb_vorbis*)sound->decoder;
 
             unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
             size_t bytes_per_sample_frame = sound->channels * sizeof(short);
@@ -2812,7 +2812,7 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
     return sound;
 }
 
-PALAPI void pal_free_music(pal_sound* sound) {
+PALAPI void pal_free_music(pal_sound *sound) {
     if (sound->is_streaming) {
         sound->stream_finished = 1;
     }
@@ -2840,7 +2840,7 @@ PALAPI void pal_free_music(pal_sound* sound) {
     free(sound);
 }
 
-PALAPI int pal_play_sound(pal_sound* sound, float volume) {
+PALAPI int pal_play_sound(pal_sound *sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         return E_FAIL;
     }
@@ -2870,7 +2870,7 @@ PALAPI int pal_play_sound(pal_sound* sound, float volume) {
     return S_OK;
 }
 
-PALAPI void pal_free_sound(pal_sound* sound) {
+PALAPI void pal_free_sound(pal_sound *sound) {
     if (sound) {
         if (sound->source_voice) {
             sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
@@ -2888,7 +2888,7 @@ PALAPI void pal_free_sound(pal_sound* sound) {
     }
 }
 
-PALAPI int pal_stop_sound(pal_sound* sound) {
+PALAPI int pal_stop_sound(pal_sound *sound) {
     HRESULT hr = 0;
     hr = sound->source_voice->lpVtbl->Stop(sound->source_voice, 0, XAUDIO2_COMMIT_NOW);
 
@@ -3155,26 +3155,209 @@ PALAPI uint64_t pal_get_timer_frequency(void) {
 
     return frequency;
 }
+//----------------------------------------------------------------------------------
+// Clip Board Functions.
+//----------------------------------------------------------------------------------
+
+PALAPI char *pal_clipboard_get(void) {
+    if (!OpenClipboard(NULL))
+        return NULL;
+
+    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+    if (!hData) {
+        CloseClipboard();
+        return NULL;
+    }
+
+    wchar_t *wtext = GlobalLock(hData);
+    if (!wtext) {
+        CloseClipboard();
+        return NULL;
+    }
+
+    // Convert wide char text to UTF-8
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wtext, -1, NULL, 0, NULL, NULL);
+    char *text = (char*)malloc(size_needed);
+    if (text)
+        WideCharToMultiByte(CP_UTF8, 0, wtext, -1, text, size_needed, NULL, NULL);
+
+    GlobalUnlock(hData);
+    CloseClipboard();
+
+    return text; // caller must free()
+}
+
+PALAPI void pal_clipboard_set(const char *text) {
+    if (text == NULL || *text == '\0')
+        return;
+
+    // Calculate the size of the text, including the null terminator
+    size_t len = strlen(text) + 1;
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
+    if (!hMem)
+        return;
+
+    // Copy the text into the allocated memory
+    memcpy(GlobalLock(hMem), text, len);
+    GlobalUnlock(hMem);
+
+    // Open the clipboard and set the data
+    if (OpenClipboard(NULL)) {
+        EmptyClipboard();
+        SetClipboardData(CF_TEXT, hMem);
+        CloseClipboard();
+    } else {
+        GlobalFree(hMem);
+    }
+}
+
+
+//----------------------------------------------------------------------------------
+// Mouse Warp Functions.
+//----------------------------------------------------------------------------------
+
+void pal_mouse_warp(int x, int y) {
+    SetCursorPos(x, y);
+}
+
+void pal_mouse_warp_relative(int dx, int dy) {
+    INPUT input = {0};
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_MOVE;
+    input.mi.dx = dx;
+    input.mi.dy = dy;
+    SendInput(1, &input, sizeof(INPUT));
+}
+
+//----------------------------------------------------------------------------------
+// Url Launch Function.
+//----------------------------------------------------------------------------------
+PALAPI void pal_url_launch(char *url) {
+	if (!url || !*url)
+	return;
+
+	// ShellExecuteA automatically opens the URL with the default app (e.g., browser)
+	HINSTANCE result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+
+	// Optional: check if it failed
+	if ((INT_PTR)result <= 32) {
+		MessageBoxA(NULL, "Failed to open URL.", "Error", MB_ICONERROR);
+	}
+}
+//----------------------------------------------------------------------------------
+// File Requester Functions.
+//----------------------------------------------------------------------------------
+
+#include <commdlg.h>
+
+typedef struct PalRequester {
+    char path[MAX_PATH];
+} PalRequester;
+
+static PalRequester g_requesters[16]; // simple static pool, indexed by `id`
+
+static PalRequester *win32_get_requester(void *id) {
+    uintptr_t index = (uintptr_t)id;
+    if (index >= 16)
+        return NULL;
+    return &g_requesters[index];
+}
+
+static void win32_build_filter_string(char **types, uint32_t type_count, char *out, size_t out_size) {
+    // Builds Windows filter string like: "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0"
+    out[0] = '\0';
+    size_t pos = 0;
+    for (uint32_t i = 0; i < type_count; i++) {
+        const char *ext = types[i];
+        int written = snprintf(out + pos, out_size - pos,
+            "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
+        pos += written;
+        if (pos >= out_size)
+            break;
+    }
+    // Add final double null terminator
+    out[pos++] = '\0';
+}
+
+void pal_requester_save(char **types, uint32_t type_count, void *id) {
+    PalRequester *req = win32_get_requester(id);
+    if (!req)
+        return;
+
+    OPENFILENAMEA ofn = {0};
+    char filter[512];
+    win32_build_filter_string(types, type_count, filter, sizeof(filter));
+    char path[MAX_PATH] = {0};
+
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = filter[0] ? filter : "All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = path;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
+
+    if (GetSaveFileNameA(&ofn)) {
+        strcpy_s(req->path, MAX_PATH, path);
+    } else {
+        req->path[0] = '\0';
+    }
+}
+
+void pal_requester_load(char **types, uint32_t type_count, void *id) {
+    PalRequester *req = win32_get_requester(id);
+    if (!req)
+        return;
+
+    OPENFILENAMEA ofn = {0};
+    char filter[512];
+    win32_build_filter_string(types, type_count, filter, sizeof(filter));
+    char path[MAX_PATH] = {0};
+
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = filter[0] ? filter : "All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = path;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
+
+    if (GetOpenFileNameA(&ofn)) {
+        strcpy_s(req->path, MAX_PATH, path);
+    } else {
+        req->path[0] = '\0';
+    }
+}
+
+char *pal_requester_save_get(void *id) {
+    PalRequester *req = win32_get_requester(id);
+    return (req && req->path[0]) ? req->path : NULL;
+}
+
+char *pal_requester_load_get(void *id) {
+    PalRequester *req = win32_get_requester(id);
+    return (req && req->path[0]) ? req->path : NULL;
+}
 
 //----------------------------------------------------------------------------------
 // Dynamic Library Functions.
 //----------------------------------------------------------------------------------
-PALAPI void* pal_load_dynamic_library(const char* dll) {
+PALAPI void *pal_load_dynamic_library(const char *dll) {
     HMODULE result = LoadLibraryA(dll);
     assert(result);
-    return result;
+    return (void*)result;
 }
 
-PALAPI void* pal_load_dynamic_function(void* dll, char* func_name) {
+PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
     FARPROC proc = GetProcAddress(dll, func_name);
     assert(proc);
     return (void*)proc;
 }
 
-PALAPI uint8_t pal_free_dynamic_library(void* dll) {
-    uint8_t free_result = FreeLibrary(dll);
+PALAPI pal_bool pal_free_dynamic_library(void *dll) {
+    pal_bool free_result = FreeLibrary(dll);
     assert(free_result);
-    return (uint8_t)free_result;
+    return (pal_bool)free_result;
 }
 
 #endif // WIN32_PLATFORM_H
