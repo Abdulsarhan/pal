@@ -28,8 +28,8 @@ static OpenglInfo get_opengl_info(void) {
         glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
         for (int i = 0; i < numExtensions; i++) {
             const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
-            strcat(info.extensions, ext);
-            strcat(info.extensions, " ");
+            //strcat(info.extensions, ext);
+            //strcat(info.extensions, " ");
         }
     } else {
         info.extensions[0] = (char)glGetString(GL_EXTENSIONS);
@@ -109,7 +109,7 @@ int main() {
         }
         // The is_* functions only work after all the events have been polled.
         // do not call this in the message loop.
-        if (pal_is_key_pressed(PAL_W)) {
+        if (pal_is_key_pressed(3, PAL_W)) {
             printf("PRESSED W!\n");
         }
         if (pal_is_mouse_pressed(PAL_MOUSE_LEFT)) {

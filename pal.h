@@ -201,6 +201,7 @@ typedef struct pal_keyboard_event {
     uint8_t pressed;
     uint8_t repeat;
     uint32_t modifiers;
+    int32_t keyboard_id;
 } pal_keyboard_event;
 
 typedef struct pal_text_editing_event {
@@ -1157,8 +1158,10 @@ PALAPI uint8_t pal_poll_events(pal_event *event);
 PALAPI int pal_make_context_current(pal_window *window);
 
 // Keyboard input
-PALAPI uint8_t pal_is_key_pressed(int key);
-PALAPI uint8_t pal_is_key_down(int key);
+PALAPI int pal_get_keyboard_count(void);
+PALAPI const char* pal_get_keyboard_name(int keyboard_id);
+PALAPI uint8_t pal_is_key_pressed(int keyboard_id, int key);
+PALAPI uint8_t pal_is_key_down(int keyboard_id, int key);
 
 // Mouse input
 PALAPI uint8_t pal_is_mouse_pressed(int button);

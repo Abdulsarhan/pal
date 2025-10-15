@@ -1005,6 +1005,47 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
 PALAPI pal_bool pal_close_window(pal_window* window) {
     return (pal_bool)DestroyWindow(window->hwnd);
 }
+#define MAX_KEYBOARDS 8
+
+typedef struct {
+    HANDLE device_handle;
+    uint8_t keys[256];
+    uint8_t keys_processed[256];
+    uint8_t key_is_down[256];
+    char device_name[256];
+} pal_keyboard_state;
+
+static pal_keyboard_state g_keyboards[MAX_KEYBOARDS] = {0};
+static int g_keyboard_count = 0;
+
+// Call during init & WM_INPUT_DEVICE_CHANGE
+void win32_enumerate_keyboards(void) {
+    UINT numDevices;
+    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    
+    PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    
+    g_keyboard_count = 0;
+    
+    for (UINT i = 0; i < numDevices && g_keyboard_count < MAX_KEYBOARDS; i++) {
+        if (deviceList[i].dwType == RIM_TYPEKEYBOARD) {
+            pal_keyboard_state *kb = &g_keyboards[g_keyboard_count];
+            kb->device_handle = deviceList[i].hDevice;
+            
+            // Get device name
+            UINT size = 0;
+            GetRawInputDeviceInfo(kb->device_handle, RIDI_DEVICENAME, NULL, &size);
+            if (size < sizeof(kb->device_name)) {
+                GetRawInputDeviceInfo(kb->device_handle, RIDI_DEVICENAME, kb->device_name, &size);
+            }
+            
+            g_keyboard_count++;
+        }
+    }
+    
+    free(deviceList);
+}
 
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     pal_window* window = g_current_window;
@@ -1158,6 +1199,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
             // TODO: Make this return a pal_event of some kind.
         case WM_INPUT_DEVICE_CHANGE: {
+            win32_enumerate_keyboards();
             win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
             printf("Device Changed!\n");
         }; break;
@@ -1694,29 +1736,38 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
 }
 
 void win32_handle_keyboard(const RAWINPUT *raw) {
+    // Find keyboard index
+    int kb_index = 0;  // Fallback to first keyboard
+    for (int i = 0; i < g_keyboard_count; i++) {
+        if (g_keyboards[i].device_handle == raw->header.hDevice) {
+            kb_index = i;
+            break;
+        }
+    }
+    
+    pal_keyboard_state *kb = &g_keyboards[kb_index];
+    
     USHORT vk = raw->data.keyboard.VKey;
     USHORT makecode = raw->data.keyboard.MakeCode;
     USHORT flags = raw->data.keyboard.Flags;
     pal_event event = {0};
     
     pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
-    
     pal_bool is_extended = (flags & RI_KEY_E0) != 0;
     
     pal_bool is_repeat = 0;
-    if (vk < 256) { // ensures that the vk key is within range, probably not necessary.
-        if (!is_key_released && g_key_is_down[vk]) {
+    if (vk < 256) {
+        if (!is_key_released && kb->key_is_down[vk]) {
             is_repeat = 1;
         }
-        
-        g_key_is_down[vk] = !is_key_released;
+        kb->key_is_down[vk] = !is_key_released;
     }
     
     update_modifier_state(vk, is_key_released);
     
     int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
-   
     int pal_scancode = 0;
+    
     if (is_extended) {
         if (makecode < 256) {
             pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
@@ -1732,24 +1783,26 @@ void win32_handle_keyboard(const RAWINPUT *raw) {
         event.key = (pal_keyboard_event){
             .virtual_key = pal_key,
             .scancode = pal_scancode,
-            .pressed = 0,  // Key is being released
-            .repeat = 0,   // Key up events are never repeats
-            .modifiers = g_cached_modifiers
+            .pressed = 0,
+            .repeat = 0,
+            .modifiers = g_cached_modifiers,
+            .keyboard_id = kb_index
         };
-		input.keys[pal_key] = 0;
-		input.keys_processed[pal_key] = 0;
+        kb->keys[pal_key] = 0;
+        kb->keys_processed[pal_key] = 0;
     } else {
         event.type = PAL_EVENT_KEY_DOWN;
         event.key = (pal_keyboard_event){
             .virtual_key = pal_key,
             .scancode = pal_scancode,
-            .pressed = 1,  // Key is being pressed
+            .pressed = 1,
             .repeat = is_repeat,
-            .modifiers = g_cached_modifiers
+            .modifiers = g_cached_modifiers,
+            .keyboard_id = kb_index
         };
-        input.keys[pal_key] = 1;
+        kb->keys[pal_key] = 1;
     }
-
+    
     pal__eventq_push(&g_event_queue, event);
 }
 

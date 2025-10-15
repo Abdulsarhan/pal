@@ -60,7 +60,7 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
 
 PALAPI void pal_init(void) {
     pal__init_eventq();
-
+    win32_enumerate_keyboards();
     win32_init_timer();
     win32_init_sound();
     if (!win32_init_gamepads()) {
@@ -81,28 +81,49 @@ PALAPI void pal_shutdown(void) {
 
 */
 
-
 // Keyboard input
-uint8_t pal__is_key_processed(int key) {
-    return input.keys_processed[key];
+PALAPI int pal_get_keyboard_count(void) {
+    return g_keyboard_count;
 }
 
-void pal__set_key_processed(int key) {
-    input.keys_processed[key] = 1; // Mark as processed
+PALAPI const char* pal_get_keyboard_name(int keyboard_id) {
+    if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return NULL;
+    return g_keyboards[keyboard_id].device_name;
 }
 
-PALAPI uint8_t pal_is_key_pressed(int key) {
-
-    if (pal_is_key_down(key) && !pal__is_key_processed(key)) {
-        pal__set_key_processed(key);
-        return 1;
-    } else {
+PALAPI uint8_t pal_is_key_down(int keyboard_id, int key) {
+    // Check all keyboards if keyboard_id is -1
+    if (keyboard_id == -1) {
+        for (int i = 0; i < g_keyboard_count; i++) {
+            if (g_keyboards[i].keys[key]) return 1;
+        }
         return 0;
     }
+    
+    if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return 0;
+    return g_keyboards[keyboard_id].keys[key];
 }
 
-PALAPI uint8_t pal_is_key_down(int key) {
-    return input.keys[key];
+PALAPI uint8_t pal_is_key_pressed(int keyboard_id, int key) {
+    // Check all keyboards if keyboard_id is -1
+    if (keyboard_id == -1) {
+        for (int i = 0; i < g_keyboard_count; i++) {
+            pal_keyboard_state *kb = &g_keyboards[i];
+            if (kb->keys[key] && !kb->keys_processed[key]) {
+                kb->keys_processed[key] = 1;
+                return 1;
+            }
+        }
+        return 0;
+    }
+    
+    if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return 0;
+    pal_keyboard_state *kb = &g_keyboards[keyboard_id];
+    if (kb->keys[key] && !kb->keys_processed[key]) {
+        kb->keys_processed[key] = 1;
+        return 1;
+    }
+    return 0;
 }
 
 uint8_t pal__is_mouse_processed(int button) {
