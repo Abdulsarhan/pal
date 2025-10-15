@@ -86,12 +86,41 @@ PALAPI int pal_get_keyboard_count(void) {
     return g_keyboard_count;
 }
 
+PALAPI int pal_get_keyboard_indices(int key, int *keyboard_indices) {
+    int count = 0;
+    
+    if (key == -1) {
+        // Check if ANY key is pressed on each keyboard
+        for (int i = 0; i < g_keyboard_count && count < MAX_KEYBOARDS; i++) {
+            pal_keyboard_state *kb = &g_keyboards[i];
+            for (int k = 0; k < 256; k++) {
+                if (kb->keys[k] && !kb->keys_processed[k]) {
+                    keyboard_indices[count++] = i;
+                    kb->keys_processed[k] = 1;  // Mark as processed
+                    break;  // Found a key on this keyboard, move to next keyboard
+                }
+            }
+        }
+    } else {
+        // Check specific key
+        for (int i = 0; i < g_keyboard_count && count < MAX_KEYBOARDS; i++) {
+            pal_keyboard_state *kb = &g_keyboards[i];
+            if (kb->keys[key] && !kb->keys_processed[key]) {
+                keyboard_indices[count++] = i;
+                kb->keys_processed[key] = 1;  // Mark as processed
+            }
+        }
+    }
+    
+    return count;
+}
+
 PALAPI const char* pal_get_keyboard_name(int keyboard_id) {
     if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return NULL;
     return g_keyboards[keyboard_id].device_name;
 }
 
-PALAPI uint8_t pal_is_key_down(int keyboard_id, int key) {
+PALAPI pal_bool pal_is_key_down(int keyboard_id, int key) {
     // Check all keyboards if keyboard_id is -1
     if (keyboard_id == -1) {
         for (int i = 0; i < g_keyboard_count; i++) {
@@ -104,7 +133,7 @@ PALAPI uint8_t pal_is_key_down(int keyboard_id, int key) {
     return g_keyboards[keyboard_id].keys[key];
 }
 
-PALAPI uint8_t pal_is_key_pressed(int keyboard_id, int key) {
+PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int key) {
     // Check all keyboards if keyboard_id is -1
     if (keyboard_id == -1) {
         for (int i = 0; i < g_keyboard_count; i++) {
@@ -126,29 +155,91 @@ PALAPI uint8_t pal_is_key_pressed(int keyboard_id, int key) {
     return 0;
 }
 
-uint8_t pal__is_mouse_processed(int button) {
-    return input.mouse_buttons_processed[button];
+PALAPI int pal_get_mouse_count(void) {
+    return g_mouse_count;
 }
 
-void pal__set_mouse_processed(int button) {
-    input.mouse_buttons_processed[button] = 1; // Mark as processed
+PALAPI const char* pal_get_mouse_name(int mouse_id) {
+    if (mouse_id < 0 || mouse_id >= g_mouse_count) return NULL;
+    return g_mice[mouse_id].device_name;
 }
 
-PALAPI uint8_t pal_is_mouse_pressed(int button) {
+PALAPI int pal_get_mouse_indices(int *mouse_indices) {
+    int count = 0;
+    
+    for (int i = 0; i < g_mouse_count && count < MAX_MICE; i++) {
+        mouse_state *m = &g_mice[i];
+        
+        // Check if mouse has delta movement
+        if (m->delta_x != 0 || m->delta_y != 0) {
+            mouse_indices[count++] = i;
+            continue;
+        }
+        
+        // Check if any button is pressed
+        for (int b = 0; b < 8; b++) {
+            if (m->buttons[b] && !m->buttons_processed[b]) {
+                mouse_indices[count++] = i;
+                m->buttons_processed[b] = 1;
+                break;
+            }
+        }
+    }
+    
+    return count;
+}
 
-    if (pal_is_mouse_down(button) && !pal__is_mouse_processed(button)) {
-        pal__set_mouse_processed(button);
-        return 1;
-    } else {
+PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
+    if (mouse_id == -1) {
+        for (int i = 0; i < g_mouse_count; i++) {
+            if (g_mice[i].buttons[button]) return 1;
+        }
         return 0;
     }
+    
+    if (mouse_id < 0 || mouse_id >= g_mouse_count) return 0;
+    return g_mice[mouse_id].buttons[button];
 }
 
-PALAPI uint8_t pal_is_mouse_down(int button) {
-    return input.mouse_buttons[button];
+PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
+    if (mouse_id == -1) {
+        for (int i = 0; i < g_mouse_count; i++) {
+            mouse_state *m = &g_mice[i];
+            if (m->buttons[button] && !m->buttons_processed[button]) {
+                m->buttons_processed[button] = 1;
+                return 1;
+            }
+        }
+        return 0;
+    }
+    
+    if (mouse_id < 0 || mouse_id >= g_mouse_count) return 0;
+    mouse_state *m = &g_mice[mouse_id];
+    if (m->buttons[button] && !m->buttons_processed[button]) {
+        m->buttons_processed[button] = 1;
+        return 1;
+    }
+    return 0;
 }
 
+// Get delta for specific mouse (useful if you want per-mouse tracking)
+PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
+    if (mouse_id < 0 || mouse_id >= g_mouse_count) {
+        return (pal_vec2){0, 0};  // Return zero vector for invalid ID
+    }
+    
+    return (pal_vec2){
+        (float)g_mice[mouse_id].delta_x,
+        (float)g_mice[mouse_id].delta_y
+    };
+}
 
+PALAPI void pal__reset_mouse_deltas(void) {
+    for (int i = 0; i < g_mouse_count; i++) {
+        g_mice[i].delta_x = 0;
+        g_mice[i].delta_y = 0;
+    }
+}
 
 // TODO: @fix This loads uncompressed .wav files only!
 static int pal__load_wav(const char* filename, pal_sound* out, float seconds) {
@@ -505,48 +596,48 @@ static const uint8_t pal_char_masks[128] = {
 
 // clang-format on
 // String Parsing functions
-PALAPI uint8_t pal_is_uppercase(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_UPPER_BIT;
+PALAPI pal_bool pal_is_uppercase(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_UPPER_BIT;
 }
 
-PALAPI uint8_t pal_is_lowercase(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_LOWER_BIT;
+PALAPI pal_bool pal_is_lowercase(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_LOWER_BIT;
 }
 
-PALAPI uint8_t pal_is_letter(char ch) {
-    return pal_char_masks[(uint8_t)ch] & (PAL_UPPER_BIT | PAL_LOWER_BIT);
+PALAPI pal_bool pal_is_letter(char ch) {
+    return pal_char_masks[(pal_bool)ch] & (PAL_UPPER_BIT | PAL_LOWER_BIT);
 }
 
-PALAPI uint8_t pal_is_number(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_DIGIT_BIT;
+PALAPI pal_bool pal_is_number(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_DIGIT_BIT;
 }
 
-PALAPI uint8_t pal_is_end_of_line(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_EOL_BIT;
+PALAPI pal_bool pal_is_end_of_line(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_EOL_BIT;
 }
 
-PALAPI uint8_t pal_is_underscore(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_UNDER_BIT;
+PALAPI pal_bool pal_is_underscore(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_UNDER_BIT;
 }
 
-PALAPI uint8_t pal_is_hyphen(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_HYPHEN_BIT;
+PALAPI pal_bool pal_is_hyphen(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_HYPHEN_BIT;
 }
 
-PALAPI uint8_t pal_is_dot(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_DOT_BIT;
+PALAPI pal_bool pal_is_dot(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_DOT_BIT;
 }
-PALAPI uint8_t pal_is_whitespace(char ch) {
-    return pal_char_masks[(uint8_t)ch] & PAL_WHITESPACE_BIT;
+PALAPI pal_bool pal_is_whitespace(char ch) {
+    return pal_char_masks[(pal_bool)ch] & PAL_WHITESPACE_BIT;
 }
 
 // Character comparison
-PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2) {
-    return (uint8_t)ch1 == (uint8_t)ch2;
+PALAPI pal_bool pal_are_chars_equal(char ch1, char ch2) {
+    return (pal_bool)ch1 == (pal_bool)ch2;
 }
 
 // String comparison
-PALAPI uint8_t pal_are_strings_equal(int count, const char* str1, const char* str2) {
+PALAPI pal_bool pal_are_strings_equal(int count, const char* str1, const char* str2) {
     if (str1 == NULL || str2 == NULL) {
         return 0;
     }

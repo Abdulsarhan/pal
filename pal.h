@@ -230,6 +230,7 @@ typedef struct pal_mouse_motion_event {
     int32_t delta_x;
     int32_t delta_y;
     uint32_t buttons;
+    int32_t mouse_id;
 } pal_mouse_motion_event;
 
 typedef struct pal_mouse_button_event {
@@ -239,6 +240,7 @@ typedef struct pal_mouse_button_event {
     uint32_t button;
     uint8_t clicks;
     uint32_t modifiers;
+    int32_t mouse_id;
 } pal_mouse_button_event;
 
 typedef struct pal_mouse_wheel_event {
@@ -248,6 +250,7 @@ typedef struct pal_mouse_wheel_event {
     float y;
     uint32_t modifiers;
     int wheel_direction; // some weird ahh mice have horizontal scroll wheels
+    int32_t mouse_id;
 } pal_mouse_wheel_event;
 
 typedef struct pal_joy_device_event {
@@ -1138,7 +1141,7 @@ PALAPI void pal_shutdown(void);
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
 PALAPI int pal_show_cursor(void);
 PALAPI int pal_hide_cursor(void);
-PALAPI uint8_t pal_set_window_title(pal_window *window, const char *string);
+PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
 PALAPI pal_bool pal_make_window_fullscreen(pal_window *window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window);
@@ -1154,18 +1157,23 @@ PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor);
 PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode);
 PALAPI pal_monitor *pal_get_primary_monitor(void);
 PALAPI void *pal_gl_get_proc_address(const char *proc);
-PALAPI uint8_t pal_poll_events(pal_event *event);
+PALAPI pal_bool pal_poll_events(pal_event *event);
 PALAPI int pal_make_context_current(pal_window *window);
 
 // Keyboard input
 PALAPI int pal_get_keyboard_count(void);
 PALAPI const char* pal_get_keyboard_name(int keyboard_id);
-PALAPI uint8_t pal_is_key_pressed(int keyboard_id, int key);
-PALAPI uint8_t pal_is_key_down(int keyboard_id, int key);
+PALAPI int pal_get_keyboard_indices(int key, int* keyboard_indices);
+PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int key);
+PALAPI pal_bool pal_is_key_down(int keyboard_id, int key);
 
 // Mouse input
-PALAPI uint8_t pal_is_mouse_pressed(int button);
-PALAPI uint8_t pal_is_mouse_down(int button);
+PALAPI int pal_get_mouse_count(void);
+PALAPI const char* pal_get_mouse_name(int mouse_id);
+PALAPI int pal_get_mouse_indices(int* mouse_indices);
+PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button);
+PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button);
+PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id);
 PALAPI pal_vec2 pal_get_mouse_position(pal_window *window);
 
 // Gamepad Input
@@ -1190,15 +1198,15 @@ PALAPI int pal_stop_music(pal_sound *sound); // unimplemented
 PALAPI void pal_free_music(pal_sound *sound);
 
 // File I/O
-PALAPI uint8_t pal_does_file_exist(const char *file_path);
+PALAPI pal_bool pal_does_file_exist(const char *file_path);
 PALAPI size_t pal_get_last_write_time(const char *file);
 PALAPI size_t pal_get_last_read_time(const char *file);
 PALAPI size_t pal_get_file_size(const char *file_path);
 PALAPI uint32_t pal_get_file_permissions(const char *file_path);
-PALAPI uint8_t pal_change_file_permissions(const char *file_path, uint32_t permission_flags);
-PALAPI uint8_t pal_read_file(const char *file_path, char *buffer);
-PALAPI uint8_t pal_write_file(const char *file_path, size_t file_size, char *buffer);
-PALAPI uint8_t pal_copy_file(const char *original_path, const char *copy_path);
+PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags);
+PALAPI pal_bool pal_read_file(const char *file_path, char *buffer);
+PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
+PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 
 // Open File I/O
 PALAPI pal_file *pal_open_file(const char *file_path);
@@ -1227,17 +1235,17 @@ void pal_mouse_warp(int x, int y);
 void pal_mouse_warp_relative(int dx, int dy);
 
 // File Parsing
-PALAPI uint8_t pal_is_uppercase(char ch);
-PALAPI uint8_t pal_is_lowercase(char ch);
-PALAPI uint8_t pal_is_letter(char ch);
-PALAPI uint8_t pal_is_end_of_line(char ch);
-PALAPI uint8_t pal_is_whitespace(char ch);
-PALAPI uint8_t pal_is_number(char ch);
-PALAPI uint8_t pal_is_underscore(char ch);
-PALAPI uint8_t pal_is_hyphen(char ch);
-PALAPI uint8_t pal_is_dot(char ch);
-PALAPI uint8_t pal_are_chars_equal(char ch1, char ch2);
-PALAPI uint8_t pal_are_strings_equal(int count, const char *str1, const char *str2);
+PALAPI pal_bool pal_is_uppercase(char ch);
+PALAPI pal_bool pal_is_lowercase(char ch);
+PALAPI pal_bool pal_is_letter(char ch);
+PALAPI pal_bool pal_is_end_of_line(char ch);
+PALAPI pal_bool pal_is_whitespace(char ch);
+PALAPI pal_bool pal_is_number(char ch);
+PALAPI pal_bool pal_is_underscore(char ch);
+PALAPI pal_bool pal_is_hyphen(char ch);
+PALAPI pal_bool pal_is_dot(char ch);
+PALAPI pal_bool pal_are_chars_equal(char ch1, char ch2);
+PALAPI pal_bool pal_are_strings_equal(int count, const char *str1, const char *str2);
 
 // Time functions
 PALAPI pal_time pal_get_date_and_time_utc(void);

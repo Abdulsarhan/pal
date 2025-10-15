@@ -112,20 +112,20 @@ int main() {
         if (pal_is_key_pressed(3, PAL_W)) {
             printf("PRESSED W!\n");
         }
-        if (pal_is_mouse_pressed(PAL_MOUSE_LEFT)) {
+        if (pal_is_mouse_pressed(-1, PAL_MOUSE_LEFT)) {
             printf("Pressed LMB!\n");
         }
-        if (pal_is_mouse_pressed(PAL_MOUSE_RIGHT)) {
+        if (pal_is_mouse_pressed(-1, PAL_MOUSE_RIGHT)) {
             printf("Pressed LMB!\n");
         }
-        if (pal_is_mouse_pressed(PAL_MOUSE_MIDDLE)) {
+        if (pal_is_mouse_pressed(-1, PAL_MOUSE_MIDDLE)) {
             printf("Pressed LMB!\n");
         }
 
-        if (pal_is_mouse_pressed(PAL_MOUSE_4)) {
+        if (pal_is_mouse_pressed(-1, PAL_MOUSE_4)) {
             printf("Pressed mouse4!\n");
         }
-        if (pal_is_mouse_pressed(PAL_MOUSE_5)) {
+        if (pal_is_mouse_pressed(-1, PAL_MOUSE_5)) {
             printf("Pressed mouse5!\n");
         }
 

@@ -89,23 +89,12 @@ struct pal_sound {
 
 // Keyboard & Mouse Input
 
-#define MAX_KEYS 256
 #define MAX_MOUSEBUTTONS 32
 #define MAX_XINPUT_CONTROLLERS 4
 #define PAL_MAX_GAMEPADS 16
 #define PAL_MAX_BUTTONS 32
 #define PAL_MAX_AXES 16
 #define PAL_MAX_MAPPINGS 256
-
-typedef struct pal_input {
-    uint8_t keys[MAX_KEYS];
-    uint8_t keys_processed[MAX_KEYS];
-    uint8_t mouse_buttons[MAX_MOUSEBUTTONS];
-    uint8_t mouse_buttons_processed[MAX_MOUSEBUTTONS];
-    pal_vec2 mouse_position;
-    pal_ivec2 mouse_delta;
-} pal_input;
-pal_input input = {0};
 
 static const uint8_t win32_button_to_pal_button[] = {
     [0] = PAL_MOUSE_LEFT,
@@ -1123,10 +1112,9 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.motion = (pal_mouse_motion_event){
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
-                .delta_x = input.mouse_delta.x,
-                .delta_y = input.mouse_delta.y,
                 .buttons = (uint32_t)wparam};
-        }; break;
+                
+        } break;
 
         case WM_MOUSELEAVE:
             ClipCursor(NULL); // we unclip the cursor to the window in case it was clipped before.
@@ -1548,10 +1536,12 @@ PALAPI pal_bool pal_minimize_window(pal_window *window) {
 }
 
 static int win32_get_raw_input_buffer(void);
-PALAPI uint8_t pal_poll_events(pal_event *event) {
+
+PALAPI void pal__reset_mouse_deltas(void);
+PALAPI pal_bool pal_poll_events(pal_event *event) {
     MSG msg = {0};
     if (!g_message_pump_drained) {
-
+        pal__reset_mouse_deltas();
         win32_get_raw_input_buffer();
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
@@ -1573,12 +1563,11 @@ PALAPI uint8_t pal_poll_events(pal_event *event) {
         return 1;
     } else {
 		g_message_pump_drained = pal_false;
-		input.mouse_delta = (pal_ivec2){.x = 0, .y = 0};
 		return 0;
     }
 }
 
-PALAPI uint8_t pal_set_window_title(pal_window *window, const char *string) {
+PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string) {
     return SetWindowTextA(window->hwnd, string);
 }
 
@@ -1656,13 +1645,8 @@ PALAPI void pal_swap_interval(int interval) {
     wglSwapIntervalEXT(interval);
 }
 
-#define MAX_RAW_INPUTS 16
-
 // Handler function signatures
 typedef void (*RawInputHandler)(const RAWINPUT*);
-
-#define MAX_MOUSE_BUTTONS 64
-#define MAX_BUTTON_CAPS 32
 
 // Helper struct to hold reusable buffers
 PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
@@ -1677,10 +1661,6 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
 
 // Cache for modifier key states
 static int g_cached_modifiers = PAL_MOD_NONE;
-
-// Cache for key states to detect repeats (256 VK codes max)
-static pal_bool g_key_is_down[256] = {0};
-
 uint32_t g_cached_mouse_buttons = 0;
 // Function to update modifier state based on raw input
 static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
@@ -1806,19 +1786,72 @@ void win32_handle_keyboard(const RAWINPUT *raw) {
     pal__eventq_push(&g_event_queue, event);
 }
 
+#define MAX_MICE 8
+
+typedef struct {
+    HANDLE device_handle;
+    uint8_t buttons[8];
+    uint8_t buttons_processed[8];
+    int32_t delta_x;
+    int32_t delta_y;
+    char device_name[256];
+} mouse_state;
+
+static mouse_state g_mice[MAX_MICE] = {0};
+static int g_mouse_count = 0;
+
+void win32_enumerate_mice(void) {
+    UINT numDevices;
+    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    
+    PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    
+    g_mouse_count = 0;
+    
+    for (UINT i = 0; i < numDevices && g_mouse_count < MAX_MICE; i++) {
+        if (deviceList[i].dwType == RIM_TYPEMOUSE) {
+            mouse_state *mouse = &g_mice[g_mouse_count];
+            mouse->device_handle = deviceList[i].hDevice;
+            
+            UINT size = 0;
+            GetRawInputDeviceInfo(mouse->device_handle, RIDI_DEVICENAME, NULL, &size);
+            if (size < sizeof(mouse->device_name)) {
+                GetRawInputDeviceInfo(mouse->device_handle, RIDI_DEVICENAME, mouse->device_name, &size);
+            }
+            
+            g_mouse_count++;
+        }
+    }
+    
+    free(deviceList);
+}
+
 void win32_handle_mouse(const RAWINPUT *raw) {
+    // Find mouse index
+    int mouse_index = 0;
+    for (int i = 0; i < g_mouse_count; i++) {
+        if (g_mice[i].device_handle == raw->header.hDevice) {
+            mouse_index = i;
+            break;
+        }
+    }
+    
+    mouse_state *mouse = &g_mice[mouse_index];
+    
     pal_event event = {0};
     int32_t dx = raw->data.mouse.lLastX;
     int32_t dy = raw->data.mouse.lLastY;
     
-    // Update mouse delta
-    input.mouse_delta.x += dx;
-    input.mouse_delta.y += dy;
+    // Update per-mouse delta
+    mouse->delta_x += dx;
+    mouse->delta_y += dy;
     
     USHORT buttons = raw->data.mouse.usButtonFlags;
     POINT point = {0};
     GetCursorPos(&point);
     ScreenToClient(g_current_window->hwnd, &point); 
+    
     // Handle motion
     if (dx || dy) {
         event.type = PAL_EVENT_MOUSE_MOTION;
@@ -1828,14 +1861,13 @@ void win32_handle_mouse(const RAWINPUT *raw) {
             .delta_x = dx,
             .delta_y = dy,
             .buttons = g_cached_mouse_buttons,
+            .mouse_id = mouse_index
         };
-        // Enqueue motion event
         pal__eventq_push(&g_event_queue, event);
     }
     
     // Handle mouse wheel
     if (buttons & RI_MOUSE_WHEEL) {
-        // Wheel delta is in the high word of usButtonData
         SHORT wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
         
         event.type = PAL_EVENT_MOUSE_WHEEL;
@@ -1843,37 +1875,39 @@ void win32_handle_mouse(const RAWINPUT *raw) {
             .mouse_x = point.x,
             .mouse_y = point.y,
             .x = 0,
-            .y = (float)(wheel_delta / WHEEL_DELTA), // Normalize to standard units
+            .y = (float)(wheel_delta / WHEEL_DELTA),
             .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
+            .mouse_id = mouse_index
         };
-        // Enqueue wheel event
         pal__eventq_push(&g_event_queue, event);
     }
     
-    // Handle horizontal wheel (if supported)
+    // Handle horizontal wheel
     if (buttons & RI_MOUSE_HWHEEL) {
-        // Horizontal wheel delta is in the high word of usButtonData
         SHORT hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
         
         event.type = PAL_EVENT_MOUSE_WHEEL;
         event.wheel = (pal_mouse_wheel_event) {
             .mouse_x = point.x,
             .mouse_y = point.y,
-            .x = (float)(hwheel_delta / WHEEL_DELTA),  // Normalize to standard units
+            .x = (float)(hwheel_delta / WHEEL_DELTA),
             .y = 0,
             .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
+            .mouse_id = mouse_index
         };
-        // Enqueue horizontal wheel event
         pal__eventq_push(&g_event_queue, event);
     }
+    
     // Handle button events
-    for (int i = 0; i < 5; i++) { // Only check first 5 buttons (left, right, middle, x1, x2)
+    for (int i = 0; i < 5; i++) {
         uint16_t down = (buttons >> (i * 2)) & 1;
         uint16_t up = (buttons >> (i * 2 + 1)) & 1;
         int pal_button = win32_button_to_pal_button[i];
         
         if (down) {
-            g_cached_mouse_buttons |= (1 << i);  // Set bit
+            mouse->buttons[i] = 1;
+            g_cached_mouse_buttons |= (1 << i);
+            
             event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
                 .x = point.x,
@@ -1881,12 +1915,15 @@ void win32_handle_mouse(const RAWINPUT *raw) {
                 .pressed = 1,
                 .clicks = 1,
                 .modifiers = g_cached_modifiers,
-                .button = win32_button_to_pal_button[i]
+                .button = pal_button,
+                .mouse_id = mouse_index
             };
-			pal__eventq_push(&g_event_queue, event);
-            input.mouse_buttons[pal_button] = 1;
+            pal__eventq_push(&g_event_queue, event);
         } else if (up) {
-            g_cached_mouse_buttons &= ~(1 << i); // Clear bit
+            mouse->buttons[i] = 0;
+            mouse->buttons_processed[i] = 0;
+            g_cached_mouse_buttons &= ~(1 << i);
+            
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
             event.button = (pal_mouse_button_event){
                 .x = point.x,
@@ -1894,15 +1931,13 @@ void win32_handle_mouse(const RAWINPUT *raw) {
                 .pressed = 0,
                 .clicks = 1,
                 .modifiers = g_cached_modifiers,
-                .button = win32_button_to_pal_button[i]
+                .button = pal_button,
+                .mouse_id = mouse_index
             };
-			pal__eventq_push(&g_event_queue, event);
-            input.mouse_buttons[pal_button] = 0;
-            input.mouse_buttons_processed[pal_button] = 0;
+            pal__eventq_push(&g_event_queue, event);
         }
     }
 }
-
 // Handles Gamepads, Joysticks, Steering wheels, etc...
 void win32_handle_hid(const RAWINPUT *raw) {
     printf("%d", raw->data.hid.dwCount);
@@ -1941,7 +1976,7 @@ static int win32_get_raw_input_buffer(void) {
 // File Functions.
 //----------------------------------------------------------------------------------
 
-PALAPI uint8_t pal_does_file_exist(const char *file_path) {
+PALAPI pal_bool pal_does_file_exist(const char *file_path) {
     DWORD attrs = GetFileAttributesA(file_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
@@ -2047,7 +2082,7 @@ PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     return permissions;
 }
 
-PALAPI uint8_t pal_change_file_permissions(const char *file_path, uint32_t permission_flags) {
+PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags) {
     if (!file_path) {
         return 0; // Invalid path
     }
@@ -2146,7 +2181,7 @@ PALAPI uint8_t pal_change_file_permissions(const char *file_path, uint32_t permi
     return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
-PALAPI uint8_t pal_read_file(const char *file_path, char *buffer) {
+PALAPI pal_bool pal_read_file(const char *file_path, char *buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -2188,7 +2223,7 @@ PALAPI uint8_t pal_read_file(const char *file_path, char *buffer) {
 }
 
 
-PALAPI uint8_t pal_write_file(const char *file_path, size_t file_size, char *buffer) {
+PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_WRITE,
@@ -2223,7 +2258,7 @@ PALAPI uint8_t pal_write_file(const char *file_path, size_t file_size, char *buf
     return 0;
 }
 
-PALAPI uint8_t pal_copy_file(const char *original_path, const char *copy_path) {
+PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) {
     return CopyFileA(original_path, copy_path, pal_false) ? 0 : 1;
 }
 
