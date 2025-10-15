@@ -14,7 +14,6 @@ glad (optional, but highly recommended)
 * Mac support
 * Linux support
 * Better Sound & Music API & More features.
-* Multiple Keyboard (and mouse?) support.
 * Support for all gamepads. Or as many can be reasonably supported.
 ## License
 MIT
