@@ -1139,6 +1139,7 @@ extern "C" {
 PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
+PALAPI pal_vec2 pal_get_window_border_size(pal_window *window);
 PALAPI int pal_show_cursor(void);
 PALAPI int pal_hide_cursor(void);
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);

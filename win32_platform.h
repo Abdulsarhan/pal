@@ -1503,6 +1503,24 @@ PALAPI pal_window *pal_create_window(int width, int height, const char* window_t
     }
 }
 
+PALAPI pal_vec2 pal_get_window_border_size(pal_window* window) {
+    RECT rect;
+    GetClientRect(window->hwnd, &rect);
+
+    HDC hdc = GetDC(window->hwnd);
+    int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+    int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+    ReleaseDC(window->hwnd, hdc);
+
+    // Convert logical pixels to physical pixels
+    float scaleX = dpiX / 96.0f;
+    float scaleY = dpiY / 96.0f;
+
+    pal_vec2 border_size;
+    border_size.x = (int)((rect.right - rect.left) * scaleX);
+    border_size.y = (int)((rect.bottom - rect.top) * scaleY);
+}
+
 PALAPI int pal_make_context_current(pal_window *window) {
     if (!wglMakeCurrent(window->hdc, window->hglrc)) {
         MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
