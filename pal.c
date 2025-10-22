@@ -61,6 +61,7 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
 PALAPI void pal_init(void) {
     pal__init_eventq();
     win32_enumerate_keyboards();
+    win32_enumerate_mice();
     win32_init_timer();
     win32_init_sound();
     if (!win32_init_gamepads()) {
@@ -200,7 +201,6 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
     if (mouse_id < 0 || mouse_id >= g_mouse_count) return 0;
     return g_mice[mouse_id].buttons[button];
 }
-
 PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
     if (mouse_id == -1) {
         for (int i = 0; i < g_mouse_count; i++) {

@@ -67,7 +67,6 @@ int main() {
 
                 case PAL_EVENT_MOUSE_BUTTON_DOWN:
                     if (event.button.button == PAL_MOUSE_LEFT) {
-                        printf("mouse button left!\n");
                     }
                     break;
                 case PAL_EVENT_MOUSE_BUTTON_UP:
@@ -109,17 +108,17 @@ int main() {
         }
         // The is_* functions only work after all the events have been polled.
         // do not call this in the message loop.
-        if (pal_is_key_pressed(3, PAL_W)) {
+        if (pal_is_key_down(3, PAL_W)) {
             printf("PRESSED W!\n");
         }
         if (pal_is_mouse_pressed(-1, PAL_MOUSE_LEFT)) {
             printf("Pressed LMB!\n");
         }
         if (pal_is_mouse_pressed(-1, PAL_MOUSE_RIGHT)) {
-            printf("Pressed LMB!\n");
+            printf("Pressed RMB!\n");
         }
         if (pal_is_mouse_pressed(-1, PAL_MOUSE_MIDDLE)) {
-            printf("Pressed LMB!\n");
+            printf("Pressed MMB!\n");
         }
 
         if (pal_is_mouse_pressed(-1, PAL_MOUSE_4)) {
