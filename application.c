@@ -28,8 +28,8 @@ static OpenglInfo get_opengl_info(void) {
         glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
         for (int i = 0; i < numExtensions; i++) {
             const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
-            //strcat(info.extensions, ext);
-            //strcat(info.extensions, " ");
+            // strcat(info.extensions, ext);
+            // strcat(info.extensions, " ");
         }
     } else {
         info.extensions[0] = (char)glGetString(GL_EXTENSIONS);
@@ -51,11 +51,11 @@ int main() {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
 
-    //OpenglInfo openglInfo = get_opengl_info();
+    // OpenglInfo openglInfo = get_opengl_info();
     pal_sound* music = pal_load_music("sine_wave.wav");
     pal_play_music(music, 0.1f);
-    //pal_set_window_icon_legacy(window, "icon.ico");
-    //pal_set_taskbar_icon(window, "png.png");
+    // pal_set_window_icon_legacy(window, "icon.ico");
+    // pal_set_taskbar_icon(window, "png.png");
     uint8_t running = pal_true;
     pal_event event;
     pal_gamepad_state state;
@@ -88,17 +88,17 @@ int main() {
                     break;
                 case PAL_EVENT_MOUSE_MOTION:
                     printf("X: %d, Y: %d\n", event.motion.delta_x, event.motion.delta_y);
-                    //printf("mouse moved!\n");
+                    // printf("mouse moved!\n");
                     break;
                 case PAL_EVENT_WINDOW_LOST_FOCUS:
                     if (is_fullscreen) {
-						pal_set_video_mode(NULL);
-						pal_minimize_window(window);
+                        pal_set_video_mode(NULL);
+                        pal_minimize_window(window);
                     }
                     break;
                 case PAL_EVENT_WINDOW_GAINED_FOCUS:
                     if (is_fullscreen) {
-						pal_make_window_fullscreen(window);
+                        pal_make_window_fullscreen(window);
                     }
                     break;
                 default:

@@ -41,7 +41,7 @@ IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
 // on windows, the message pump is not specific to any window, it's specific to the thread.
-// this is false initially because windows sends messages to the window as soon as 
+// this is false initially because windows sends messages to the window as soon as
 // Create_WindowExA() is called.
 pal_bool g_message_pump_drained = pal_false;
 struct pal_window {
@@ -183,148 +183,147 @@ static const uint16_t win32_key_to_pal_key[] = {
     [0x90] = 0x90, [0x91] = 0x91, // NumLock, ScrollLock
 };
 
-
 // clang-format on
 static int win32_makecode_to_pal_scancode[256] = {
-    [0x00] = 0,                    // Invalid
-    [0x01] = PAL_SCAN_ESCAPE,      // Escape
-    [0x02] = PAL_SCAN_1,           // 1
-    [0x03] = PAL_SCAN_2,           // 2
-    [0x04] = PAL_SCAN_3,           // 3
-    [0x05] = PAL_SCAN_4,           // 4
-    [0x06] = PAL_SCAN_5,           // 5
-    [0x07] = PAL_SCAN_6,           // 6
-    [0x08] = PAL_SCAN_7,           // 7
-    [0x09] = PAL_SCAN_8,           // 8
-    [0x0A] = PAL_SCAN_9,           // 9
-    [0x0B] = PAL_SCAN_0,           // 0
-    [0x0C] = PAL_SCAN_MINUS,       // -
-    [0x0D] = PAL_SCAN_EQUALS,      // =
-    [0x0E] = PAL_SCAN_BACKSPACE,   // Backspace
-    [0x0F] = PAL_SCAN_TAB,         // Tab
-    [0x10] = PAL_SCAN_Q,           // Q
-    [0x11] = PAL_SCAN_W,           // W
-    [0x12] = PAL_SCAN_E,           // E
-    [0x13] = PAL_SCAN_R,           // R
-    [0x14] = PAL_SCAN_T,           // T
-    [0x15] = PAL_SCAN_Y,           // Y
-    [0x16] = PAL_SCAN_U,           // U
-    [0x17] = PAL_SCAN_I,           // I
-    [0x18] = PAL_SCAN_O,           // O
-    [0x19] = PAL_SCAN_P,           // P
-    [0x1A] = PAL_SCAN_LEFTBRACKET,     // [
-    [0x1B] = PAL_SCAN_RIGHTBRACKET,    // ]
-    [0x1C] = PAL_SCAN_RETURN,      // Enter
-    [0x1D] = PAL_SCAN_LCTRL,       // Left Ctrl
-    [0x1E] = PAL_SCAN_A,           // A
-    [0x1F] = PAL_SCAN_S,           // S
-    [0x20] = PAL_SCAN_D,           // D
-    [0x21] = PAL_SCAN_F,           // F
-    [0x22] = PAL_SCAN_G,           // G
-    [0x23] = PAL_SCAN_H,           // H
-    [0x24] = PAL_SCAN_J,           // J
-    [0x25] = PAL_SCAN_K,           // K
-    [0x26] = PAL_SCAN_L,           // L
-    [0x27] = PAL_SCAN_SEMICOLON,   // ;
-    [0x28] = PAL_SCAN_APOSTROPHE,  // '
-    [0x29] = PAL_SCAN_GRAVE,       // `
-    [0x2A] = PAL_SCAN_LSHIFT,      // Left Shift
-    [0x2B] = PAL_SCAN_BACKSLASH,   // \ (backslash)
-    [0x2C] = PAL_SCAN_Z,           // Z
-    [0x2D] = PAL_SCAN_X,           // X
-    [0x2E] = PAL_SCAN_C,           // C
-    [0x2F] = PAL_SCAN_V,           // V
-    [0x30] = PAL_SCAN_B,           // B
-    [0x31] = PAL_SCAN_N,           // N
-    [0x32] = PAL_SCAN_M,           // M
-    [0x33] = PAL_SCAN_COMMA,       // ,
-    [0x34] = PAL_SCAN_PERIOD,      // .
-    [0x35] = PAL_SCAN_SLASH,       // /
-    [0x36] = PAL_SCAN_RSHIFT,      // Right Shift
-    [0x37] = PAL_SCAN_KP_MULTIPLY, // Keypad *
-    [0x38] = PAL_SCAN_LALT,        // Left Alt
-    [0x39] = PAL_SCAN_SPACE,       // Space
-    [0x3A] = PAL_SCAN_CAPSLOCK,    // Caps Lock
-    [0x3B] = PAL_SCAN_F1,          // F1
-    [0x3C] = PAL_SCAN_F2,          // F2
-    [0x3D] = PAL_SCAN_F3,          // F3
-    [0x3E] = PAL_SCAN_F4,          // F4
-    [0x3F] = PAL_SCAN_F5,          // F5
-    [0x40] = PAL_SCAN_F6,          // F6
-    [0x41] = PAL_SCAN_F7,          // F7
-    [0x42] = PAL_SCAN_F8,          // F8
-    [0x43] = PAL_SCAN_F9,          // F9
-    [0x44] = PAL_SCAN_F10,         // F10
-    [0x45] = PAL_SCAN_NUMCLEAR,    // Num Lock
-    [0x46] = PAL_SCAN_SCROLLLOCK,  // Scroll Lock
-    [0x47] = PAL_SCAN_KP_7,        // Keypad 7 / Home
-    [0x48] = PAL_SCAN_KP_8,        // Keypad 8 / Up
-    [0x49] = PAL_SCAN_KP_9,        // Keypad 9 / Page Up
-    [0x4A] = PAL_SCAN_KP_MINUS,    // Keypad -
-    [0x4B] = PAL_SCAN_KP_4,        // Keypad 4 / Left
-    [0x4C] = PAL_SCAN_KP_5,        // Keypad 5
-    [0x4D] = PAL_SCAN_KP_6,        // Keypad 6 / Right
-    [0x4E] = PAL_SCAN_KP_PLUS,     // Keypad +
-    [0x4F] = PAL_SCAN_KP_1,        // Keypad 1 / End
-    [0x50] = PAL_SCAN_KP_2,        // Keypad 2 / Down
-    [0x51] = PAL_SCAN_KP_3,        // Keypad 3 / Page Down
-    [0x52] = PAL_SCAN_KP_0,        // Keypad 0 / Insert
-    [0x53] = PAL_SCAN_KP_PERIOD,   // Keypad . / Delete
+    [0x00] = 0,                       // Invalid
+    [0x01] = PAL_SCAN_ESCAPE,         // Escape
+    [0x02] = PAL_SCAN_1,              // 1
+    [0x03] = PAL_SCAN_2,              // 2
+    [0x04] = PAL_SCAN_3,              // 3
+    [0x05] = PAL_SCAN_4,              // 4
+    [0x06] = PAL_SCAN_5,              // 5
+    [0x07] = PAL_SCAN_6,              // 6
+    [0x08] = PAL_SCAN_7,              // 7
+    [0x09] = PAL_SCAN_8,              // 8
+    [0x0A] = PAL_SCAN_9,              // 9
+    [0x0B] = PAL_SCAN_0,              // 0
+    [0x0C] = PAL_SCAN_MINUS,          // -
+    [0x0D] = PAL_SCAN_EQUALS,         // =
+    [0x0E] = PAL_SCAN_BACKSPACE,      // Backspace
+    [0x0F] = PAL_SCAN_TAB,            // Tab
+    [0x10] = PAL_SCAN_Q,              // Q
+    [0x11] = PAL_SCAN_W,              // W
+    [0x12] = PAL_SCAN_E,              // E
+    [0x13] = PAL_SCAN_R,              // R
+    [0x14] = PAL_SCAN_T,              // T
+    [0x15] = PAL_SCAN_Y,              // Y
+    [0x16] = PAL_SCAN_U,              // U
+    [0x17] = PAL_SCAN_I,              // I
+    [0x18] = PAL_SCAN_O,              // O
+    [0x19] = PAL_SCAN_P,              // P
+    [0x1A] = PAL_SCAN_LEFTBRACKET,    // [
+    [0x1B] = PAL_SCAN_RIGHTBRACKET,   // ]
+    [0x1C] = PAL_SCAN_RETURN,         // Enter
+    [0x1D] = PAL_SCAN_LCTRL,          // Left Ctrl
+    [0x1E] = PAL_SCAN_A,              // A
+    [0x1F] = PAL_SCAN_S,              // S
+    [0x20] = PAL_SCAN_D,              // D
+    [0x21] = PAL_SCAN_F,              // F
+    [0x22] = PAL_SCAN_G,              // G
+    [0x23] = PAL_SCAN_H,              // H
+    [0x24] = PAL_SCAN_J,              // J
+    [0x25] = PAL_SCAN_K,              // K
+    [0x26] = PAL_SCAN_L,              // L
+    [0x27] = PAL_SCAN_SEMICOLON,      // ;
+    [0x28] = PAL_SCAN_APOSTROPHE,     // '
+    [0x29] = PAL_SCAN_GRAVE,          // `
+    [0x2A] = PAL_SCAN_LSHIFT,         // Left Shift
+    [0x2B] = PAL_SCAN_BACKSLASH,      // \ (backslash)
+    [0x2C] = PAL_SCAN_Z,              // Z
+    [0x2D] = PAL_SCAN_X,              // X
+    [0x2E] = PAL_SCAN_C,              // C
+    [0x2F] = PAL_SCAN_V,              // V
+    [0x30] = PAL_SCAN_B,              // B
+    [0x31] = PAL_SCAN_N,              // N
+    [0x32] = PAL_SCAN_M,              // M
+    [0x33] = PAL_SCAN_COMMA,          // ,
+    [0x34] = PAL_SCAN_PERIOD,         // .
+    [0x35] = PAL_SCAN_SLASH,          // /
+    [0x36] = PAL_SCAN_RSHIFT,         // Right Shift
+    [0x37] = PAL_SCAN_KP_MULTIPLY,    // Keypad *
+    [0x38] = PAL_SCAN_LALT,           // Left Alt
+    [0x39] = PAL_SCAN_SPACE,          // Space
+    [0x3A] = PAL_SCAN_CAPSLOCK,       // Caps Lock
+    [0x3B] = PAL_SCAN_F1,             // F1
+    [0x3C] = PAL_SCAN_F2,             // F2
+    [0x3D] = PAL_SCAN_F3,             // F3
+    [0x3E] = PAL_SCAN_F4,             // F4
+    [0x3F] = PAL_SCAN_F5,             // F5
+    [0x40] = PAL_SCAN_F6,             // F6
+    [0x41] = PAL_SCAN_F7,             // F7
+    [0x42] = PAL_SCAN_F8,             // F8
+    [0x43] = PAL_SCAN_F9,             // F9
+    [0x44] = PAL_SCAN_F10,            // F10
+    [0x45] = PAL_SCAN_NUMCLEAR,       // Num Lock
+    [0x46] = PAL_SCAN_SCROLLLOCK,     // Scroll Lock
+    [0x47] = PAL_SCAN_KP_7,           // Keypad 7 / Home
+    [0x48] = PAL_SCAN_KP_8,           // Keypad 8 / Up
+    [0x49] = PAL_SCAN_KP_9,           // Keypad 9 / Page Up
+    [0x4A] = PAL_SCAN_KP_MINUS,       // Keypad -
+    [0x4B] = PAL_SCAN_KP_4,           // Keypad 4 / Left
+    [0x4C] = PAL_SCAN_KP_5,           // Keypad 5
+    [0x4D] = PAL_SCAN_KP_6,           // Keypad 6 / Right
+    [0x4E] = PAL_SCAN_KP_PLUS,        // Keypad +
+    [0x4F] = PAL_SCAN_KP_1,           // Keypad 1 / End
+    [0x50] = PAL_SCAN_KP_2,           // Keypad 2 / Down
+    [0x51] = PAL_SCAN_KP_3,           // Keypad 3 / Page Down
+    [0x52] = PAL_SCAN_KP_0,           // Keypad 0 / Insert
+    [0x53] = PAL_SCAN_KP_PERIOD,      // Keypad . / Delete
     [0x56] = PAL_SCAN_NONUSBACKSLASH, // Non-US backslash (ISO layout)
-    [0x57] = PAL_SCAN_F11,         // F11
-    [0x58] = PAL_SCAN_F12,         // F12
-    [0x64] = PAL_SCAN_F13,         // F13
-    [0x65] = PAL_SCAN_F14,         // F14
-    [0x66] = PAL_SCAN_F15,         // F15
-    [0x67] = PAL_SCAN_F16,         // F16
-    [0x68] = PAL_SCAN_F17,         // F17
-    [0x69] = PAL_SCAN_F18,         // F18
-    [0x6A] = PAL_SCAN_F19,         // F19
-    [0x6B] = PAL_SCAN_F20,         // F20
-    [0x6C] = PAL_SCAN_F21,         // F21
-    [0x6D] = PAL_SCAN_F22,         // F22
-    [0x6E] = PAL_SCAN_F23,         // F23
-    [0x6F] = PAL_SCAN_F24,         // F24
+    [0x57] = PAL_SCAN_F11,            // F11
+    [0x58] = PAL_SCAN_F12,            // F12
+    [0x64] = PAL_SCAN_F13,            // F13
+    [0x65] = PAL_SCAN_F14,            // F14
+    [0x66] = PAL_SCAN_F15,            // F15
+    [0x67] = PAL_SCAN_F16,            // F16
+    [0x68] = PAL_SCAN_F17,            // F17
+    [0x69] = PAL_SCAN_F18,            // F18
+    [0x6A] = PAL_SCAN_F19,            // F19
+    [0x6B] = PAL_SCAN_F20,            // F20
+    [0x6C] = PAL_SCAN_F21,            // F21
+    [0x6D] = PAL_SCAN_F22,            // F22
+    [0x6E] = PAL_SCAN_F23,            // F23
+    [0x6F] = PAL_SCAN_F24,            // F24
     [0x70] = PAL_SCAN_INTERNATIONAL2, // Katakana/Hiragana
     [0x73] = PAL_SCAN_INTERNATIONAL1, // Ro
     [0x79] = PAL_SCAN_INTERNATIONAL4, // Henkan
     [0x7B] = PAL_SCAN_INTERNATIONAL5, // Muhenkan
     [0x7D] = PAL_SCAN_INTERNATIONAL3, // Yen
-    
+
 };
 
 // Translation table for extended makecodes (E0 prefix keys)
 static int win32_extended_makecode_to_pal_scancode[256] = {
-    [0x1C] = PAL_SCAN_KP_ENTER,      // Keypad Enter
-    [0x1D] = PAL_SCAN_RCTRL,         // Right Ctrl
-    [0x35] = PAL_SCAN_KP_DIVIDE,     // Keypad /
-    [0x37] = PAL_SCAN_PRINTSCREEN,   // Print Screen
-    [0x38] = PAL_SCAN_RALT,          // Right Alt / AltGr
-    [0x46] = PAL_SCAN_PAUSE,         // Pause/Break
-    [0x47] = PAL_SCAN_HOME,          // Home
-    [0x48] = PAL_SCAN_UP,            // Up Arrow
-    [0x49] = PAL_SCAN_PAGEUP,        // Page Up
-    [0x4B] = PAL_SCAN_LEFT,          // Left Arrow
-    [0x4D] = PAL_SCAN_RIGHT,         // Right Arrow
-    [0x4F] = PAL_SCAN_END,           // End
-    [0x50] = PAL_SCAN_DOWN,          // Down Arrow
-    [0x51] = PAL_SCAN_PAGEDOWN,      // Page Down
-    [0x52] = PAL_SCAN_INSERT,        // Insert
-    [0x53] = PAL_SCAN_DELETE,        // Delete
-    [0x5B] = PAL_SCAN_LGUI,          // Left Windows/Super
-    [0x5C] = PAL_SCAN_RGUI,          // Right Windows/Super
-    [0x5D] = PAL_SCAN_APPLICATION,   // Menu/Application
-    [0x5F] = PAL_SCAN_SLEEP,         // Sleep
-    [0x63] = PAL_SCAN_WAKE,          // Wake
-    [0x65] = PAL_SCAN_AC_SEARCH,     // Search
-    [0x66] = PAL_SCAN_AC_BOOKMARKS,  // Favorites
-    [0x67] = PAL_SCAN_AC_REFRESH,    // Refresh
-    [0x68] = PAL_SCAN_AC_STOP,       // Stop
-    [0x69] = PAL_SCAN_AC_FORWARD,    // Forward
-    [0x6A] = PAL_SCAN_AC_BACK,       // Back
-    [0x6B] = PAL_SCAN_AC_HOME,       // My Computer
-    [0x6C] = PAL_SCAN_AC_OPEN,       // Mail
-    [0x6D] = PAL_SCAN_MEDIA_SELECT,  // Media Select
+    [0x1C] = PAL_SCAN_KP_ENTER,     // Keypad Enter
+    [0x1D] = PAL_SCAN_RCTRL,        // Right Ctrl
+    [0x35] = PAL_SCAN_KP_DIVIDE,    // Keypad /
+    [0x37] = PAL_SCAN_PRINTSCREEN,  // Print Screen
+    [0x38] = PAL_SCAN_RALT,         // Right Alt / AltGr
+    [0x46] = PAL_SCAN_PAUSE,        // Pause/Break
+    [0x47] = PAL_SCAN_HOME,         // Home
+    [0x48] = PAL_SCAN_UP,           // Up Arrow
+    [0x49] = PAL_SCAN_PAGEUP,       // Page Up
+    [0x4B] = PAL_SCAN_LEFT,         // Left Arrow
+    [0x4D] = PAL_SCAN_RIGHT,        // Right Arrow
+    [0x4F] = PAL_SCAN_END,          // End
+    [0x50] = PAL_SCAN_DOWN,         // Down Arrow
+    [0x51] = PAL_SCAN_PAGEDOWN,     // Page Down
+    [0x52] = PAL_SCAN_INSERT,       // Insert
+    [0x53] = PAL_SCAN_DELETE,       // Delete
+    [0x5B] = PAL_SCAN_LGUI,         // Left Windows/Super
+    [0x5C] = PAL_SCAN_RGUI,         // Right Windows/Super
+    [0x5D] = PAL_SCAN_APPLICATION,  // Menu/Application
+    [0x5F] = PAL_SCAN_SLEEP,        // Sleep
+    [0x63] = PAL_SCAN_WAKE,         // Wake
+    [0x65] = PAL_SCAN_AC_SEARCH,    // Search
+    [0x66] = PAL_SCAN_AC_BOOKMARKS, // Favorites
+    [0x67] = PAL_SCAN_AC_REFRESH,   // Refresh
+    [0x68] = PAL_SCAN_AC_STOP,      // Stop
+    [0x69] = PAL_SCAN_AC_FORWARD,   // Forward
+    [0x6A] = PAL_SCAN_AC_BACK,      // Back
+    [0x6B] = PAL_SCAN_AC_HOME,      // My Computer
+    [0x6C] = PAL_SCAN_AC_OPEN,      // Mail
+    [0x6D] = PAL_SCAN_MEDIA_SELECT, // Media Select
 };
 
 typedef struct {
@@ -1013,31 +1012,31 @@ static int g_cached_modifiers = PAL_MOD_NONE; // both keyboard and mouse code ne
 void win32_enumerate_mice(void) {
     UINT numDevices;
     GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
-    
+
     PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
-    
+
     g_mouse_count = 0;
-    
+
     for (UINT i = 0; i < numDevices && g_mouse_count < MAX_MICE; i++) {
         if (deviceList[i].dwType == RIM_TYPEMOUSE) {
-            mouse_state *mouse = &g_mice[g_mouse_count];
+            mouse_state* mouse = &g_mice[g_mouse_count];
             mouse->device_handle = deviceList[i].hDevice;
-            
+
             UINT size = 0;
             GetRawInputDeviceInfo(mouse->device_handle, RIDI_DEVICENAME, NULL, &size);
             if (size < sizeof(mouse->device_name)) {
                 GetRawInputDeviceInfo(mouse->device_handle, RIDI_DEVICENAME, mouse->device_name, &size);
             }
-            
+
             g_mouse_count++;
         }
     }
-    
+
     free(deviceList);
 }
 
-void win32_handle_mouse(const RAWINPUT *raw) {
+void win32_handle_mouse(const RAWINPUT* raw) {
     // Find mouse index
     int mouse_index = 0;
     for (int i = 0; i < g_mouse_count; i++) {
@@ -1046,78 +1045,75 @@ void win32_handle_mouse(const RAWINPUT *raw) {
             break;
         }
     }
-    
-    mouse_state *mouse = &g_mice[mouse_index];
-    
+
+    mouse_state* mouse = &g_mice[mouse_index];
+
     pal_event event = {0};
     int32_t dx = raw->data.mouse.lLastX;
     int32_t dy = raw->data.mouse.lLastY;
-    
+
     // Update per-mouse delta
     mouse->delta_x += dx;
     mouse->delta_y += dy;
-    
+
     USHORT buttons = raw->data.mouse.usButtonFlags;
     POINT point = {0};
     GetCursorPos(&point);
-    ScreenToClient(g_current_window->hwnd, &point); 
-    
+    ScreenToClient(g_current_window->hwnd, &point);
+
     // Handle motion
     if (dx || dy) {
         event.type = PAL_EVENT_MOUSE_MOTION;
-        event.motion = (pal_mouse_motion_event) {
+        event.motion = (pal_mouse_motion_event){
             .x = point.x,
             .y = point.y,
             .delta_x = dx,
             .delta_y = dy,
             .buttons = g_cached_mouse_buttons,
-            .mouse_id = mouse_index
-        };
+            .mouse_id = mouse_index};
         pal__eventq_push(&g_event_queue, event);
     }
-    
+
     // Handle mouse wheel
     if (buttons & RI_MOUSE_WHEEL) {
         SHORT wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
-        
+
         event.type = PAL_EVENT_MOUSE_WHEEL;
-        event.wheel = (pal_mouse_wheel_event) {
+        event.wheel = (pal_mouse_wheel_event){
             .mouse_x = point.x,
             .mouse_y = point.y,
             .x = 0,
             .y = (float)(wheel_delta / WHEEL_DELTA),
             .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
-            .mouse_id = mouse_index
-        };
+            .mouse_id = mouse_index};
         pal__eventq_push(&g_event_queue, event);
     }
-    
+
     // Handle horizontal wheel
     if (buttons & RI_MOUSE_HWHEEL) {
         SHORT hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
-        
+
         event.type = PAL_EVENT_MOUSE_WHEEL;
-        event.wheel = (pal_mouse_wheel_event) {
+        event.wheel = (pal_mouse_wheel_event){
             .mouse_x = point.x,
             .mouse_y = point.y,
             .x = (float)(hwheel_delta / WHEEL_DELTA),
             .y = 0,
             .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
-            .mouse_id = mouse_index
-        };
+            .mouse_id = mouse_index};
         pal__eventq_push(&g_event_queue, event);
     }
-    
+
     // Handle button events
     for (int i = 0; i < 5; i++) {
         uint16_t down = (buttons >> (i * 2)) & 1;
         uint16_t up = (buttons >> (i * 2 + 1)) & 1;
         int pal_button = win32_button_to_pal_button[i];
-        
+
         if (down) {
-            mouse->buttons[pal_button] = 1;  // FIXED: Use pal_button instead of i
+            mouse->buttons[pal_button] = 1; // FIXED: Use pal_button instead of i
             g_cached_mouse_buttons |= (1 << i);
-            
+
             event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
                 .x = point.x,
@@ -1126,14 +1122,13 @@ void win32_handle_mouse(const RAWINPUT *raw) {
                 .clicks = 1,
                 .modifiers = g_cached_modifiers,
                 .button = pal_button,
-                .mouse_id = mouse_index
-            };
+                .mouse_id = mouse_index};
             pal__eventq_push(&g_event_queue, event);
         } else if (up) {
-            mouse->buttons[pal_button] = 0;  // FIXED: Use pal_button instead of i
-            mouse->buttons_processed[pal_button] = 0;  // FIXED: Use pal_button instead of i
+            mouse->buttons[pal_button] = 0;           // FIXED: Use pal_button instead of i
+            mouse->buttons_processed[pal_button] = 0; // FIXED: Use pal_button instead of i
             g_cached_mouse_buttons &= ~(1 << i);
-            
+
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
             event.button = (pal_mouse_button_event){
                 .x = point.x,
@@ -1142,8 +1137,7 @@ void win32_handle_mouse(const RAWINPUT *raw) {
                 .clicks = 1,
                 .modifiers = g_cached_modifiers,
                 .button = pal_button,
-                .mouse_id = mouse_index
-            };
+                .mouse_id = mouse_index};
             pal__eventq_push(&g_event_queue, event);
         }
     }
@@ -1166,44 +1160,53 @@ static int g_keyboard_count = 0;
 void win32_enumerate_keyboards(void) {
     UINT numDevices;
     GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
-    
+
     PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
-    
+
     g_keyboard_count = 0;
-    
+
     for (UINT i = 0; i < numDevices && g_keyboard_count < MAX_KEYBOARDS; i++) {
         if (deviceList[i].dwType == RIM_TYPEKEYBOARD) {
-            pal_keyboard_state *kb = &g_keyboards[g_keyboard_count];
+            pal_keyboard_state* kb = &g_keyboards[g_keyboard_count];
             kb->device_handle = deviceList[i].hDevice;
-            
+
             // Get device name
             UINT size = 0;
             GetRawInputDeviceInfo(kb->device_handle, RIDI_DEVICENAME, NULL, &size);
             if (size < sizeof(kb->device_name)) {
                 GetRawInputDeviceInfo(kb->device_handle, RIDI_DEVICENAME, kb->device_name, &size);
             }
-            
+
             g_keyboard_count++;
         }
     }
-    
+
     free(deviceList);
 }
-
 
 // Function to update modifier state based on raw input
 static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
     int modifier_flag = 0;
-    
+
     // Map VK codes to modifier flags
     switch (vk) {
-        case VK_LSHIFT:   modifier_flag = PAL_MOD_LSHIFT; break;
-        case VK_RSHIFT:   modifier_flag = PAL_MOD_RSHIFT; break;
-        case VK_LCONTROL: modifier_flag = PAL_MOD_LCTRL; break;
-        case VK_RCONTROL: modifier_flag = PAL_MOD_RCTRL; break;
-        case VK_LMENU:    modifier_flag = PAL_MOD_LALT; break;
-        case VK_RMENU:    
+        case VK_LSHIFT:
+            modifier_flag = PAL_MOD_LSHIFT;
+            break;
+        case VK_RSHIFT:
+            modifier_flag = PAL_MOD_RSHIFT;
+            break;
+        case VK_LCONTROL:
+            modifier_flag = PAL_MOD_LCTRL;
+            break;
+        case VK_RCONTROL:
+            modifier_flag = PAL_MOD_RCTRL;
+            break;
+        case VK_LMENU:
+            modifier_flag = PAL_MOD_LALT;
+            break;
+        case VK_RMENU:
             modifier_flag = PAL_MOD_RALT;
             // Also handle AltGr (right alt)
             // TODO: Assuming that right alt = altgr is probably wrong.
@@ -1213,8 +1216,12 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
                 g_cached_modifiers |= PAL_MOD_ALTGR;
             }
             break;
-        case VK_LWIN:     modifier_flag = PAL_MOD_LSUPER; break;
-        case VK_RWIN:     modifier_flag = PAL_MOD_RSUPER; break;
+        case VK_LWIN:
+            modifier_flag = PAL_MOD_LSUPER;
+            break;
+        case VK_RWIN:
+            modifier_flag = PAL_MOD_RSUPER;
+            break;
         case VK_CAPITAL:
             // Toggle caps lock state
             if (!is_key_released) {
@@ -1236,7 +1243,7 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
         default:
             return; // Not a modifier key
     }
-    
+
     // Update the cached modifier state
     if (is_key_released) {
         g_cached_modifiers &= ~modifier_flag;
@@ -1245,26 +1252,26 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
     }
 }
 
-void win32_handle_keyboard(const RAWINPUT *raw) {
+void win32_handle_keyboard(const RAWINPUT* raw) {
     // Find keyboard index
-    int kb_index = 0;  // Fallback to first keyboard
+    int kb_index = 0; // Fallback to first keyboard
     for (int i = 0; i < g_keyboard_count; i++) {
         if (g_keyboards[i].device_handle == raw->header.hDevice) {
             kb_index = i;
             break;
         }
     }
-    
-    pal_keyboard_state *kb = &g_keyboards[kb_index];
-    
+
+    pal_keyboard_state* kb = &g_keyboards[kb_index];
+
     USHORT vk = raw->data.keyboard.VKey;
     USHORT makecode = raw->data.keyboard.MakeCode;
     USHORT flags = raw->data.keyboard.Flags;
     pal_event event = {0};
-    
+
     pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
     pal_bool is_extended = (flags & RI_KEY_E0) != 0;
-    
+
     pal_bool is_repeat = 0;
     if (vk < 256) {
         if (!is_key_released && kb->key_is_down[vk]) {
@@ -1272,12 +1279,12 @@ void win32_handle_keyboard(const RAWINPUT *raw) {
         }
         kb->key_is_down[vk] = !is_key_released;
     }
-    
+
     update_modifier_state(vk, is_key_released);
-    
+
     int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
     int pal_scancode = 0;
-    
+
     if (is_extended) {
         if (makecode < 256) {
             pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
@@ -1287,7 +1294,7 @@ void win32_handle_keyboard(const RAWINPUT *raw) {
             pal_scancode = win32_makecode_to_pal_scancode[makecode];
         }
     }
-    
+
     if (is_key_released) {
         event.type = PAL_EVENT_KEY_UP;
         event.key = (pal_keyboard_event){
@@ -1296,8 +1303,7 @@ void win32_handle_keyboard(const RAWINPUT *raw) {
             .pressed = 0,
             .repeat = 0,
             .modifiers = g_cached_modifiers,
-            .keyboard_id = kb_index
-        };
+            .keyboard_id = kb_index};
         kb->keys[pal_key] = 0;
         kb->keys_processed[pal_key] = 0;
     } else {
@@ -1308,11 +1314,10 @@ void win32_handle_keyboard(const RAWINPUT *raw) {
             .pressed = 1,
             .repeat = is_repeat,
             .modifiers = g_cached_modifiers,
-            .keyboard_id = kb_index
-        };
+            .keyboard_id = kb_index};
         kb->keys[pal_key] = 1;
     }
-    
+
     pal__eventq_push(&g_event_queue, event);
 }
 
@@ -1393,7 +1398,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
                 .buttons = (uint32_t)wparam};
-                
+
         } break;
 
         case WM_MOUSELEAVE:
@@ -1468,7 +1473,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             // TODO: Make this return a pal_event of some kind.
         case WM_INPUT_DEVICE_CHANGE: {
             win32_enumerate_keyboards();
-			win32_enumerate_mice();
+            win32_enumerate_mice();
             win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
             printf("Device Changed!\n");
         }; break;
@@ -1482,10 +1487,10 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 }
 
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
-PALAPI pal_window *pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
+PALAPI pal_window* pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
     // these variables are only
     // used when initializing opengl.
-    pal_window *fakewindow = NULL;
+    pal_window* fakewindow = NULL;
     HGLRC fakeRC = 0;
     PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
     PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
@@ -1585,7 +1590,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char* window_t
 
     RegisterClassExA(&wc);
 
-    pal_window *window = (pal_window*)malloc(sizeof(pal_window));
+    pal_window* window = (pal_window*)malloc(sizeof(pal_window));
     window->width = (float)width;
     window->height = (float)height;
 
@@ -1667,15 +1672,8 @@ PALAPI pal_window *pal_create_window(int width, int height, const char* window_t
     window->hdc = GetDC(window->hwnd);
 
     const int pixelAttribs[] = {
-        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-        WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-        WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-        WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8,
-        WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8,
-        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
-        0 // null terminator for attrib list.
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE, WGL_SUPPORT_OPENGL_ARB, GL_TRUE, WGL_DOUBLE_BUFFER_ARB, GL_TRUE, WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB, WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB, WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8, WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8, WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
+        0                                                                                                                                                                                                                                                                                                                                              // null terminator for attrib list.
     };
 
     int pixelFormatID;
@@ -1695,10 +1693,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char* window_t
     SetPixelFormat(window->hdc, pixelFormatID, &PFD);
 
     int contextAttribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-        WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
-        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0
-    };
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB, WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0};
 
     window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
 
@@ -1802,7 +1797,7 @@ PALAPI pal_vec2 pal_get_window_border_size(pal_window* window) {
     border_size.y = (int)((rect.bottom - rect.top) * scaleY);
 }
 
-PALAPI int pal_make_context_current(pal_window *window) {
+PALAPI int pal_make_context_current(pal_window* window) {
     if (!wglMakeCurrent(window->hdc, window->hglrc)) {
         MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
         return 1;
@@ -1826,18 +1821,18 @@ PALAPI int pal_hide_cursor(void) {
     return result;
 }
 
-PALAPI pal_bool pal_maximize_window(pal_window *window) {
+PALAPI pal_bool pal_maximize_window(pal_window* window) {
     return ShowWindow(window->hwnd, SW_MAXIMIZE);
 }
 
-PALAPI pal_bool pal_minimize_window(pal_window *window) {
+PALAPI pal_bool pal_minimize_window(pal_window* window) {
     return ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
 static int win32_get_raw_input_buffer(void);
 
 PALAPI void pal__reset_mouse_deltas(void);
-PALAPI pal_bool pal_poll_events(pal_event *event) {
+PALAPI pal_bool pal_poll_events(pal_event* event) {
     MSG msg = {0};
     if (!g_message_pump_drained) {
         pal__reset_mouse_deltas();
@@ -1849,7 +1844,7 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
         g_message_pump_drained = pal_true;
     }
 
-    pal_event_queue *queue = &g_event_queue;
+    pal_event_queue* queue = &g_event_queue;
 
     if (queue->size) { // if queue is not empty,
 
@@ -1861,24 +1856,24 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
         queue->size--;
         return 1;
     } else {
-		g_message_pump_drained = pal_false;
-		return 0;
+        g_message_pump_drained = pal_false;
+        return 0;
     }
 }
 
-PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string) {
+PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
     return SetWindowTextA(window->hwnd, string);
 }
 
-PALAPI pal_monitor *pal_get_primary_monitor(void) {
+PALAPI pal_monitor* pal_get_primary_monitor(void) {
     // The point (0, 0) is guaranteed to be on the primary monitor
-    pal_monitor *monitor = malloc(sizeof(pal_monitor));
+    pal_monitor* monitor = malloc(sizeof(pal_monitor));
     POINT pt = {0, 0};
     monitor->handle = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
     return monitor;
 }
 
-PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
+PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     MONITORINFOEX mi = {.cbSize = sizeof(MONITORINFOEX)};
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
@@ -1886,7 +1881,7 @@ PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
     DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
     if (!EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
         return 0;
-    pal_video_mode *mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
+    pal_video_mode* mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
     mode->width = dm.dmPelsWidth;
     mode->height = dm.dmPelsHeight;
     mode->refresh_rate = dm.dmDisplayFrequency;
@@ -1895,32 +1890,31 @@ PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
     return mode;
 }
 
-PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
+PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
     DEVMODEA dm = {.dmSize = sizeof(DEVMODEA)};
     if (mode == NULL) {
-		if (ChangeDisplaySettingsA(NULL, 0)) {
-			return 1; 
-		} else {
-			return 0;
-		}
+        if (ChangeDisplaySettingsA(NULL, 0)) {
+            return 1;
+        } else {
+            return 0;
+        }
     } else {
         dm.dmPelsWidth = mode->width;
         dm.dmPelsHeight = mode->height;
         dm.dmDisplayFrequency = mode->refresh_rate;
         dm.dmBitsPerPel = mode->bits_per_pixel;
-		if (ChangeDisplaySettingsA(&dm, 0)) {
-			return 1; 
-		} else {
-			return 0;
-		}
+        if (ChangeDisplaySettingsA(&dm, 0)) {
+            return 1;
+        } else {
+            return 0;
+        }
     }
-
 }
 
-PALAPI void *pal_gl_get_proc_address(const char *proc) {
+PALAPI void* pal_gl_get_proc_address(const char* proc) {
     static HMODULE opengl_module = NULL; // Cached across all calls
 
-    void *p = (void*)wglGetProcAddress(proc);
+    void* p = (void*)wglGetProcAddress(proc);
     if (p == NULL || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
         // Load opengl32.dll once on first call, reuse handle afterwards
         if (opengl_module == NULL) {
@@ -1936,7 +1930,7 @@ PALAPI void *pal_gl_get_proc_address(const char *proc) {
     return p;
 }
 
-PALAPI void pal_swap_buffers(pal_window *window) {
+PALAPI void pal_swap_buffers(pal_window* window) {
     SwapBuffers(window->hdc);
 }
 
@@ -1948,7 +1942,7 @@ PALAPI void pal_swap_interval(int interval) {
 typedef void (*RawInputHandler)(const RAWINPUT*);
 
 // Helper struct to hold reusable buffers
-PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
+PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
     POINT cursor_pos = {0};
     GetCursorPos(&cursor_pos);
 
@@ -1959,15 +1953,14 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
-void win32_handle_hid(const RAWINPUT *raw) {
+void win32_handle_hid(const RAWINPUT* raw) {
     printf("%d", raw->data.hid.dwCount);
 }
 
 RawInputHandler Win32InputHandlers[3] = {
-    win32_handle_mouse,    
+    win32_handle_mouse,
     win32_handle_keyboard,
-    win32_handle_hid
-};
+    win32_handle_hid};
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
@@ -1996,12 +1989,12 @@ static int win32_get_raw_input_buffer(void) {
 // File Functions.
 //----------------------------------------------------------------------------------
 
-PALAPI pal_bool pal_does_file_exist(const char *file_path) {
+PALAPI pal_bool pal_does_file_exist(const char* file_path) {
     DWORD attrs = GetFileAttributesA(file_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-PALAPI size_t pal_get_file_size(const char *file_path) {
+PALAPI size_t pal_get_file_size(const char* file_path) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -2021,7 +2014,7 @@ PALAPI size_t pal_get_file_size(const char *file_path) {
     return 0;
 }
 
-PALAPI size_t pal_get_last_write_time(const char *file) {
+PALAPI size_t pal_get_last_write_time(const char* file) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
@@ -2030,7 +2023,7 @@ PALAPI size_t pal_get_last_write_time(const char *file) {
            fileInfo.ftLastWriteTime.dwLowDateTime;
 }
 
-PALAPI size_t pal_get_last_read_time(const char *file) {
+PALAPI size_t pal_get_last_read_time(const char* file) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
         return 0; // Error case
@@ -2039,7 +2032,7 @@ PALAPI size_t pal_get_last_read_time(const char *file) {
            fileInfo.ftLastAccessTime.dwLowDateTime;
 }
 
-PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
+PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     if (!file_path) {
         return 0;
     }
@@ -2102,7 +2095,7 @@ PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     return permissions;
 }
 
-PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags) {
+PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
     if (!file_path) {
         return 0; // Invalid path
     }
@@ -2201,7 +2194,7 @@ PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t perm
     return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
-PALAPI pal_bool pal_read_file(const char *file_path, char *buffer) {
+PALAPI pal_bool pal_read_file(const char* file_path, char* buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -2242,8 +2235,7 @@ PALAPI pal_bool pal_read_file(const char *file_path, char *buffer) {
     return 0;
 }
 
-
-PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer) {
+PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* buffer) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_WRITE,
@@ -2258,7 +2250,7 @@ PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *bu
     }
 
     size_t remaining = file_size;
-    const char *current_pos = buffer;
+    const char* current_pos = buffer;
 
     while (remaining > 0) {
         DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
@@ -2278,12 +2270,12 @@ PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *bu
     return 0;
 }
 
-PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) {
+PALAPI pal_bool pal_copy_file(const char* original_path, const char* copy_path) {
     return CopyFileA(original_path, copy_path, FALSE) ? 0 : 1;
 }
 
-PALAPI pal_file *pal_open_file(const char *file_path) {
-    pal_file *file = (pal_file*)malloc(sizeof(pal_file));
+PALAPI pal_file* pal_open_file(const char* file_path) {
+    pal_file* file = (pal_file*)malloc(sizeof(pal_file));
     file->handle = CreateFileA(
         file_path,             // File name
         GENERIC_READ,          // Desired access
@@ -2303,7 +2295,7 @@ PALAPI pal_file *pal_open_file(const char *file_path) {
     return file;
 }
 
-PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer) {
+PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
     if (!file || file->handle == INVALID_HANDLE_VALUE || !buffer) {
         return 0;
     }
@@ -2334,7 +2326,7 @@ PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t by
     return 1;
 }
 
-PALAPI pal_bool pal_close_file(pal_file *file) {
+PALAPI pal_bool pal_close_file(pal_file* file) {
     if (!CloseHandle(file->handle)) {
         return 0;
     }
@@ -2346,14 +2338,14 @@ PALAPI pal_bool pal_close_file(pal_file *file) {
 // Random Number Generator.
 //----------------------------------------------------------------------------------
 
-PALAPI void pal_srand(uint64_t *state, uint64_t seed) {
+PALAPI void pal_srand(uint64_t* state, uint64_t seed) {
     if (seed == 0) {
         seed = 1; // Avoid zero state which would produce all zeros
     }
     *state = seed;
 }
 
-PALAPI uint32_t pal_rand(uint64_t *state) {
+PALAPI uint32_t pal_rand(uint64_t* state) {
     // SDL's well-tested LCG constants:
     // - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs)
     // - Increment: 0x05 (small odd number, generates smaller ARM code)
@@ -2391,17 +2383,17 @@ int win32_init_sound(void) {
 
 // XAudio2 callback for streaming
 typedef struct {
-    IXAudio2VoiceCallbackVtbl *lpVtbl;
-    pal_sound *sound;
+    IXAudio2VoiceCallbackVtbl* lpVtbl;
+    pal_sound* sound;
 } StreamingVoiceCallback;
 
-static size_t calculate_buffer_size_for_seconds(pal_sound *sound, float seconds) {
+static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds) {
     // bytes_per_second = sample_rate * channels * (bits_per_sample / 8)
     size_t bytes_per_second = sound->sample_rate * sound->channels * (sound->bits_per_sample / 8);
     return (size_t)(bytes_per_second * seconds);
 }
 
-static size_t load_next_chunk(pal_sound *sound, unsigned char *buffer, size_t buffer_size) {
+static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
     size_t bytes_read = 0;
 
     if (sound->source_file) {
@@ -2445,7 +2437,7 @@ static size_t load_next_chunk(pal_sound *sound, unsigned char *buffer, size_t bu
         printf("WAV: Read %zu bytes, new bytes_streamed=%zu\n", bytes_read, sound->bytes_streamed);
 
     } else if (sound->decoder) {
-        stb_vorbis *vorbis = (stb_vorbis*)sound->decoder;
+        stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
 
         // Calculate how many sample frames we can fit in the buffer
         size_t bytes_per_sample_frame = sound->channels * sizeof(short);
@@ -2477,7 +2469,7 @@ static size_t load_next_chunk(pal_sound *sound, unsigned char *buffer, size_t bu
         }
 
         // Allocate temporary float buffers for non-interleaved data
-        float **channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
+        float** channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
         for (int i = 0; i < sound->channels; i++) {
             channel_buffers[i] = (float*)malloc(max_sample_frames * sizeof(float));
         }
@@ -2488,7 +2480,7 @@ static size_t load_next_chunk(pal_sound *sound, unsigned char *buffer, size_t bu
 
         if (total_sample_frames_read > 0) {
             // Convert float samples to interleaved 16-bit shorts
-            short *output_ptr = (short*)buffer;
+            short* output_ptr = (short*)buffer;
 
             for (int sample = 0; sample < total_sample_frames_read; sample++) {
                 for (int ch = 0; ch < sound->channels; ch++) {
@@ -2534,9 +2526,9 @@ static size_t load_next_chunk(pal_sound *sound, unsigned char *buffer, size_t bu
     return bytes_read;
 }
 
-static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback *callback, void *pBufferContext) {
-    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
-    pal_sound *sound = cb->sound;
+static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
 
     static int buffer_end_count = 0;
     printf("OnBufferEnd %d: buffer=%p\n", buffer_end_count++, pBufferContext);
@@ -2560,7 +2552,7 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback *callback, void 
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
 
-        unsigned char *chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
+        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
 
         if (chunk_buffer) {
             size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
@@ -2590,10 +2582,10 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback *callback, void 
     }
 }
 
-static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback *callback) {
+static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
     // OnBufferEnd now handles buffer queuing, so this can be much simpler
-    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
-    pal_sound *sound = cb->sound;
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
 
     if (!sound->is_streaming || sound->stream_finished) {
         return;
@@ -2613,21 +2605,21 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback *ca
     callback_count++;
 }
 
-static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback *callback, void *pBufferContext) {
+static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     // Called when XAudio2 starts processing a buffer
     // pBufferContext contains the buffer we passed in SubmitSourceBuffer
     // For streaming, we don't need to do anything special here
 }
 
-static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback *callback, void *pBufferContext) {
+static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     // Called when a buffer with XAUDIO2_LOOP_INFINITE completes a loop
     // We don't use looping buffers in streaming, so this stays empty
 }
 
-static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback *callback, void *pBufferContext, HRESULT error) {
+static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void* pBufferContext, HRESULT error) {
     // Called when XAudio2 encounters an error
-    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
-    pal_sound *sound = cb->sound;
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
 
     printf("XAudio2 Voice Error: 0x%08X\n", error);
 
@@ -2635,20 +2627,20 @@ static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback *callback, void
     sound->stream_finished = 1;
 }
 
-static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback *callback, UINT32 BytesRequired) {
+static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback* callback, UINT32 BytesRequired) {
     // Called when XAudio2 starts processing audio for this voice
     // BytesRequired tells us how much data XAudio2 needs
-    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
-    pal_sound *sound = cb->sound;
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
 
     // We can use BytesRequired to be more intelligent about buffer management
     // For now, we'll handle this in OnBufferEnd instead
 }
 
-static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback *callback) {
+static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
     // Called when the last buffer with XAUDIO2_END_OF_STREAM finishes playing
-    StreamingVoiceCallback *cb = (StreamingVoiceCallback*)callback;
-    pal_sound *sound = cb->sound;
+    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
+    pal_sound* sound = cb->sound;
 
     printf("Audio stream ended\n");
 
@@ -2669,7 +2661,7 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
     OnVoiceError,
 };
 
-PALAPI int pal_play_music(pal_sound *sound, float volume) {
+PALAPI int pal_play_music(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
         return E_FAIL;
@@ -2711,7 +2703,7 @@ PALAPI int pal_play_music(pal_sound *sound, float volume) {
         float chunk_seconds = sound->preload_seconds;
         size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
 
-        unsigned char *chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
+        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
         if (chunk_buffer) {
             size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
 
@@ -2746,22 +2738,22 @@ PALAPI int pal_play_music(pal_sound *sound, float volume) {
     return S_OK;
 }
 
-static int pal__load_wav(const char *filename, pal_sound *out, float seconds);
-static int pal__load_ogg(const char *filename, pal_sound *out, float seconds);
+static int pal__load_wav(const char* filename, pal_sound* out, float seconds);
+static int pal__load_ogg(const char* filename, pal_sound* out, float seconds);
 
-pal_sound *win32_load_sound(const char *filename, float seconds);
-PALAPI pal_sound *pal_load_music(const char* filename) {
+pal_sound* win32_load_sound(const char* filename, float seconds);
+PALAPI pal_sound* pal_load_music(const char* filename) {
     // every loaded buffer will be this long.
     const float buffer_length_in_seconds = 2.0f;
     return win32_load_sound(filename, buffer_length_in_seconds);
 }
 
-PALAPI pal_sound *pal_load_sound(const char* filename) {
+PALAPI pal_sound* pal_load_sound(const char* filename) {
     return win32_load_sound(filename, 0.0f);
 }
 
-pal_sound *win32_load_sound(const char *filename, float seconds) {
-    FILE *file = fopen(filename, "rb");
+pal_sound* win32_load_sound(const char* filename, float seconds) {
+    FILE* file = fopen(filename, "rb");
 
     if (!file)
         return NULL;
@@ -2772,7 +2764,7 @@ pal_sound *win32_load_sound(const char *filename, float seconds) {
         return NULL;
     }
 
-    pal_sound *sound = (pal_sound*)malloc(sizeof(pal_sound));
+    pal_sound* sound = (pal_sound*)malloc(sizeof(pal_sound));
     if (!sound) {
         fclose(file);
         printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
@@ -2851,7 +2843,7 @@ pal_sound *win32_load_sound(const char *filename, float seconds) {
 
     // Create streaming callback if this is a streaming sound
     if (seconds > 0.0f) {
-        StreamingVoiceCallback *callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
+        StreamingVoiceCallback* callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
         if (callback) {
             callback->lpVtbl = &StreamingCallbackVtbl;
             callback->sound = sound;
@@ -2875,7 +2867,7 @@ pal_sound *win32_load_sound(const char *filename, float seconds) {
                    sound->data_size);
 
         } else if (sound->decoder) {
-            stb_vorbis *vorbis = (stb_vorbis*)sound->decoder;
+            stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
 
             unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
             size_t bytes_per_sample_frame = sound->channels * sizeof(short);
@@ -2920,7 +2912,7 @@ pal_sound *win32_load_sound(const char *filename, float seconds) {
     return sound;
 }
 
-PALAPI void pal_free_music(pal_sound *sound) {
+PALAPI void pal_free_music(pal_sound* sound) {
     if (sound->is_streaming) {
         sound->stream_finished = 1;
     }
@@ -2948,7 +2940,7 @@ PALAPI void pal_free_music(pal_sound *sound) {
     free(sound);
 }
 
-PALAPI int pal_play_sound(pal_sound *sound, float volume) {
+PALAPI int pal_play_sound(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         return E_FAIL;
     }
@@ -2978,7 +2970,7 @@ PALAPI int pal_play_sound(pal_sound *sound, float volume) {
     return S_OK;
 }
 
-PALAPI void pal_free_sound(pal_sound *sound) {
+PALAPI void pal_free_sound(pal_sound* sound) {
     if (sound) {
         if (sound->source_voice) {
             sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
@@ -2996,7 +2988,7 @@ PALAPI void pal_free_sound(pal_sound *sound) {
     }
 }
 
-PALAPI int pal_stop_sound(pal_sound *sound) {
+PALAPI int pal_stop_sound(pal_sound* sound) {
     HRESULT hr = 0;
     hr = sound->source_voice->lpVtbl->Stop(sound->source_voice, 0, XAUDIO2_COMMIT_NOW);
 
@@ -3267,7 +3259,7 @@ PALAPI uint64_t pal_get_timer_frequency(void) {
 // Clip Board Functions.
 //----------------------------------------------------------------------------------
 
-PALAPI char *pal_clipboard_get(void) {
+PALAPI char* pal_clipboard_get(void) {
     if (!OpenClipboard(NULL))
         return NULL;
 
@@ -3277,7 +3269,7 @@ PALAPI char *pal_clipboard_get(void) {
         return NULL;
     }
 
-    wchar_t *wtext = GlobalLock(hData);
+    wchar_t* wtext = GlobalLock(hData);
     if (!wtext) {
         CloseClipboard();
         return NULL;
@@ -3285,7 +3277,7 @@ PALAPI char *pal_clipboard_get(void) {
 
     // Convert wide char text to UTF-8
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, wtext, -1, NULL, 0, NULL, NULL);
-    char *text = (char*)malloc(size_needed);
+    char* text = (char*)malloc(size_needed);
     if (text)
         WideCharToMultiByte(CP_UTF8, 0, wtext, -1, text, size_needed, NULL, NULL);
 
@@ -3295,7 +3287,7 @@ PALAPI char *pal_clipboard_get(void) {
     return text; // caller must free()
 }
 
-PALAPI void pal_clipboard_set(const char *text) {
+PALAPI void pal_clipboard_set(const char* text) {
     if (text == NULL || *text == '\0')
         return;
 
@@ -3319,7 +3311,6 @@ PALAPI void pal_clipboard_set(const char *text) {
     }
 }
 
-
 //----------------------------------------------------------------------------------
 // Mouse Warp Functions.
 //----------------------------------------------------------------------------------
@@ -3340,17 +3331,17 @@ void pal_mouse_warp_relative(int dx, int dy) {
 //----------------------------------------------------------------------------------
 // Url Launch Function.
 //----------------------------------------------------------------------------------
-PALAPI void pal_url_launch(char *url) {
-	if (!url || !*url)
-	return;
+PALAPI void pal_url_launch(char* url) {
+    if (!url || !*url)
+        return;
 
-	// ShellExecuteA automatically opens the URL with the default app (e.g., browser)
-	HINSTANCE result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+    // ShellExecuteA automatically opens the URL with the default app (e.g., browser)
+    HINSTANCE result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 
-	// Optional: check if it failed
-	if ((INT_PTR)result <= 32) {
-		MessageBoxA(NULL, "Failed to open URL.", "Error", MB_ICONERROR);
-	}
+    // Optional: check if it failed
+    if ((INT_PTR)result <= 32) {
+        MessageBoxA(NULL, "Failed to open URL.", "Error", MB_ICONERROR);
+    }
 }
 //----------------------------------------------------------------------------------
 // File Requester Functions.
@@ -3364,21 +3355,20 @@ typedef struct PalRequester {
 
 static PalRequester g_requesters[16]; // simple static pool, indexed by `id`
 
-static PalRequester *win32_get_requester(void *id) {
+static PalRequester* win32_get_requester(void* id) {
     uintptr_t index = (uintptr_t)id;
     if (index >= 16)
         return NULL;
     return &g_requesters[index];
 }
 
-static void win32_build_filter_string(char **types, uint32_t type_count, char *out, size_t out_size) {
+static void win32_build_filter_string(char** types, uint32_t type_count, char* out, size_t out_size) {
     // Builds Windows filter string like: "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0"
     out[0] = '\0';
     size_t pos = 0;
     for (uint32_t i = 0; i < type_count; i++) {
-        const char *ext = types[i];
-        int written = snprintf(out + pos, out_size - pos,
-            "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
+        const char* ext = types[i];
+        int written = snprintf(out + pos, out_size - pos, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
         pos += written;
         if (pos >= out_size)
             break;
@@ -3387,8 +3377,8 @@ static void win32_build_filter_string(char **types, uint32_t type_count, char *o
     out[pos++] = '\0';
 }
 
-void pal_requester_save(char **types, uint32_t type_count, void *id) {
-    PalRequester *req = win32_get_requester(id);
+void pal_requester_save(char** types, uint32_t type_count, void* id) {
+    PalRequester* req = win32_get_requester(id);
     if (!req)
         return;
 
@@ -3412,8 +3402,8 @@ void pal_requester_save(char **types, uint32_t type_count, void *id) {
     }
 }
 
-void pal_requester_load(char **types, uint32_t type_count, void *id) {
-    PalRequester *req = win32_get_requester(id);
+void pal_requester_load(char** types, uint32_t type_count, void* id) {
+    PalRequester* req = win32_get_requester(id);
     if (!req)
         return;
 
@@ -3437,32 +3427,32 @@ void pal_requester_load(char **types, uint32_t type_count, void *id) {
     }
 }
 
-char *pal_requester_save_get(void *id) {
-    PalRequester *req = win32_get_requester(id);
+char* pal_requester_save_get(void* id) {
+    PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
 }
 
-char *pal_requester_load_get(void *id) {
-    PalRequester *req = win32_get_requester(id);
+char* pal_requester_load_get(void* id) {
+    PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
 }
 
 //----------------------------------------------------------------------------------
 // Dynamic Library Functions.
 //----------------------------------------------------------------------------------
-PALAPI void *pal_load_dynamic_library(const char *dll) {
+PALAPI void* pal_load_dynamic_library(const char* dll) {
     HMODULE result = LoadLibraryA(dll);
     assert(result);
     return (void*)result;
 }
 
-PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
+PALAPI void* pal_load_dynamic_function(void* dll, char* func_name) {
     FARPROC proc = GetProcAddress(dll, func_name);
     assert(proc);
     return (void*)proc;
 }
 
-PALAPI pal_bool pal_free_dynamic_library(void *dll) {
+PALAPI pal_bool pal_free_dynamic_library(void* dll) {
     pal_bool free_result = FreeLibrary(dll);
     assert(free_result);
     return (pal_bool)free_result;

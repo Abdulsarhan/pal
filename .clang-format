@@ -1,0 +1,46 @@
+# .clang-format
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Column and line breaking
+ColumnLimit: 0
+AllowAllParametersOfDeclarationOnNextLine: false
+BinPackParameters: false
+BinPackArguments: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: false
+
+# Brace style
+BreakBeforeBraces: Attach  # K&R style
+
+# Pointer alignment
+PointerAlignment: Right  # Ensures `int* ptr`, not `int *ptr`
+
+# Prevent reordering of #include directives
+SortIncludes: false
+
+# Misc
+AlwaysBreakAfterReturnType: None
+BreakConstructorInitializers: BeforeColon
+SpacesBeforeTrailingComments: 1
+Cpp11BracedListStyle: true
+IndentCaseLabels: true
+AlignAfterOpenBracket: Align
+SpaceBeforeParens: ControlStatements
+
+# Optional: ensure function definitions don't collapse
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false

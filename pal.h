@@ -94,8 +94,8 @@ typedef enum pal_event_type {
     PAL_EVENT_WINDOW_RESIZED,
     PAL_EVENT_WINDOW_ENTERED_FULLSCREEN,
     PAL_EVENT_WINDOW_LEFT_FULLSCREEN,
-	PAL_EVENT_WINDOW_GAINED_FOCUS,
-	PAL_EVENT_WINDOW_LOST_FOCUS,
+    PAL_EVENT_WINDOW_GAINED_FOCUS,
+    PAL_EVENT_WINDOW_LOST_FOCUS,
 
     PAL_EVENT_KEY_DOWN = 0x300,
     PAL_EVENT_KEY_UP,
@@ -452,24 +452,24 @@ typedef struct pal_event_queue {
     size_t capacity;
     int front;
     int back;
-    pal_event* events;
+    pal_event *events;
 } pal_event_queue;
 
 #if defined(_WIN32)
-	#if defined(__TINYC__)
-		#define __declspec(x) __attribute__((x))
-	#endif
+#if defined(__TINYC__)
+#define __declspec(x) __attribute__((x))
+#endif
 
-	#if defined(PAL_BUILD_SHARED)
-		#define PALAPI __declspec(dllexport) // We are building the library as a Win32 shared library (.dll)
-	#elif defined(PAL_USE_SHARED)
-		#define PALAPI __declspec(dllimport) // We are using the library as a Win32 shared library (.dll)
-	#endif
+#if defined(PAL_BUILD_SHARED)
+#define PALAPI __declspec(dllexport) // We are building the library as a Win32 shared library (.dll)
+#elif defined(PAL_USE_SHARED)
+#define PALAPI __declspec(dllimport) // We are using the library as a Win32 shared library (.dll)
+#endif
 
-	#else
-		#if defined(PAL_BUILD_SHARED)
-			#define PALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
-	#endif
+#else
+#if defined(PAL_BUILD_SHARED)
+#define PALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
+#endif
 #endif
 
 #ifndef PALAPI
@@ -1114,7 +1114,7 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_COUNT 512 /**< not a key just marks the number of scancodes for array bounds */
 
 //----------------------------------------------------------------------------------
-// True and False defines 
+// True and False defines
 //----------------------------------------------------------------------------------
 #define pal_true 1
 #define pal_false 0
@@ -1163,15 +1163,15 @@ PALAPI int pal_make_context_current(pal_window *window);
 
 // Keyboard input
 PALAPI int pal_get_keyboard_count(void);
-PALAPI const char* pal_get_keyboard_name(int keyboard_id);
-PALAPI int pal_get_keyboard_indices(int key, int* keyboard_indices);
+PALAPI const char *pal_get_keyboard_name(int keyboard_id);
+PALAPI int pal_get_keyboard_indices(int key, int *keyboard_indices);
 PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int key);
 PALAPI pal_bool pal_is_key_down(int keyboard_id, int key);
 
 // Mouse input
 PALAPI int pal_get_mouse_count(void);
-PALAPI const char* pal_get_mouse_name(int mouse_id);
-PALAPI int pal_get_mouse_indices(int* mouse_indices);
+PALAPI const char *pal_get_mouse_name(int mouse_id);
+PALAPI int pal_get_mouse_indices(int *mouse_indices);
 PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button);
 PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button);
 PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id);
