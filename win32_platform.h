@@ -1780,7 +1780,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
 	return final_window;
 }
 
-PALAPI pal_vec2 pal_get_window_border_size(pal_window* window) {
+PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     RECT rect;
     GetClientRect(window->hwnd, &rect);
 
@@ -1793,9 +1793,14 @@ PALAPI pal_vec2 pal_get_window_border_size(pal_window* window) {
     float scaleX = dpiX / 96.0f;
     float scaleY = dpiY / 96.0f;
 
-    pal_vec2 border_size;
+    pal_ivec2 border_size;
     border_size.x = (int)((rect.right - rect.left) * scaleX);
     border_size.y = (int)((rect.bottom - rect.top) * scaleY);
+    return border_size;
+}
+
+PALAPI void *pal_get_window_handle(pal_window *window) {
+    return (void*)window->hwnd;
 }
 
 PALAPI int pal_make_context_current(pal_window* window) {
@@ -2223,7 +2228,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
     }
 
     size_t total_size = (size_t)file_size.QuadPart;
-    char *buffer = (char *)malloc(total_size);
+    char *buffer = (char *)malloc(total_size + 1);
     if (!buffer) {
         CloseHandle(file);
         return NULL;
@@ -2244,7 +2249,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 
         total_read += read_now;
     }
-
+    buffer[total_read] = '\0';
     CloseHandle(file);
 
     if (bytes_read)
@@ -2963,7 +2968,7 @@ PALAPI int pal_play_sound(pal_sound* sound, float volume) {
         return E_FAIL;
     }
     
-    if (sound == NULL) return;
+    if (sound == NULL) return S_FALSE;
 
     // Set the volume
     sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);

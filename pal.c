@@ -612,6 +612,10 @@ PALAPI pal_bool pal_is_number(char ch) {
     return pal_char_masks[(pal_bool)ch] & PAL_DIGIT_BIT;
 }
 
+PALAPI pal_bool pal_is_alphanumeric(char ch) {
+    return pal_is_number(ch) || pal_is_letter(ch);
+}
+
 PALAPI pal_bool pal_is_end_of_line(char ch) {
     return pal_char_masks[(pal_bool)ch] & PAL_EOL_BIT;
 }
@@ -631,21 +635,37 @@ PALAPI pal_bool pal_is_whitespace(char ch) {
     return pal_char_masks[(pal_bool)ch] & PAL_WHITESPACE_BIT;
 }
 
-// Character comparison
 PALAPI pal_bool pal_are_chars_equal(char ch1, char ch2) {
     return (pal_bool)ch1 == (pal_bool)ch2;
 }
 
+PALAPI pal_bool pal_are_strings_equal(const char* s1, const char* s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *s1 == *s2;
+}
+
 // String comparison
-PALAPI pal_bool pal_are_strings_equal(int count, const char* str1, const char* str2) {
-    if (str1 == NULL || str2 == NULL) {
-        return 0;
+PALAPI int pal_strcmp(const char* s1, const char* s2) {
+	while (*s1 && (*s1 == *s2)) {
+		s1++;
+		s2++;
+	}
+	// Cast to unsigned char to match standard strcmp behavior
+	return (unsigned char)*s1 - (unsigned char)*s2;
+}
+
+PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
+    while (n > 0 && *s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+        n--;
     }
 
-    for (int i = 0; i < count; i++) {
-        if (!pal_are_chars_equal(str1[i], str2[i])) {
-            return 0;
-        }
-    }
-    return 1;
+    if (n == 0)
+        return 0;
+
+    return (unsigned char)*s1 - (unsigned char)*s2;
 }

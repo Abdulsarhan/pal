@@ -1139,7 +1139,8 @@ extern "C" {
 PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
-PALAPI pal_vec2 pal_get_window_border_size(pal_window *window);
+PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
+PALAPI void *pal_get_window_handle(pal_window *window);
 PALAPI int pal_show_cursor(void);
 PALAPI int pal_hide_cursor(void);
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
@@ -1242,11 +1243,14 @@ PALAPI pal_bool pal_is_letter(char ch);
 PALAPI pal_bool pal_is_end_of_line(char ch);
 PALAPI pal_bool pal_is_whitespace(char ch);
 PALAPI pal_bool pal_is_number(char ch);
+PALAPI pal_bool pal_is_alphanumeric(char ch);
 PALAPI pal_bool pal_is_underscore(char ch);
 PALAPI pal_bool pal_is_hyphen(char ch);
 PALAPI pal_bool pal_is_dot(char ch);
 PALAPI pal_bool pal_are_chars_equal(char ch1, char ch2);
-PALAPI pal_bool pal_are_strings_equal(int count, const char *str1, const char *str2);
+PALAPI pal_bool pal_are_strings_equal(const char *s1, const char *s2);
+PALAPI int pal_strcmp(const char *s1, const char *s2);
+PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n);
 
 // Time functions
 PALAPI pal_time pal_get_date_and_time_utc(void);
