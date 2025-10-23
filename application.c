@@ -45,7 +45,7 @@ int main() {
 
     pal_monitor* monitor = pal_get_primary_monitor();
     pal_video_mode* mode = pal_get_video_mode(monitor);
-    pal_window* window = pal_create_window(1280, 720, "Window Title", PAL_WINDOW_RESIZABLE);
+    pal_window* window = pal_create_window(1280, 720, "Window Title", PAL_WINDOW_RESIZABLE | PAL_WINDOW_OPENGL);
     pal_make_context_current(window);
     if (!gladLoadGLLoader((GLADloadproc)pal_gl_get_proc_address)) {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");

@@ -5,8 +5,8 @@
 // Windows system headers
 #include <Windows.h>
 #include <windowsx.h> // Useful macros (e.g., GET_X_LPARAM)
-#include <xaudio2.h>  // XAudio2
-#include <Xinput.h>
+#include <xaudio2.h>  // For Sound.
+#include <Xinput.h> // For gamepad input.
 #include <hidsdi.h> // Link with hid.lib
 
 // for file permissions.
@@ -14,7 +14,6 @@
 
 // OpenGL
 #include <gl/gl.h>
-#include <GL/glext.h>
 #include <GL/wglext.h>
 
 // C Standard Library
@@ -1488,6 +1487,51 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
 PALAPI pal_window* pal_create_window(int width, int height, const char* window_title, uint64_t window_flags) {
+    DWORD ext_window_style = 0;
+    DWORD window_style = 0;
+
+    if (window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
+        ext_window_style |= WS_EX_NOACTIVATE;
+    }
+    if (window_flags & PAL_WINDOW_ALWAYS_ON_TOP) {
+        ext_window_style |= WS_EX_TOPMOST;
+    }
+
+    if (window_flags & PAL_WINDOW_UTILITY) {
+
+        ext_window_style |= WS_EX_TOOLWINDOW;
+        window_style |= WS_SYSMENU;
+    } else if (window_flags & PAL_WINDOW_POPUP_MENU) {
+        window_style |= WS_POPUPWINDOW;
+    } else if (window_flags & PAL_WINDOW_TOOLTIP) {
+        ext_window_style |= WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+    } else if (window_flags & PAL_WINDOW_RESIZABLE) {
+        window_style |= WS_OVERLAPPEDWINDOW;
+
+    } else {
+        window_style |= WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    }
+
+    if (window_flags & PAL_WINDOW_BORDERLESS) {
+        window_style = WS_POPUP;
+    }
+
+    if (window_flags & PAL_WINDOW_FULLSCREEN) {
+
+        DEVMODE dm = {0};
+        dm.dmSize = sizeof(dm);
+        dm.dmPelsWidth = width;
+        dm.dmPelsHeight = height;
+        dm.dmBitsPerPel = 32;
+        dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+
+        LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
+        if (result != DISP_CHANGE_SUCCESSFUL) {
+            MessageBoxA(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
+        }
+        window_style = WS_POPUP;
+    }
+
     // these variables are only
     // used when initializing opengl.
     pal_window* fakewindow = NULL;
@@ -1498,6 +1542,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
     if (!(window_flags & PAL_WINDOW_OPENGL) || !(window_flags & PAL_WINDOW_VULKAN) || !(window_flags & PAL_WINDOW_METAL)) {
         window_flags |= PAL_WINDOW_OPENGL;
     }
+
     if (window_flags & PAL_WINDOW_OPENGL) {
         fakewindow = (pal_window*)malloc(sizeof(pal_window));
         WNDCLASSEXA fakewc = {0};
@@ -1510,10 +1555,10 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
         RegisterClassExA(&fakewc);
 
         fakewindow->hwnd = CreateWindowExA(
-            0,                    // Optional window styles.
+            ext_window_style,     // Optional window styles.
             fakewc.lpszClassName, // Window class
-            "Fake Ass Window.",   // Window text
-            WS_OVERLAPPEDWINDOW,  // Window style
+            window_title,   // Window text
+            window_style,  // Window style
 
             // Size and position
             CW_USEDEFAULT,
@@ -1593,51 +1638,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
     pal_window* window = (pal_window*)malloc(sizeof(pal_window));
     window->width = (float)width;
     window->height = (float)height;
-
-    DWORD ext_window_style = 0;
-    DWORD window_style = 0;
-
-    if (window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
-        ext_window_style |= WS_EX_NOACTIVATE;
-    }
-    if (window_flags & PAL_WINDOW_ALWAYS_ON_TOP) {
-        ext_window_style |= WS_EX_TOPMOST;
-    }
-
-    if (window_flags & PAL_WINDOW_UTILITY) {
-
-        ext_window_style |= WS_EX_TOOLWINDOW;
-        window_style |= WS_SYSMENU;
-    } else if (window_flags & PAL_WINDOW_POPUP_MENU) {
-        window_style |= WS_POPUPWINDOW;
-    } else if (window_flags & PAL_WINDOW_TOOLTIP) {
-        ext_window_style |= WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
-    } else if (window_flags & PAL_WINDOW_RESIZABLE) {
-        window_style |= WS_OVERLAPPEDWINDOW;
-
-    } else {
-        window_style |= WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
-    }
-
-    if (window_flags & PAL_WINDOW_BORDERLESS) {
-        window_style = WS_POPUP;
-    }
-
-    if (window_flags & PAL_WINDOW_FULLSCREEN) {
-
-        DEVMODE dm = {0};
-        dm.dmSize = sizeof(dm);
-        dm.dmPelsWidth = width;
-        dm.dmPelsHeight = height;
-        dm.dmBitsPerPel = 32;
-        dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
-
-        LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
-        if (result != DISP_CHANGE_SUCCESSFUL) {
-            MessageBoxA(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
-        }
-        window_style = WS_POPUP;
-    }
     // -- CREATING EVENT QUEUE --
     // It's very important to set g_current_window to the pal_window
     // before we call CreateWindowExA() on window->hwnd, because if we don't,
@@ -1668,34 +1668,53 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
     if (window->hwnd == NULL) {
         return window;
     }
+    
+    if (window_flags & PAL_WINDOW_OPENGL) {
+		window->hdc = GetDC(window->hwnd);
 
-    window->hdc = GetDC(window->hwnd);
+		const int pixelAttribs[] = {
+			WGL_DRAW_TO_WINDOW_ARB, GL_TRUE, WGL_SUPPORT_OPENGL_ARB, GL_TRUE, WGL_DOUBLE_BUFFER_ARB, GL_TRUE, WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB, WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB, WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8, WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8, WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
+			0                                                                                                                                                                                                                                                                                                                                              // null terminator for attrib list.
+		};
 
-    const int pixelAttribs[] = {
-        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE, WGL_SUPPORT_OPENGL_ARB, GL_TRUE, WGL_DOUBLE_BUFFER_ARB, GL_TRUE, WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB, WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB, WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8, WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8, WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
-        0                                                                                                                                                                                                                                                                                                                                              // null terminator for attrib list.
-    };
+		int pixelFormatID;
+		UINT numFormats;
+		uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
+		if (status == 0 || numFormats == 0) {
+			MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
+			return window;
+		}
 
-    int pixelFormatID;
-    UINT numFormats;
-    uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
-    if (status == 0 || numFormats == 0) {
-        MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
-        return window;
+		PIXELFORMATDESCRIPTOR PFD;
+		PFD.dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
+		DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
+		SetPixelFormat(window->hdc, pixelFormatID, &PFD);
+
+		int contextAttribs[] = {
+			WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB, WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0};
+
+		window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
     }
 
-    PIXELFORMATDESCRIPTOR PFD;
-    if (window_flags & PAL_WINDOW_OPENGL)
-        PFD.dwFlags |= PFD_SUPPORT_OPENGL;
-
-    PFD.dwFlags |= PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
-    DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
-    SetPixelFormat(window->hdc, pixelFormatID, &PFD);
-
-    int contextAttribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB, WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0};
-
-    window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
+    pal_window *final_window = NULL;
+    if (window_flags & PAL_WINDOW_OPENGL) {
+		if (window->hglrc) {
+            final_window = window;
+			wglMakeCurrent(NULL, NULL);
+			wglDeleteContext(fakeRC);
+			ReleaseDC(fakewindow->hwnd, s_fakeDC);
+			DestroyWindow(fakewindow->hwnd);
+			free(fakewindow);
+		} else {
+			// This is supposed to be a fallback in case we can't create the context that we want.
+			// Ideally, this should never happen. - Abdelrahman june 13, 2024
+            final_window = fakewindow;
+            final_window->hglrc = fakeRC;
+            final_window->hdc = s_fakeDC;
+		}
+    } else {
+        final_window = window; 
+    }
 
     RAWINPUTDEVICE rid[3];
 
@@ -1703,80 +1722,62 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
     rid[0].usUsagePage = 0x01;                          // Generic desktop controls
     rid[0].usUsage = 0x06;                              // Keyboard
     rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
-    rid[0].hwndTarget = window->hwnd;
+    rid[0].hwndTarget = final_window->hwnd;
 
     // 2. Mouse
     rid[1].usUsagePage = 0x01; // Generic desktop controls
     rid[1].usUsage = 0x02;     // Mouse
     rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-    rid[1].hwndTarget = window->hwnd;
+    rid[1].hwndTarget = final_window->hwnd;
 
     // 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
     rid[2].usUsagePage = 0x01; // Generic desktop controls
     rid[2].usUsage = 0x04;     // Joystick
     rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-    rid[2].hwndTarget = window->hwnd;
+    rid[2].hwndTarget = final_window->hwnd;
 
     if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
         DWORD error = GetLastError();
         printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
     }
 
-    if (window->hglrc) {
-
-        wglMakeCurrent(NULL, NULL);
-        wglDeleteContext(fakeRC);
-        ReleaseDC(fakewindow->hwnd, s_fakeDC);
-        DestroyWindow(fakewindow->hwnd);
-        free(fakewindow);
-
-        if (!(window_flags & PAL_WINDOW_HIDDEN)) {
-            if (window_flags & PAL_WINDOW_FULLSCREEN) {
-                ShowWindow(window->hwnd, SW_SHOW);
-            } else if (window_flags & PAL_WINDOW_MAXIMIZED) {
-                ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
-            } else if (window_flags & PAL_WINDOW_MINIMIZED) {
-                ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
-            } else {
-                ShowWindow(window->hwnd, SW_SHOWNORMAL);
-            }
-        } else {
-            ShowWindow(window->hwnd, SW_HIDE);
-        }
-        if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
-            RECT rect;
-            GetClientRect(window->hwnd, &rect);
-            POINT tl = {rect.left, rect.top};
-            POINT br = {rect.right, rect.bottom};
-            ClientToScreen(window->hwnd, &tl);
-            ClientToScreen(window->hwnd, &br);
-            rect.left = tl.x;
-            rect.top = tl.y;
-            rect.right = br.x;
-            rect.bottom = br.y;
-            ClipCursor(&rect);
-            window->confine_mouse = pal_true;
-        } else {
-            window->confine_mouse = pal_false;
-        }
-        SetForegroundWindow(window->hwnd);
-        SetFocus(window->hwnd);
-        OutputDebugStringA("INFO: Using modern OpenGL Context.");
-        // save the window style and the window rect in case the user sets the window to windowed before setting it to fullscreen.
-        // The fullscreen function is supposed to save this state whenever the user calls it,
-        // but if the user doesn't, the make_window_windowed() function uses a state that's all zeroes
-        //, so we have to save it here. - Abdelrahman june 13, 2024
-        window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the window.
-        return window;
-    } else {
-        // This is supposed to be a fallback in case we can't create the context that we want.
-        // Ideally, this should never happen. - Abdelrahman june 13, 2024
-        ShowWindow(fakewindow->hwnd, SW_SHOW);
-        SetForegroundWindow(fakewindow->hwnd);
-        SetFocus(fakewindow->hwnd);
-        OutputDebugStringA("INFO: Using old OpenGL Context.");
-        return fakewindow;
-    }
+	if (!(window_flags & PAL_WINDOW_HIDDEN)) {
+		if (window_flags & PAL_WINDOW_FULLSCREEN) {
+			ShowWindow(final_window->hwnd, SW_SHOW);
+		} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
+			ShowWindow(final_window->hwnd, SW_SHOWMAXIMIZED);
+		} else if (window_flags & PAL_WINDOW_MINIMIZED) {
+			ShowWindow(final_window->hwnd, SW_SHOWMINIMIZED);
+		} else {
+			ShowWindow(final_window->hwnd, SW_SHOWNORMAL);
+		}
+	} else {
+		ShowWindow(final_window->hwnd, SW_HIDE);
+	}
+	if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
+		RECT rect;
+		GetClientRect(final_window->hwnd, &rect);
+		POINT tl = {rect.left, rect.top};
+		POINT br = {rect.right, rect.bottom};
+		ClientToScreen(final_window->hwnd, &tl);
+		ClientToScreen(final_window->hwnd, &br);
+		rect.left = tl.x;
+		rect.top = tl.y;
+		rect.right = br.x;
+		rect.bottom = br.y;
+		ClipCursor(&rect);
+		final_window->confine_mouse = pal_true;
+	} else {
+		final_window->confine_mouse = pal_false;
+	}
+	SetForegroundWindow(final_window->hwnd);
+	SetFocus(final_window->hwnd);
+	// save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen.
+	// The fullscreen function is supposed to save this state whenever the user calls it,
+	// but if the user doesn't, the pal_make__window_windowed() function uses a state that's all zeroes,
+	// so we have to save it here. - Abdelrahman june 13, 2024
+	final_window->windowedStyle = GetWindowLongA(final_window->hwnd, GWL_STYLE); // style of the final_window.
+	return final_window;
 }
 
 PALAPI pal_vec2 pal_get_window_border_size(pal_window* window) {
@@ -2194,7 +2195,7 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
     return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
-PALAPI pal_bool pal_read_file(const char* file_path, char* buffer) {
+PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read) {
     HANDLE file = CreateFileA(
         file_path,
         GENERIC_READ,
@@ -2202,37 +2203,54 @@ PALAPI pal_bool pal_read_file(const char* file_path, char* buffer) {
         NULL,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL,
-        NULL);
+        NULL
+    );
 
     if (file == INVALID_HANDLE_VALUE) {
-        return 1;
+        return NULL;
     }
 
     LARGE_INTEGER file_size;
     if (!GetFileSizeEx(file, &file_size)) {
         CloseHandle(file);
-        return 1;
+        return NULL;
     }
 
-    size_t remaining = (size_t)file_size.QuadPart;
-    size_t offset = 0;
+    if (file_size.QuadPart > SIZE_MAX) {
+        // File too large to fit in memory
+        CloseHandle(file);
+        return NULL;
+    }
 
-    while (remaining > 0) {
-        DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
-        DWORD bytes_read = 0;
+    size_t total_size = (size_t)file_size.QuadPart;
+    char *buffer = (char *)malloc(total_size);
+    if (!buffer) {
+        CloseHandle(file);
+        return NULL;
+    }
 
-        if (!ReadFile(file, buffer + offset, chunk, &bytes_read, NULL) ||
-            bytes_read != chunk) {
+    size_t total_read = 0;
+    while (total_read < total_size) {
+        DWORD chunk = (DWORD)((total_size - total_read > MAXDWORD) ? MAXDWORD : (total_size - total_read));
+        DWORD read_now = 0;
+
+        if (!ReadFile(file, buffer + total_read, chunk, &read_now, NULL)) {
+            free(buffer);
             CloseHandle(file);
-            return 1;
+            return NULL;
         }
 
-        remaining -= chunk;
-        offset += chunk;
+        if (read_now == 0) break; // EOF or unexpected end
+
+        total_read += read_now;
     }
 
     CloseHandle(file);
-    return 0;
+
+    if (bytes_read)
+        *bytes_read = total_read;
+
+    return buffer;
 }
 
 PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* buffer) {
@@ -2944,6 +2962,8 @@ PALAPI int pal_play_sound(pal_sound* sound, float volume) {
     if (!g_xaudio2 || !g_mastering_voice) {
         return E_FAIL;
     }
+    
+    if (sound == NULL) return;
 
     // Set the volume
     sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
@@ -3377,7 +3397,7 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
     out[pos++] = '\0';
 }
 
-void pal_requester_save(char** types, uint32_t type_count, void* id) {
+void pal_make_save_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
     if (!req)
         return;
@@ -3402,7 +3422,7 @@ void pal_requester_save(char** types, uint32_t type_count, void* id) {
     }
 }
 
-void pal_requester_load(char** types, uint32_t type_count, void* id) {
+void pal_make_load_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
     if (!req)
         return;
@@ -3427,12 +3447,12 @@ void pal_requester_load(char** types, uint32_t type_count, void* id) {
     }
 }
 
-char* pal_requester_save_get(void* id) {
+char* pal_get_save_dialog(void* id) {
     PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
 }
 
-char* pal_requester_load_get(void* id) {
+char* pal_get_load_dialog(void* id) {
     PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
 }

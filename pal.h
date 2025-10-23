@@ -1205,7 +1205,7 @@ PALAPI size_t pal_get_last_read_time(const char *file);
 PALAPI size_t pal_get_file_size(const char *file_path);
 PALAPI uint32_t pal_get_file_permissions(const char *file_path);
 PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags);
-PALAPI pal_bool pal_read_file(const char *file_path, char *buffer);
+PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read);
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 
@@ -1222,11 +1222,11 @@ PALAPI uint32_t pal_rand(uint64_t *state);
 PALAPI void pal_clipboard_set(const char *text);
 PALAPI char *pal_clipboard_get(void);
 
-// File Requester
-PALAPI void pal_requester_save(char **types, uint32_t type_count, void *id);
-PALAPI void pal_requester_load(char **types, uint32_t type_count, void *id);
-PALAPI char *pal_requester_save_get(void *id);
-PALAPI char *pal_requester_load_get(void *id);
+// File dialog / requester
+PALAPI void pal_make_save_dialog(char **types, uint32_t type_count, void *id);
+PALAPI void pal_make_load_dialog(char **types, uint32_t type_count, void *id);
+PALAPI char *pal_get_save_dialog(void *id);
+PALAPI char *pal_get_load_dialog(void *id);
 
 // URL launch
 PALAPI void pal_url_launch(char *url);

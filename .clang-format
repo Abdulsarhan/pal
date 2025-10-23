@@ -12,7 +12,7 @@ AllowAllParametersOfDeclarationOnNextLine: false
 BinPackParameters: false
 BinPackArguments: false
 AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: false
 AllowShortBlocksOnASingleLine: false
 
@@ -20,7 +20,7 @@ AllowShortBlocksOnASingleLine: false
 BreakBeforeBraces: Attach  # K&R style
 
 # Pointer alignment
-PointerAlignment: Right  # Ensures `int* ptr`, not `int *ptr`
+PointerAlignment: Right # Ensures `int *ptr`, not `int* ptr`
 
 # Prevent reordering of #include directives
 SortIncludes: false
