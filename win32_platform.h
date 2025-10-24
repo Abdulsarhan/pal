@@ -3452,12 +3452,12 @@ void pal_make_load_dialog(char** types, uint32_t type_count, void* id) {
     }
 }
 
-char* pal_get_save_dialog(void* id) {
+char* pal_show_save_dialog(void* id) {
     PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
 }
 
-char* pal_get_load_dialog(void* id) {
+char* pal_show_load_dialog(void* id) {
     PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
 }
