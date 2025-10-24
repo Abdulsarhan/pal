@@ -1224,8 +1224,8 @@ PALAPI void pal_clipboard_set(const char *text);
 PALAPI char *pal_clipboard_get(void);
 
 // File dialog / requester
-PALAPI void pal_make_save_dialog(char **types, uint32_t type_count, void *id);
-PALAPI void pal_make_load_dialog(char **types, uint32_t type_count, void *id);
+PALAPI void pal_create_save_dialog(char **types, uint32_t type_count, void *id);
+PALAPI void pal_create_load_dialog(char **types, uint32_t type_count, void *id);
 PALAPI char *pal_show_save_dialog(void *id);
 PALAPI char *pal_show_load_dialog(void *id);
 

@@ -54,7 +54,7 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
 
 #ifdef _WIN32
 #include "win32_platform.h"
-#elif __LINUX__
+#elif __linux__
 #include "linux_x11_platform.h"
 #endif
 
@@ -529,10 +529,10 @@ static const uint8_t pal_char_masks[128] = {
     [5] = 0, [6] = 0, [7] = 0, [8] = 0,
 
     ['\t'] = PAL_WHITESPACE_BIT, // tab
-    ['\n'] = PAL_WHITESPACE_BIT, // new line
+    ['\n'] = PAL_WHITESPACE_BIT | PAL_EOL_BIT, // new line
     ['\v'] = PAL_WHITESPACE_BIT, // vertical tab (not used anymore)
     ['\f'] = PAL_WHITESPACE_BIT, // form feed (not used anymore)
-    ['\r'] = PAL_WHITESPACE_BIT, // carriage return
+    ['\r'] = PAL_WHITESPACE_BIT | PAL_EOL_BIT, // carriage return
 
     [14] = 0, [15] = 0, [16] = 0, [17] = 0, [18] = 0,
     [19] = 0, [20] = 0, [21] = 0, [22] = 0, [23] = 0,

@@ -17,8 +17,6 @@
 #include <GL/wglext.h>
 
 // C Standard Library
-#include <stdio.h>
-#include <stdint.h>
 #include <assert.h>
 
 // Global function pointers
@@ -1995,23 +1993,53 @@ static int win32_get_raw_input_buffer(void) {
 // File Functions.
 //----------------------------------------------------------------------------------
 
+// Helper function to convert UTF-8 to UTF-16
+static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
+    if (!utf8_str) return NULL;
+    
+    int len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, NULL, 0);
+    if (len == 0) return NULL;
+    
+    wchar_t* utf16_str = (wchar_t*)malloc(len * sizeof(wchar_t));
+    if (!utf16_str) return NULL;
+    
+    if (MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, utf16_str, len) == 0) {
+        free(utf16_str);
+        return NULL;
+    }
+    
+    return utf16_str;
+}
+
 PALAPI pal_bool pal_does_file_exist(const char* file_path) {
-    DWORD attrs = GetFileAttributesA(file_path);
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return 0;
+    
+    DWORD attrs = GetFileAttributesW(wide_path);
+    free(wide_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 PALAPI size_t pal_get_file_size(const char* file_path) {
-    HANDLE file = CreateFileA(
-        file_path,
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return 0;
+    
+    HANDLE file = CreateFileW(
+        wide_path,
         GENERIC_READ,
         FILE_SHARE_READ,
         NULL,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL,
         NULL);
+    
+    free(wide_path);
+
+    if (file == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
 
     LARGE_INTEGER file_size;
-
     if (GetFileSizeEx(file, &file_size)) {
         CloseHandle(file);
         return file_size.QuadPart;
@@ -2021,19 +2049,29 @@ PALAPI size_t pal_get_file_size(const char* file_path) {
 }
 
 PALAPI size_t pal_get_last_write_time(const char* file) {
+    wchar_t* wide_path = win32_utf8_to_utf16(file);
+    if (!wide_path) return 0;
+    
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
-    if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
-        return 0; // Error case
+    if (!GetFileAttributesExW(wide_path, GetFileExInfoStandard, &fileInfo)) {
+        free(wide_path);
+        return 0;
     }
+    free(wide_path);
     return ((uint64_t)fileInfo.ftLastWriteTime.dwHighDateTime << 32) |
            fileInfo.ftLastWriteTime.dwLowDateTime;
 }
 
 PALAPI size_t pal_get_last_read_time(const char* file) {
+    wchar_t* wide_path = win32_utf8_to_utf16(file);
+    if (!wide_path) return 0;
+    
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
-    if (!GetFileAttributesExA(file, GetFileExInfoStandard, &fileInfo)) {
-        return 0; // Error case
+    if (!GetFileAttributesExW(wide_path, GetFileExInfoStandard, &fileInfo)) {
+        free(wide_path);
+        return 0;
     }
+    free(wide_path);
     return ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) |
            fileInfo.ftLastAccessTime.dwLowDateTime;
 }
@@ -2043,13 +2081,15 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
         return 0;
     }
 
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return 0;
+
     uint32_t permissions = 0;
 
-    // Get the file's security descriptor
     PACL pDacl = NULL;
     PSECURITY_DESCRIPTOR pSD = NULL;
-    DWORD dwRes = GetNamedSecurityInfoA(
-        file_path,
+    DWORD dwRes = GetNamedSecurityInfoW(
+        wide_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
         NULL,
@@ -2058,20 +2098,20 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
         NULL,
         &pSD);
 
+    free(wide_path);
+
     if (dwRes != ERROR_SUCCESS) {
         if (pSD)
             LocalFree(pSD);
         return 0;
     }
 
-    // Get current process token
     HANDLE hToken;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
         LocalFree(pSD);
         return 0;
     }
 
-    // Check effective permissions
     GENERIC_MAPPING mapping = {0};
     mapping.GenericRead = FILE_GENERIC_READ;
     mapping.GenericWrite = FILE_GENERIC_WRITE;
@@ -2094,7 +2134,6 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
             permissions |= PAL_EXECUTE;
     }
 
-    // Cleanup
     CloseHandle(hToken);
     LocalFree(pSD);
 
@@ -2103,10 +2142,12 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
 
 PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
     if (!file_path) {
-        return 0; // Invalid path
+        return 0;
     }
 
-    // Convert permission_flags to Windows-specific access rights
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return 0;
+
     DWORD dwAccessRights = 0;
     if (permission_flags & PAL_READ)
         dwAccessRights |= GENERIC_READ;
@@ -2116,12 +2157,13 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
         dwAccessRights |= GENERIC_EXECUTE;
 
     if (dwAccessRights == 0) {
-        return 0; // No valid permissions requested
+        free(wide_path);
+        return 0;
     }
 
-    // Get the current user's SID
     HANDLE hToken;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        free(wide_path);
         return 0;
     }
 
@@ -2129,38 +2171,39 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
     GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
     if (dwSize == 0) {
         CloseHandle(hToken);
+        free(wide_path);
         return 0;
     }
 
     PTOKEN_USER pTokenUser = (PTOKEN_USER)malloc(dwSize);
     if (!pTokenUser) {
         CloseHandle(hToken);
+        free(wide_path);
         return 0;
     }
 
     if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) {
         free(pTokenUser);
         CloseHandle(hToken);
+        free(wide_path);
         return 0;
     }
 
     CloseHandle(hToken);
 
-    // Initialize an EXPLICIT_ACCESS structure for the new permissions
-    EXPLICIT_ACCESSA ea = {0};
+    EXPLICIT_ACCESS_W ea = {0};
     ea.grfAccessPermissions = dwAccessRights;
     ea.grfAccessMode = SET_ACCESS;
     ea.grfInheritance = NO_INHERITANCE;
     ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
     ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
-    ea.Trustee.ptstrName = (LPSTR)pTokenUser->User.Sid;
+    ea.Trustee.ptstrName = (LPWSTR)pTokenUser->User.Sid;
 
-    // Get the existing DACL and modify it
     PACL pOldDACL = NULL, pNewDACL = NULL;
     PSECURITY_DESCRIPTOR pSD = NULL;
 
-    DWORD dwRes = GetNamedSecurityInfoA(
-        (LPSTR)file_path,
+    DWORD dwRes = GetNamedSecurityInfoW(
+        wide_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
         NULL,
@@ -2171,20 +2214,20 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
 
     if (dwRes != ERROR_SUCCESS) {
         free(pTokenUser);
+        free(wide_path);
         return 0;
     }
 
-    // Create a new DACL with the updated permissions
-    dwRes = SetEntriesInAclA(1, &ea, pOldDACL, &pNewDACL);
+    dwRes = SetEntriesInAclW(1, &ea, pOldDACL, &pNewDACL);
     if (dwRes != ERROR_SUCCESS) {
         LocalFree(pSD);
         free(pTokenUser);
+        free(wide_path);
         return 0;
     }
 
-    // Apply the new DACL to the file
-    dwRes = SetNamedSecurityInfoA(
-        (LPSTR)file_path,
+    dwRes = SetNamedSecurityInfoW(
+        wide_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
         NULL,
@@ -2192,17 +2235,20 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
         pNewDACL,
         NULL);
 
-    // Cleanup
     LocalFree(pNewDACL);
     LocalFree(pSD);
     free(pTokenUser);
+    free(wide_path);
 
     return (dwRes == ERROR_SUCCESS) ? 1 : 0;
 }
 
 PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read) {
-    HANDLE file = CreateFileA(
-        file_path,
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return NULL;
+    
+    HANDLE file = CreateFileW(
+        wide_path,
         GENERIC_READ,
         FILE_SHARE_READ,
         NULL,
@@ -2210,6 +2256,8 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
         FILE_ATTRIBUTE_NORMAL,
         NULL
     );
+
+    free(wide_path);
 
     if (file == INVALID_HANDLE_VALUE) {
         return NULL;
@@ -2222,7 +2270,6 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
     }
 
     if (file_size.QuadPart > SIZE_MAX) {
-        // File too large to fit in memory
         CloseHandle(file);
         return NULL;
     }
@@ -2245,7 +2292,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
             return NULL;
         }
 
-        if (read_now == 0) break; // EOF or unexpected end
+        if (read_now == 0) break;
 
         total_read += read_now;
     }
@@ -2255,18 +2302,23 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
     if (bytes_read)
         *bytes_read = total_read;
 
-    return buffer;
+    return (unsigned char*)buffer;
 }
 
 PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* buffer) {
-    HANDLE file = CreateFileA(
-        file_path,
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return 1;
+    
+    HANDLE file = CreateFileW(
+        wide_path,
         GENERIC_WRITE,
         0,
         NULL,
         CREATE_ALWAYS,
         FILE_ATTRIBUTE_NORMAL,
         NULL);
+
+    free(wide_path);
 
     if (file == INVALID_HANDLE_VALUE) {
         return 1;
@@ -2294,24 +2346,47 @@ PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* bu
 }
 
 PALAPI pal_bool pal_copy_file(const char* original_path, const char* copy_path) {
-    return CopyFileA(original_path, copy_path, FALSE) ? 0 : 1;
+    wchar_t* wide_original = win32_utf8_to_utf16(original_path);
+    wchar_t* wide_copy = win32_utf8_to_utf16(copy_path);
+    
+    if (!wide_original || !wide_copy) {
+        if (wide_original) free(wide_original);
+        if (wide_copy) free(wide_copy);
+        return 1;
+    }
+    
+    BOOL result = CopyFileW(wide_original, wide_copy, FALSE);
+    
+    free(wide_original);
+    free(wide_copy);
+    
+    return result ? 0 : 1;
 }
 
 PALAPI pal_file* pal_open_file(const char* file_path) {
+    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    if (!wide_path) return NULL;
+    
     pal_file* file = (pal_file*)malloc(sizeof(pal_file));
-    file->handle = CreateFileA(
-        file_path,             // File name
-        GENERIC_READ,          // Desired access
-        FILE_SHARE_READ,       // Share mode
-        NULL,                  // Security attributes
-        OPEN_EXISTING,         // Creation disposition
-        FILE_ATTRIBUTE_NORMAL, // Flags and attributes
-        NULL                   // Template file
+    if (!file) {
+        free(wide_path);
+        return NULL;
+    }
+    
+    file->handle = CreateFileW(
+        wide_path,
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
     );
 
+    free(wide_path);
+
     if (file->handle == INVALID_HANDLE_VALUE) {
-        DWORD error = GetLastError();
-        // Optional: Log or handle error here
+        free(file);
         return NULL;
     }
 
@@ -2350,6 +2425,8 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
 }
 
 PALAPI pal_bool pal_close_file(pal_file* file) {
+    if (!file) return 0;
+    
     if (!CloseHandle(file->handle)) {
         return 0;
     }
@@ -3402,7 +3479,7 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
     out[pos++] = '\0';
 }
 
-void pal_make_save_dialog(char** types, uint32_t type_count, void* id) {
+void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
     if (!req)
         return;
@@ -3427,7 +3504,7 @@ void pal_make_save_dialog(char** types, uint32_t type_count, void* id) {
     }
 }
 
-void pal_make_load_dialog(char** types, uint32_t type_count, void* id) {
+void pal_create_load_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
     if (!req)
         return;
