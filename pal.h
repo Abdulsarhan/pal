@@ -3,7 +3,17 @@
 
 #include <stdint.h>   // For Clearly Defined Types.
 #include <sys/stat.h> // For time_t and stat.
+
 typedef uint8_t pal_bool;
+typedef void pal_file;
+typedef void pal_signal;
+typedef void pal_thread;
+typedef void *(*pal_thread_func)(void *arg);
+typedef struct pal_window pal_window;
+typedef struct pal_monitor pal_monitor;
+typedef struct pal_sound pal_sound;
+typedef struct pal_music pal_music;
+typedef struct pal_mutex pal_mutex;
 
 typedef struct pal_video_mode {
     int width;
@@ -11,10 +21,6 @@ typedef struct pal_video_mode {
     int refresh_rate;
     int bits_per_pixel;
 } pal_video_mode;
-
-typedef struct pal_file {
-    void *handle;
-} pal_file;
 
 typedef struct {
     uint32_t year;
@@ -25,9 +31,6 @@ typedef struct {
     uint32_t minutes;
     uint32_t seconds;
 } pal_time;
-
-typedef struct pal_sound pal_sound;
-typedef struct pal_music pal_music;
 #define PAL_MAX_TOUCHES 2
 typedef struct {
     // Standard gamepad controls
@@ -72,12 +75,7 @@ typedef struct {
     } touchpad;
 } pal_gamepad_state;
 
-// Window stuff.
-typedef struct pal_window pal_window;
-typedef struct pal_monitor pal_monitor;
-
 // events.
-
 typedef enum pal_event_type {
     PAL_EVENT_NONE = 0x0,
     PAL_EVENT_QUIT = 0x100,
@@ -645,7 +643,6 @@ typedef struct pal_ivec4 {
 //----------------------------------------------------------------------------------
 // Keys
 //----------------------------------------------------------------------------------
-
 #define PAL_BACKSPACE 0x08
 #define PAL_TAB 0x09
 #define PAL_ENTER 0x0D
@@ -772,7 +769,6 @@ typedef struct pal_ivec4 {
 //----------------------------------------------------------------------------------
 // Scancodes
 //----------------------------------------------------------------------------------
-
 #define PAL_SCAN_A 4
 #define PAL_SCAN_B 5
 #define PAL_SCAN_C 6
@@ -1136,8 +1132,11 @@ typedef struct pal_ivec4 {
 extern "C" {
 #endif
 
+// Init and Shutdown
 PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
+
+// Video and Windowing subsystem.
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
@@ -1161,6 +1160,9 @@ PALAPI pal_monitor *pal_get_primary_monitor(void);
 PALAPI void *pal_gl_get_proc_address(const char *proc);
 PALAPI pal_bool pal_poll_events(pal_event *event);
 PALAPI int pal_make_context_current(pal_window *window);
+
+// Image Loading
+PALAPI char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp);
 
 // Keyboard input
 PALAPI int pal_get_keyboard_count(void);
@@ -1210,6 +1212,9 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 
+// Directory Listing
+PALAPI pal_bool pal_path_is_dir(const char *path);
+
 // Open File I/O
 PALAPI pal_file *pal_open_file(const char *file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer);
@@ -1233,8 +1238,8 @@ PALAPI char *pal_show_load_dialog(void *id);
 PALAPI void pal_url_launch(char *url);
 
 // Mouse Warp
-void pal_mouse_warp(int x, int y);
-void pal_mouse_warp_relative(int dx, int dy);
+PALAPI void pal_mouse_warp(int x, int y);
+PALAPI void pal_mouse_warp_relative(int dx, int dy);
 
 // File Parsing
 PALAPI pal_bool pal_is_uppercase(char ch);
@@ -1259,6 +1264,24 @@ PALAPI pal_time pal_get_time_since_boot(void);
 PALAPI double pal_get_time_since_pal_started(void);
 PALAPI uint64_t pal_get_timer(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
+
+// Multi-threadding functions
+PALAPI pal_mutex *pal_create_mutex();
+PALAPI void pal_lock_mutex(pal_mutex *mutex);
+PALAPI pal_bool pal_lock_mutex_try(pal_mutex *mutex);
+PALAPI void pal_unlock_mutex(pal_mutex *mutex);
+PALAPI void pal_destroy_mutex(pal_mutex *mutex);
+
+PALAPI pal_signal *pal_create_signal(void);
+PALAPI pal_bool pal_activate_signal(pal_signal *signal);
+PALAPI pal_bool pal_deactivate_signal(pal_signal *signal);
+PALAPI pal_bool pal_wait_for_signal(pal_signal *signal, pal_mutex *mutex);
+PALAPI void pal_destroy_signal(pal_signal *signal);
+
+PALAPI pal_thread *pal_create_thread(pal_thread_func func, void *arg);
+PALAPI pal_bool pal_start_thread(pal_thread *thread);
+PALAPI pal_bool pal_join_thread(pal_thread *thread);
+PALAPI void pal_destroy_thread(pal_thread *thread);
 
 // .dll/.so/.dylib loading
 PALAPI void *pal_load_dynamic_library(const char *dll);

@@ -68,10 +68,13 @@ PALAPI void pal_init(void) {
         printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
     }
 }
-
 PALAPI void pal_shutdown(void) {
     win32_shutdown_gamepads();
     pal__eventq_free(g_event_queue);
+}
+
+PALAPI char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp) {
+    return stbi_load(filename, x, y, comp, req_comp);
 }
 
 /*

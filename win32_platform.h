@@ -12,6 +12,9 @@
 // for file permissions.
 #include <aclapi.h>
 
+// for PathIsDirectoryW
+#include <Shlwapi.h>
+
 // OpenGL
 #include <gl/gl.h>
 #include <GL/wglext.h>
@@ -82,6 +85,10 @@ struct pal_sound {
     float preload_seconds; // How many seconds were preloaded
     int is_streaming;      // 1 if this is a streaming sound
     int stream_finished;   // 1 when streaming is complete
+};
+
+struct pal_mutex {
+    CRITICAL_SECTION cs;
 };
 
 // Keyboard & Mouse Input
@@ -2296,7 +2303,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 
         total_read += read_now;
     }
-    buffer[total_read] = '\0';
+    buffer[total_size] = '\0';
     CloseHandle(file);
 
     if (bytes_read)
@@ -2367,13 +2374,13 @@ PALAPI pal_file* pal_open_file(const char* file_path) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
     if (!wide_path) return NULL;
     
-    pal_file* file = (pal_file*)malloc(sizeof(pal_file));
+    pal_file* file = NULL;
     if (!file) {
         free(wide_path);
         return NULL;
     }
     
-    file->handle = CreateFileW(
+    file = CreateFileW(
         wide_path,
         GENERIC_READ,
         FILE_SHARE_READ,
@@ -2385,7 +2392,7 @@ PALAPI pal_file* pal_open_file(const char* file_path) {
 
     free(wide_path);
 
-    if (file->handle == INVALID_HANDLE_VALUE) {
+    if (file == INVALID_HANDLE_VALUE) {
         free(file);
         return NULL;
     }
@@ -2394,14 +2401,14 @@ PALAPI pal_file* pal_open_file(const char* file_path) {
 }
 
 PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
-    if (!file || file->handle == INVALID_HANDLE_VALUE || !buffer) {
+    if (!file || file == INVALID_HANDLE_VALUE || !buffer) {
         return 0;
     }
 
     LARGE_INTEGER file_offset = {0};
     file_offset.QuadPart = (LONGLONG)offset;
 
-    if (!SetFilePointerEx(file->handle, file_offset, NULL, FILE_BEGIN)) {
+    if (!SetFilePointerEx(file, file_offset, NULL, FILE_BEGIN)) {
         return 0;
     }
 
@@ -2414,7 +2421,7 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
             to_read = (DWORD)(bytes_to_read - total_read);
         }
         DWORD bytesRead = 0;
-        BOOL success = ReadFile(file->handle, buffer + total_read, to_read, &bytesRead, NULL);
+        BOOL success = ReadFile(file, buffer + total_read, to_read, &bytesRead, NULL);
         if (!success || bytesRead != to_read) {
             return 0;
         }
@@ -2427,11 +2434,25 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
 PALAPI pal_bool pal_close_file(pal_file* file) {
     if (!file) return 0;
     
-    if (!CloseHandle(file->handle)) {
+    if (!CloseHandle(file)) {
         return 0;
     }
     free(file);
     return 1;
+}
+
+//----------------------------------------------------------------------------------
+// Directory Listing.
+//----------------------------------------------------------------------------------
+PALAPI pal_bool pal_path_is_dir(const char *path) {
+    wchar_t* wide_path = win32_utf8_to_utf16(path);
+    if (!wide_path) return 1;
+
+    pal_bool is_dir = PathIsDirectoryW(wide_path) ? pal_true : pal_false;
+
+    free(wide_path);
+
+    return is_dir;
 }
 
 //----------------------------------------------------------------------------------
@@ -3445,6 +3466,7 @@ PALAPI void pal_url_launch(char* url) {
         MessageBoxA(NULL, "Failed to open URL.", "Error", MB_ICONERROR);
     }
 }
+
 //----------------------------------------------------------------------------------
 // File Requester Functions.
 //----------------------------------------------------------------------------------
@@ -3537,6 +3559,112 @@ char* pal_show_save_dialog(void* id) {
 char* pal_show_load_dialog(void* id) {
     PalRequester* req = win32_get_requester(id);
     return (req && req->path[0]) ? req->path : NULL;
+}
+
+//----------------------------------------------------------------------------------
+// Multi-threadding functions.
+//----------------------------------------------------------------------------------
+PALAPI pal_mutex *pal_create_mutex() {
+    pal_mutex *mutex = malloc(sizeof(*mutex));
+    if (!mutex) return NULL;
+    InitializeCriticalSection(&mutex->cs);
+    return mutex;
+}
+
+PALAPI void pal_lock_mutex(pal_mutex *mutex) {
+    EnterCriticalSection(&mutex->cs);
+}
+
+PALAPI pal_bool pal_lock_mutex_try(pal_mutex *mutex) {
+    return TryEnterCriticalSection(&mutex->cs) ? 1 : 0;
+}
+
+PALAPI void pal_unlock_mutex(pal_mutex *mutex) {
+    LeaveCriticalSection(&mutex->cs);
+}
+
+PALAPI void pal_destroy_mutex(pal_mutex *mutex) {
+    DeleteCriticalSection(&mutex->cs);
+    free(mutex);
+}
+
+PALAPI pal_signal *pal_create_signal(void) {
+    // Manual-reset event, initially non-signaled
+    return (pal_signal *)CreateEventW(NULL, TRUE, FALSE, NULL);
+}
+
+PALAPI pal_bool pal_wait_for_signal(pal_signal *signal, pal_mutex *mutex) {
+    if (!signal)
+        return pal_false;
+
+    // Release the mutex so other threads can activate the signal
+    if (mutex)
+        pal_unlock_mutex(mutex);
+
+    // Wait for the signal to be activated
+    DWORD result = WaitForSingleObject((HANDLE)signal, INFINITE);
+
+    // Reacquire the mutex before returning
+    if (mutex)
+        pal_lock_mutex(mutex);
+
+    return (result == WAIT_OBJECT_0);
+}
+
+PALAPI pal_bool pal_activate_signal(pal_signal *signal) {
+    if (!signal)
+        return pal_false;
+
+    return SetEvent((HANDLE)signal) ? pal_true : pal_false;
+}
+
+PALAPI pal_bool pal_deactivate_signal(pal_signal *signal) {
+    if (!signal)
+        return pal_false;
+
+    return ResetEvent((HANDLE)signal) ? pal_true : pal_false;
+}
+
+PALAPI void pal_destroy_signal(pal_signal *signal) {
+    if (signal)
+        CloseHandle((HANDLE)signal);
+}
+
+typedef struct {
+    pal_thread_func func;
+    void *arg;
+} thread_wrapper_arg;
+
+// Wrapper to adapt pal_thread_func to Windows signature
+DWORD WINAPI thread_wrapper(LPVOID param) {
+    thread_wrapper_arg *wrapper = (thread_wrapper_arg *)param;
+    wrapper->func(wrapper->arg);
+    HeapFree(GetProcessHeap(), 0, wrapper);
+    return 0;
+}
+
+PALAPI pal_thread *pal_create_thread(pal_thread_func func, void *arg) {
+    thread_wrapper_arg *wrapper = (thread_wrapper_arg *)HeapAlloc(GetProcessHeap(), 0, sizeof(thread_wrapper_arg));
+    if (!wrapper) return NULL;
+    wrapper->func = func;
+    wrapper->arg = arg;
+
+    HANDLE thread = CreateThread(NULL, 0, thread_wrapper, wrapper, CREATE_SUSPENDED, NULL);
+    return (pal_thread *)thread;
+}
+
+PALAPI pal_bool pal_start_thread(pal_thread *thread) {
+    if (!thread) return pal_false;
+    return ResumeThread((HANDLE)thread) != (DWORD)-1;
+}
+
+PALAPI pal_bool pal_join_thread(pal_thread *thread) {
+    if (!thread) return pal_false;
+    return WaitForSingleObject((HANDLE)thread, INFINITE) == WAIT_OBJECT_0;
+}
+
+PALAPI void pal_destroy_thread(pal_thread *thread) {
+    if (thread) CloseHandle((HANDLE)thread);
 }
 
 //----------------------------------------------------------------------------------
