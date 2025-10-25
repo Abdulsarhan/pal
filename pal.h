@@ -12,9 +12,7 @@ typedef struct pal_video_mode {
     int bits_per_pixel;
 } pal_video_mode;
 
-typedef struct pal_file {
-    void *handle;
-} pal_file;
+typedef void pal_file;
 
 typedef struct {
     uint32_t year;
@@ -28,6 +26,7 @@ typedef struct {
 
 typedef struct pal_sound pal_sound;
 typedef struct pal_music pal_music;
+typedef struct pal_mutex pal_mutex;
 #define PAL_MAX_TOUCHES 2
 typedef struct {
     // Standard gamepad controls
@@ -1210,6 +1209,9 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 
+// Directory Listing
+PALAPI pal_bool pal_path_is_dir(const char *path);
+
 // Open File I/O
 PALAPI pal_file *pal_open_file(const char *file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer);
@@ -1233,8 +1235,8 @@ PALAPI char *pal_show_load_dialog(void *id);
 PALAPI void pal_url_launch(char *url);
 
 // Mouse Warp
-void pal_mouse_warp(int x, int y);
-void pal_mouse_warp_relative(int dx, int dy);
+PALAPI void pal_mouse_warp(int x, int y);
+PALAPI void pal_mouse_warp_relative(int dx, int dy);
 
 // File Parsing
 PALAPI pal_bool pal_is_uppercase(char ch);
@@ -1259,6 +1261,13 @@ PALAPI pal_time pal_get_time_since_boot(void);
 PALAPI double pal_get_time_since_pal_started(void);
 PALAPI uint64_t pal_get_timer(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
+
+// Multi-threadding functions
+PALAPI pal_mutex *pal_create_mutex();
+PALAPI void pal_lock_mutex(pal_mutex *mutex);
+PALAPI pal_bool pal_lock_mutex_try(pal_mutex *mutex);
+PALAPI void pal_unlock_mutex(pal_mutex *mutex);
+PALAPI void pal_destroy_mutex(pal_mutex *mutex);
 
 // .dll/.so/.dylib loading
 PALAPI void *pal_load_dynamic_library(const char *dll);
