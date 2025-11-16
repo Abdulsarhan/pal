@@ -2,6 +2,7 @@
 #define PAL_INCLUDE_H
 
 #include <stdint.h>   // For Clearly Defined Types.
+#include <stddef.h>
 #include <sys/stat.h> // For time_t and stat.
 
 typedef uint8_t pal_bool;
@@ -480,6 +481,10 @@ typedef struct pal_event_queue {
 #define PAL_PI 3.14159265358979323846f
 #define PAL_DEG2RAD (PAL_PI / 180.0f)
 #define PAL_RAD2DEG (180.0f / PAL_PI)
+
+typedef struct {
+    int width, height, x, y;
+}pal_rect;
 
 typedef struct pal_vec2 {
     union {
@@ -1140,8 +1145,8 @@ PALAPI void pal_shutdown(void);
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
-PALAPI int pal_show_cursor(void);
-PALAPI int pal_hide_cursor(void);
+PALAPI int pal_show_cursor(pal_window *window);
+PALAPI int pal_hide_cursor(pal_window *window);
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
 PALAPI pal_bool pal_make_window_fullscreen(pal_window *window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
@@ -1150,6 +1155,8 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window);
 PALAPI pal_bool pal_maximize_window(pal_window *window);
 PALAPI pal_bool pal_minimize_window(pal_window *window);
 PALAPI void pal_set_window_icon(pal_window *window, const char *image_path);
+// I am thinking that a better way of doing legacy stuff is with macros.
+// Just have a macro like WINDOWS_XP_OR_LATER or WINDOWS_VISTA_OR_LATER.
 PALAPI void pal_set_window_icon_legacy(pal_window *window, const char *image_path);
 PALAPI void pal_set_taskbar_icon(pal_window *taskbar, const char *image_path);
 PALAPI void pal_set_taskbar_icon_legacy(pal_window *taskbar, const char *image_path);
@@ -1161,8 +1168,11 @@ PALAPI void *pal_gl_get_proc_address(const char *proc);
 PALAPI pal_bool pal_poll_events(pal_event *event);
 PALAPI int pal_make_context_current(pal_window *window);
 
+// Rendering functions (implemented using GDI on windows and X11 on linux)
+PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_vec4 color);
+
 // Image Loading
-PALAPI char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp);
+PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp);
 
 // Keyboard input
 PALAPI int pal_get_keyboard_count(void);

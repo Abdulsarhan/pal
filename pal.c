@@ -58,22 +58,8 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
 #include "linux_x11_platform.h"
 #endif
 
-PALAPI void pal_init(void) {
-    pal__init_eventq();
-    win32_enumerate_keyboards();
-    win32_enumerate_mice();
-    win32_init_timer();
-    win32_init_sound();
-    if (!win32_init_gamepads()) {
-        printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
-    }
-}
-PALAPI void pal_shutdown(void) {
-    win32_shutdown_gamepads();
-    pal__eventq_free(g_event_queue);
-}
 
-PALAPI char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp) {
+PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp) {
     return stbi_load(filename, x, y, comp, req_comp);
 }
 
@@ -172,7 +158,7 @@ PALAPI int pal_get_mouse_indices(int *mouse_indices) {
     int count = 0;
     
     for (int i = 0; i < g_mouse_count && count < MAX_MICE; i++) {
-        mouse_state *m = &g_mice[i];
+        pal_mouse_state *m = &g_mice[i];
         
         // Check if mouse has delta movement
         if (m->delta_x != 0 || m->delta_y != 0) {
@@ -207,7 +193,7 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
 PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
     if (mouse_id == -1) {
         for (int i = 0; i < g_mouse_count; i++) {
-            mouse_state *m = &g_mice[i];
+            pal_mouse_state *m = &g_mice[i];
             if (m->buttons[button] && !m->buttons_processed[button]) {
                 m->buttons_processed[button] = 1;
                 return 1;
@@ -217,7 +203,7 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
     }
     
     if (mouse_id < 0 || mouse_id >= g_mouse_count) return 0;
-    mouse_state *m = &g_mice[mouse_id];
+    pal_mouse_state *m = &g_mice[mouse_id];
     if (m->buttons[button] && !m->buttons_processed[button]) {
         m->buttons_processed[button] = 1;
         return 1;
@@ -227,17 +213,20 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
 
 // Get delta for specific mouse (useful if you want per-mouse tracking)
 PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
+    pal_vec2 mouse_delta;
+
     if (mouse_id < 0 || mouse_id >= g_mouse_count) {
-        return (pal_vec2){0, 0};  // Return zero vector for invalid ID
+        mouse_delta.x = 0;
+        mouse_delta.y = 0;
+        return mouse_delta;
     }
-    
-    return (pal_vec2){
-        (float)g_mice[mouse_id].delta_x,
-        (float)g_mice[mouse_id].delta_y
-    };
+
+    mouse_delta.x = (float)g_mice[mouse_id].delta_x;
+    mouse_delta.y = (float)g_mice[mouse_id].delta_y;
+    return mouse_delta;
 }
 
-PALAPI void pal__reset_mouse_deltas(void) {
+void pal__reset_mouse_deltas(void) {
     for (int i = 0; i < g_mouse_count; i++) {
         g_mice[i].delta_x = 0;
         g_mice[i].delta_y = 0;
@@ -418,7 +407,7 @@ static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
         target_sample_frames = total_sample_frames;
     }
 
-    printf("OGG Load: Requesting %lld sample frames (%.3f seconds) from %lld total\n",
+    printf("OGG Load: Requesting %zu sample frames (%.3f seconds) from %zu total\n",
            target_sample_frames,
            (float)target_sample_frames / sample_rate,
            total_sample_frames);
@@ -468,7 +457,7 @@ static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
         total_decoded += samples_read;
 
         unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
-        printf("OGG Load: Read %d sample frames, total: %lld/%lld, decoder: %u\n",
+        printf("OGG Load: Read %d sample frames, total: %zu/%zu, decoder: %u\n",
                samples_read,
                total_decoded,
                target_sample_frames,
@@ -485,7 +474,7 @@ static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
     int final_position = stb_vorbis_get_sample_offset(vorbis);
     size_t expected_position = start_position + total_decoded;
 
-    printf("OGG Load: Finished - loaded %lld sample frames\n", total_decoded);
+    printf("OGG Load: Finished - loaded %zu sample frames\n", total_decoded);
     printf("OGG Load: Decoder position: %zu -> %d (expected %zu)\n",
            start_position,
            final_position,

@@ -1006,9 +1006,9 @@ typedef struct {
     int32_t delta_x;
     int32_t delta_y;
     char device_name[256];
-} mouse_state;
+}pal_mouse_state;
 
-static mouse_state g_mice[MAX_MICE] = {0};
+static pal_mouse_state g_mice[MAX_MICE] = {0};
 static int g_mouse_count = 0;
 uint32_t g_cached_mouse_buttons = 0;
 static int g_cached_modifiers = PAL_MOD_NONE; // both keyboard and mouse code need this so that you can do ctrl+click or ctrl+scroll
@@ -1024,7 +1024,7 @@ void win32_enumerate_mice(void) {
 
     for (UINT i = 0; i < numDevices && g_mouse_count < MAX_MICE; i++) {
         if (deviceList[i].dwType == RIM_TYPEMOUSE) {
-            mouse_state* mouse = &g_mice[g_mouse_count];
+            pal_mouse_state* mouse = &g_mice[g_mouse_count];
             mouse->device_handle = deviceList[i].hDevice;
 
             UINT size = 0;
@@ -1050,7 +1050,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         }
     }
 
-    mouse_state* mouse = &g_mice[mouse_index];
+    pal_mouse_state* mouse = &g_mice[mouse_index];
 
     pal_event event = {0};
     int32_t dx = raw->data.mouse.lLastX;
@@ -3686,6 +3686,22 @@ PALAPI pal_bool pal_free_dynamic_library(void* dll) {
     pal_bool free_result = FreeLibrary(dll);
     assert(free_result);
     return (pal_bool)free_result;
+}
+
+PALAPI void pal_init(void) {
+    pal__init_eventq();
+    win32_enumerate_keyboards();
+    win32_enumerate_mice();
+    win32_init_timer();
+    win32_init_sound();
+    if (!win32_init_gamepads()) {
+        printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
+    }
+}
+
+PALAPI void pal_shutdown(void) {
+    win32_shutdown_gamepads();
+    pal__eventq_free(g_event_queue);
 }
 
 #endif // WIN32_PLATFORM_H
