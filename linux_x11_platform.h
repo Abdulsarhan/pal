@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string.h>
 
 // X11
 #include <X11/Xlib.h>
@@ -21,6 +22,14 @@
 
 // dlopen/dlsym/dlclose
 #include <dlfcn.h>
+
+// linux-specific headers
+#include <linux/input.h>
+#include <sys/ioctl.h>
+#include <sys/poll.h>
+#include <libudev.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 struct pal_window {
     Window window;
@@ -66,34 +75,12 @@ typedef struct pal_monitor {
 Display *g_display = NULL;
 Atom g_wm_delete = 0;
 
-// KEYBOARD SHIT:
-static int g_keyboard_count = 0;
-#define MAX_KEYBOARDS 8
 
-typedef struct {
-    void *device_handle; // on linux, we prolly don't need this. It's probably as simple as just reading a file.
-    uint8_t keys[256];
-    uint8_t keys_processed[256];
-    uint8_t key_is_down[256];
-    char device_name[256];
-} pal_keyboard_state;
-static pal_keyboard_state g_keyboards[MAX_KEYBOARDS] = {0};
-
-// MOUSE SHIT:
-static int g_mouse_count = 0;
-#define MAX_MICE 8
-
-typedef struct {
-    void *device_handle;
-    uint8_t buttons[8];
-    uint8_t buttons_processed[8];
-    int32_t delta_x;
-    int32_t delta_y;
-    char device_name[256];
-}pal_mouse_state;
-static pal_mouse_state g_mice[MAX_MICE] = {0};
+void linux_x11_init_raw_input();
 
 PALAPI void pal_init(void) {
+    pal__init_eventq();
+    linux_x11_init_raw_input();
     g_display = XOpenDisplay(NULL);
     if (!g_display) {
         fprintf(stderr, "Failed to open display\n");
@@ -106,6 +93,248 @@ PALAPI void pal_init(void) {
 PALAPI void pal_shutdown() {
     if(g_display) {
         XCloseDisplay(g_display);
+    }
+}
+
+pal_bool g_message_pump_drained = pal_false;
+pal_event_queue g_event_queue;
+
+void linux_x11_poll_raw_input();
+PALAPI pal_bool pal_poll_events(pal_event* event) {
+    if (!g_message_pump_drained) {
+        linux_x11_poll_raw_input();
+        while (XPending(g_display) > 0) {
+            XEvent event;
+            XNextEvent(g_display, &event);  // removes the event from queue
+            //handle_event(&event);
+        }
+        g_message_pump_drained = pal_true;
+    }
+
+    pal_event_queue* queue = &g_event_queue;
+
+    if (queue->size) { // if queue is not empty,
+
+        // peek
+        *event = queue->events[queue->front];
+
+        // dequeue
+        queue->front = (queue->front + 1) % queue->capacity;
+        queue->size--;
+        return 1;
+    } else {
+        g_message_pump_drained = pal_false;
+        return 0;
+    }
+}
+
+#define MAX_KEYBOARDS 16
+#define MAX_MICE 16
+#define MAX_KEYS 256
+#define MAX_MOUSE_BUTTONS 8
+
+typedef struct {
+    int fds[MAX_KEYBOARDS];               // fds of keyboards
+    char names[MAX_KEYBOARDS][256];       // names of keyboards
+    int count;                             // number of keyboards
+    unsigned char keys[MAX_KEYBOARDS][MAX_KEYS];         // per-keyboard key states
+    unsigned char keys_toggled[MAX_KEYBOARDS][MAX_KEYS]; // per-keyboard toggle tracking
+} pal_keyboard_state;
+
+typedef struct {
+    int fds[MAX_MICE];                     // fds of mice
+    char names[MAX_MICE][256];             // names of mice
+    int count;
+    int buttons[MAX_MICE][MAX_MOUSE_BUTTONS];        // per-mouse button states
+    int buttons_toggled[MAX_MICE][MAX_MOUSE_BUTTONS]; // per-mouse toggle tracking
+    int dx[MAX_MICE];                      // per-mouse accumulated movement
+    int dy[MAX_MICE];
+    int wheel[MAX_MICE];                             
+} pal_mouse_state;
+
+pal_keyboard_state g_keyboards = {0};
+pal_mouse_state g_mice = {0};
+
+// udev context and monitor
+struct udev *g_udev = NULL;
+struct udev_monitor *g_monitor = NULL;
+
+// -------- Helpers --------
+int is_keyboard(int fd) {
+    unsigned long evbits[(EV_MAX+7)/8] = {0};
+    ioctl(fd, EVIOCGBIT(0, EV_MAX), evbits);
+    return (evbits[EV_KEY/8] & (1 << (EV_KEY % 8))) != 0;
+}
+
+int is_mouse(int fd) {
+    unsigned long evbits[(EV_MAX+7)/8] = {0};
+    ioctl(fd, EVIOCGBIT(0, EV_MAX), evbits);
+    return (evbits[EV_REL/8] & (1 << (EV_REL % 8))) != 0;
+}
+
+// -------- Initialization --------
+void linux_x11_init_raw_input() {
+    g_udev = udev_new();
+    if (!g_udev) {
+        fprintf(stderr, "Failed to create udev context\n");
+        exit(1);
+    }
+
+    g_monitor = udev_monitor_new_from_netlink(g_udev, "udev");
+    udev_monitor_filter_add_match_subsystem_devtype(g_monitor, "input", NULL);
+    udev_monitor_enable_receiving(g_monitor);
+
+    // Enumerate existing devices
+    struct udev_enumerate *enumerate = udev_enumerate_new(g_udev);
+    udev_enumerate_add_match_subsystem(enumerate, "input");
+    udev_enumerate_scan_devices(enumerate);
+    struct udev_list_entry *devices = udev_enumerate_get_list_entry(enumerate);
+    struct udev_list_entry *entry;
+
+    udev_list_entry_foreach(entry, devices) {
+        const char *path = udev_list_entry_get_name(entry);
+        struct udev_device *dev = udev_device_new_from_syspath(g_udev, path);
+        const char *devnode = udev_device_get_devnode(dev);
+        if (!devnode) { udev_device_unref(dev); continue; }
+
+        int dev_fd = open(devnode, O_RDONLY | O_NONBLOCK);
+        if (dev_fd < 0) { udev_device_unref(dev); continue; }
+
+        char name[256] = {0};
+        ioctl(dev_fd, EVIOCGNAME(sizeof(name)), name);
+
+        if (is_keyboard(dev_fd) && g_keyboards.count < MAX_KEYBOARDS) {
+            g_keyboards.fds[g_keyboards.count] = dev_fd;
+            strncpy(g_keyboards.names[g_keyboards.count], name, 255);
+            g_keyboards.count++;
+        } else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
+            g_mice.fds[g_mice.count] = dev_fd;
+            strncpy(g_mice.names[g_mice.count], name, 255);
+            g_mice.count++;
+        } else {
+            close(dev_fd);
+        }
+
+        udev_device_unref(dev);
+    }
+    udev_enumerate_unref(enumerate);
+}
+void linux_x11_poll_raw_input() {
+    struct pollfd fds[MAX_KEYBOARDS + MAX_MICE + 1];
+    int nfds = 0;
+
+    // Clear toggle flags at the start of each poll
+    for (int i = 0; i < g_keyboards.count; i++) {
+        memset(g_keyboards.keys_toggled[i], 0, sizeof(g_keyboards.keys_toggled[i]));
+    }
+    for (int i = 0; i < g_mice.count; i++) {
+        memset(g_mice.buttons_toggled[i], 0, sizeof(g_mice.buttons_toggled[i]));
+        g_mice.dx[i] = 0;  // Reset delta each frame
+        g_mice.dy[i] = 0;
+        g_mice.wheel[i] = 0;
+    }
+
+    // Add keyboard fds
+    for (int i = 0; i < g_keyboards.count; i++) {
+        fds[nfds].fd = g_keyboards.fds[i];
+        fds[nfds].events = POLLIN;
+        nfds++;
+    }
+
+    // Add mouse fds
+    for (int i = 0; i < g_mice.count; i++) {
+        fds[nfds].fd = g_mice.fds[i];
+        fds[nfds].events = POLLIN;
+        nfds++;
+    }
+
+    // Add udev monitor
+    int monitor_fd = udev_monitor_get_fd(g_monitor);
+    fds[nfds].fd = monitor_fd;
+    fds[nfds].events = POLLIN;
+    nfds++;
+
+    int ret = poll(fds, nfds, 0);
+    if (ret <= 0) return;
+
+    struct input_event ev;
+    int index = 0;
+
+    // ---- Process keyboard events ----
+    for (int i = 0; i < g_keyboards.count; i++, index++) {
+        while (read(fds[index].fd, &ev, sizeof(ev)) > 0) {
+            if (ev.type == EV_KEY && ev.code < MAX_KEYS) {
+                unsigned char old_state = g_keyboards.keys[i][ev.code];
+                unsigned char new_state = ev.value;
+                
+                g_keyboards.keys[i][ev.code] = new_state;
+                
+                // Mark as toggled if state changed
+                if (old_state != new_state) {
+                    g_keyboards.keys_toggled[i][ev.code] = 1;
+                }
+            }
+        }
+    }
+
+    // ---- Process mouse events ----
+    for (int i = 0; i < g_mice.count; i++, index++) {
+        while (read(fds[index].fd, &ev, sizeof(ev)) > 0) {
+            if (ev.type == EV_KEY && ev.code < MAX_MOUSE_BUTTONS) {
+                int old_state = g_mice.buttons[i][ev.code];
+                int new_state = ev.value;
+                
+                g_mice.buttons[i][ev.code] = new_state;
+                
+                // Mark as toggled if state changed
+                if (old_state != new_state) {
+                    g_mice.buttons_toggled[i][ev.code] = 1;
+                }
+            } else if (ev.type == EV_REL) {
+                if (ev.code == REL_X) g_mice.dx[i] += ev.value;
+                else if (ev.code == REL_Y) g_mice.dy[i] += ev.value;
+                else if (ev.code == REL_WHEEL) g_mice.wheel[i] += ev.value;
+            }
+        }
+    }
+
+    // ---- Check udev hotplug ----
+    if (fds[nfds-1].revents & POLLIN) {
+        struct udev_device *dev = udev_monitor_receive_device(g_monitor);
+        if (dev) {
+            const char *action = udev_device_get_action(dev);
+            const char *devnode = udev_device_get_devnode(dev);
+            if (devnode && action && strcmp(action,"add")==0) {
+                int dev_fd = open(devnode, O_RDONLY | O_NONBLOCK);
+                if (dev_fd >= 0) {
+                    char name[256] = {0};
+                    ioctl(dev_fd, EVIOCGNAME(sizeof(name)), name);
+                    if (is_keyboard(dev_fd) && g_keyboards.count < MAX_KEYBOARDS) {
+                        g_keyboards.fds[g_keyboards.count] = dev_fd;
+                        strncpy(g_keyboards.names[g_keyboards.count], name, 255);
+                        // Initialize new keyboard state to 0
+                        memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
+                        memset(g_keyboards.keys_toggled[g_keyboards.count], 0, MAX_KEYS);
+                        g_keyboards.count++;
+                        printf("[Keyboard Added] %s\n", name);
+                    } else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
+                        g_mice.fds[g_mice.count] = dev_fd;
+                        strncpy(g_mice.names[g_mice.count], name, 255);
+                        // Initialize new mouse state to 0
+                        memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+                        memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+                        g_mice.dx[g_mice.count] = 0;
+                        g_mice.dy[g_mice.count] = 0;
+                        g_mice.wheel[g_mice.count] = 0;
+                        g_mice.count++;
+                        printf("[Mouse Added] %s\n", name);
+                    } else {
+                        close(dev_fd);
+                    }
+                }
+            }
+            udev_device_unref(dev);
+        }
     }
 }
 
@@ -531,11 +760,6 @@ PALAPI int pal_hide_cursor(pal_window *window) {
     XFixesHideCursor(g_display, window->window);
     XFlush(g_display);
     return 0;
-}
-
-PALAPI pal_bool pal_poll_events(pal_event *event) {
-
-    return pal_false;
 }
 
 PALAPI pal_monitor *pal_get_primary_monitor(void) {

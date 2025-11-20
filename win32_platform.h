@@ -997,21 +997,67 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
 PALAPI pal_bool pal_close_window(pal_window* window) {
     return (pal_bool)DestroyWindow(window->hwnd);
 }
-#define MAX_MICE 8
+
+#define MAX_MICE 16
+#define MAX_KEYBOARDS 16
+#define MAX_KEYS 256
+#define MAX_MOUSE_BUTTONS 8
 
 typedef struct {
-    HANDLE device_handle;
-    uint8_t buttons[8];
-    uint8_t buttons_processed[8];
-    int32_t delta_x;
-    int32_t delta_y;
-    char device_name[256];
-}pal_mouse_state;
+    HANDLE handles[MAX_KEYBOARDS];
+    char names[MAX_KEYBOARDS][256];
+    int count;
+    unsigned char keys[MAX_KEYBOARDS][MAX_KEYS];
+    unsigned char keys_toggled[MAX_KEYBOARDS][MAX_KEYS];
+} pal_keyboard_state;
 
-static pal_mouse_state g_mice[MAX_MICE] = {0};
-static int g_mouse_count = 0;
-uint32_t g_cached_mouse_buttons = 0;
-static int g_cached_modifiers = PAL_MOD_NONE; // both keyboard and mouse code need this so that you can do ctrl+click or ctrl+scroll
+typedef struct {
+    HANDLE handles[MAX_MICE];
+    char names[MAX_MICE][256];
+    int count;
+    int buttons[MAX_MICE][MAX_MOUSE_BUTTONS];
+    int buttons_toggled[MAX_MICE][MAX_MOUSE_BUTTONS];
+    int dx[MAX_MICE];
+    int dy[MAX_MICE];
+    int wheel[MAX_MICE];
+} pal_mouse_state;
+
+static pal_keyboard_state g_keyboards = {0};
+static pal_mouse_state g_mice = {0};
+static uint32_t g_cached_mouse_buttons = 0;
+static int g_cached_modifiers = PAL_MOD_NONE;
+
+void win32_enumerate_keyboards(void) {
+    UINT numDevices;
+    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+
+    PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
+
+    g_keyboards.count = 0;
+
+    for (UINT i = 0; i < numDevices && g_keyboards.count < MAX_KEYBOARDS; i++) {
+        if (deviceList[i].dwType == RIM_TYPEKEYBOARD) {
+            int idx = g_keyboards.count;
+            g_keyboards.handles[idx] = deviceList[i].hDevice;
+
+            UINT size = 0;
+            GetRawInputDeviceInfo(g_keyboards.handles[idx], RIDI_DEVICENAME, NULL, &size);
+            if (size < sizeof(g_keyboards.names[idx])) {
+                GetRawInputDeviceInfo(g_keyboards.handles[idx], RIDI_DEVICENAME, 
+                                    g_keyboards.names[idx], &size);
+            }
+
+            // Initialize state arrays for this keyboard
+            memset(g_keyboards.keys[idx], 0, MAX_KEYS);
+            memset(g_keyboards.keys_toggled[idx], 0, MAX_KEYS);
+
+            g_keyboards.count++;
+        }
+    }
+
+    free(deviceList);
+}
 
 void win32_enumerate_mice(void) {
     UINT numDevices;
@@ -1020,45 +1066,185 @@ void win32_enumerate_mice(void) {
     PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
 
-    g_mouse_count = 0;
+    g_mice.count = 0;
 
-    for (UINT i = 0; i < numDevices && g_mouse_count < MAX_MICE; i++) {
+    for (UINT i = 0; i < numDevices && g_mice.count < MAX_MICE; i++) {
         if (deviceList[i].dwType == RIM_TYPEMOUSE) {
-            pal_mouse_state* mouse = &g_mice[g_mouse_count];
-            mouse->device_handle = deviceList[i].hDevice;
+            int idx = g_mice.count;
+            g_mice.handles[idx] = deviceList[i].hDevice;
 
             UINT size = 0;
-            GetRawInputDeviceInfo(mouse->device_handle, RIDI_DEVICENAME, NULL, &size);
-            if (size < sizeof(mouse->device_name)) {
-                GetRawInputDeviceInfo(mouse->device_handle, RIDI_DEVICENAME, mouse->device_name, &size);
+            GetRawInputDeviceInfo(g_mice.handles[idx], RIDI_DEVICENAME, NULL, &size);
+            if (size < sizeof(g_mice.names[idx])) {
+                GetRawInputDeviceInfo(g_mice.handles[idx], RIDI_DEVICENAME, 
+                                    g_mice.names[idx], &size);
             }
 
-            g_mouse_count++;
+            // Initialize state arrays for this mouse
+            memset(g_mice.buttons[idx], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            memset(g_mice.buttons_toggled[idx], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            g_mice.dx[idx] = 0;
+            g_mice.dy[idx] = 0;
+            g_mice.wheel[idx] = 0;
+
+            g_mice.count++;
         }
     }
 
     free(deviceList);
 }
 
-void win32_handle_mouse(const RAWINPUT* raw) {
-    // Find mouse index
-    int mouse_index = 0;
-    for (int i = 0; i < g_mouse_count; i++) {
-        if (g_mice[i].device_handle == raw->header.hDevice) {
-            mouse_index = i;
+// Function to update modifier state based on raw input
+static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
+    int modifier_flag = 0;
+
+    switch (vk) {
+        case VK_LSHIFT:
+            modifier_flag = PAL_MOD_LSHIFT;
+            break;
+        case VK_RSHIFT:
+            modifier_flag = PAL_MOD_RSHIFT;
+            break;
+        case VK_LCONTROL:
+            modifier_flag = PAL_MOD_LCTRL;
+            break;
+        case VK_RCONTROL:
+            modifier_flag = PAL_MOD_RCTRL;
+            break;
+        case VK_LMENU:
+            modifier_flag = PAL_MOD_LALT;
+            break;
+        case VK_RMENU:
+            modifier_flag = PAL_MOD_RALT;
+            if (is_key_released) {
+                g_cached_modifiers &= ~PAL_MOD_ALTGR;
+            } else {
+                g_cached_modifiers |= PAL_MOD_ALTGR;
+            }
+            break;
+        case VK_LWIN:
+            modifier_flag = PAL_MOD_LSUPER;
+            break;
+        case VK_RWIN:
+            modifier_flag = PAL_MOD_RSUPER;
+            break;
+        case VK_CAPITAL:
+            if (!is_key_released) {
+                g_cached_modifiers ^= PAL_MOD_CAPS;
+            }
+            return;
+        case VK_NUMLOCK:
+            if (!is_key_released) {
+                g_cached_modifiers ^= PAL_MOD_NUM;
+            }
+            return;
+        case VK_SCROLL:
+            if (!is_key_released) {
+                g_cached_modifiers ^= PAL_MOD_SCROLL;
+            }
+            return;
+        default:
+            return;
+    }
+
+    if (is_key_released) {
+        g_cached_modifiers &= ~modifier_flag;
+    } else {
+        g_cached_modifiers |= modifier_flag;
+    }
+}
+
+void win32_handle_keyboard(const RAWINPUT* raw) {
+    // Find keyboard index
+    int kb_index = 0;
+    for (int i = 0; i < g_keyboards.count; i++) {
+        if (g_keyboards.handles[i] == raw->header.hDevice) {
+            kb_index = i;
             break;
         }
     }
 
-    pal_mouse_state* mouse = &g_mice[mouse_index];
+    // CLEAR TOGGLES FOR THIS KEYBOARD HERE
+    memset(g_keyboards.keys_toggled[kb_index], 0, MAX_KEYS);
+
+    USHORT vk = raw->data.keyboard.VKey;
+    USHORT makecode = raw->data.keyboard.MakeCode;
+    USHORT flags = raw->data.keyboard.Flags;
+    pal_event event = {0};
+
+    pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
+    pal_bool is_extended = (flags & RI_KEY_E0) != 0;
+
+    static uint8_t key_is_down[MAX_KEYBOARDS][256] = {0};
+    pal_bool is_repeat = 0;
+    if (vk < 256) {
+        if (!is_key_released && key_is_down[kb_index][vk]) {
+            is_repeat = 1;
+        }
+        key_is_down[kb_index][vk] = !is_key_released;
+    }
+
+    update_modifier_state(vk, is_key_released);
+
+    int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
+    int pal_scancode = 0;
+
+    if (is_extended) {
+        if (makecode < 256) pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
+    } else {
+        if (makecode < 256) pal_scancode = win32_makecode_to_pal_scancode[makecode];
+    }
+
+    if (is_key_released) {
+        event.type = PAL_EVENT_KEY_UP;
+        event.key = (pal_keyboard_event){
+            .virtual_key = pal_key,
+            .scancode = pal_scancode,
+            .pressed = 0,
+            .repeat = 0,
+            .modifiers = g_cached_modifiers,
+            .keyboard_id = kb_index};
+
+        g_keyboards.keys[kb_index][pal_key] = 0;
+        g_keyboards.keys_toggled[kb_index][pal_key] = 0;
+    } else {
+        event.type = PAL_EVENT_KEY_DOWN;
+        event.key = (pal_keyboard_event){
+            .virtual_key = pal_key,
+            .scancode = pal_scancode,
+            .pressed = 1,
+            .repeat = is_repeat,
+            .modifiers = g_cached_modifiers,
+            .keyboard_id = kb_index};
+
+        unsigned char old_state = g_keyboards.keys[kb_index][pal_key];
+        g_keyboards.keys[kb_index][pal_key] = 1;
+
+        if (old_state != 1) {
+            g_keyboards.keys_toggled[kb_index][pal_key] = 1;
+        }
+    }
+
+    pal__eventq_push(&g_event_queue, event);
+}
+
+void win32_handle_mouse(const RAWINPUT* raw) {
+    // Find mouse index
+    int mouse_index = 0;
+    for (int i = 0; i < g_mice.count; i++) {
+        if (g_mice.handles[i] == raw->header.hDevice) {
+            mouse_index = i;
+            break;
+        }
+    }
 
     pal_event event = {0};
     int32_t dx = raw->data.mouse.lLastX;
     int32_t dy = raw->data.mouse.lLastY;
 
     // Update per-mouse delta
-    mouse->delta_x += dx;
-    mouse->delta_y += dy;
+    g_mice.dx[mouse_index] += dx;
+    g_mice.dy[mouse_index] += dy;
 
     USHORT buttons = raw->data.mouse.usButtonFlags;
     POINT point = {0};
@@ -1081,6 +1267,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     // Handle mouse wheel
     if (buttons & RI_MOUSE_WHEEL) {
         SHORT wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
+        g_mice.wheel[mouse_index] += wheel_delta / WHEEL_DELTA;
 
         event.type = PAL_EVENT_MOUSE_WHEEL;
         event.wheel = (pal_mouse_wheel_event){
@@ -1115,7 +1302,14 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         int pal_button = win32_button_to_pal_button[i];
 
         if (down) {
-            mouse->buttons[pal_button] = 1; // FIXED: Use pal_button instead of i
+            int old_state = g_mice.buttons[mouse_index][pal_button];
+            g_mice.buttons[mouse_index][pal_button] = 1;
+            
+            // Mark as toggled if state changed
+            if (old_state != 1) {
+                g_mice.buttons_toggled[mouse_index][pal_button] = 1;
+            }
+            
             g_cached_mouse_buttons |= (1 << i);
 
             event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
@@ -1129,8 +1323,8 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .mouse_id = mouse_index};
             pal__eventq_push(&g_event_queue, event);
         } else if (up) {
-            mouse->buttons[pal_button] = 0;           // FIXED: Use pal_button instead of i
-            mouse->buttons_processed[pal_button] = 0; // FIXED: Use pal_button instead of i
+            g_mice.buttons[mouse_index][pal_button] = 0;
+            g_mice.buttons_toggled[mouse_index][pal_button] = 0;
             g_cached_mouse_buttons &= ~(1 << i);
 
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
@@ -1147,184 +1341,18 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     }
 }
 
-#define MAX_KEYBOARDS 8
-
-typedef struct {
-    HANDLE device_handle;
-    uint8_t keys[256];
-    uint8_t keys_processed[256];
-    uint8_t key_is_down[256];
-    char device_name[256];
-} pal_keyboard_state;
-
-static pal_keyboard_state g_keyboards[MAX_KEYBOARDS] = {0};
-static int g_keyboard_count = 0;
-
-// Call during init & WM_INPUT_DEVICE_CHANGE
-void win32_enumerate_keyboards(void) {
-    UINT numDevices;
-    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
-
-    PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
-    GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
-
-    g_keyboard_count = 0;
-
-    for (UINT i = 0; i < numDevices && g_keyboard_count < MAX_KEYBOARDS; i++) {
-        if (deviceList[i].dwType == RIM_TYPEKEYBOARD) {
-            pal_keyboard_state* kb = &g_keyboards[g_keyboard_count];
-            kb->device_handle = deviceList[i].hDevice;
-
-            // Get device name
-            UINT size = 0;
-            GetRawInputDeviceInfo(kb->device_handle, RIDI_DEVICENAME, NULL, &size);
-            if (size < sizeof(kb->device_name)) {
-                GetRawInputDeviceInfo(kb->device_handle, RIDI_DEVICENAME, kb->device_name, &size);
-            }
-
-            g_keyboard_count++;
-        }
+// Add this function to clear toggle flags each frame (call at start of event poll)
+void win32_clear_input_toggles(void) {
+    for (int i = 0; i < g_keyboards.count; i++) {
+        memset(g_keyboards.keys_toggled[i], 0, MAX_KEYS);
     }
-
-    free(deviceList);
-}
-
-// Function to update modifier state based on raw input
-static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
-    int modifier_flag = 0;
-
-    // Map VK codes to modifier flags
-    switch (vk) {
-        case VK_LSHIFT:
-            modifier_flag = PAL_MOD_LSHIFT;
-            break;
-        case VK_RSHIFT:
-            modifier_flag = PAL_MOD_RSHIFT;
-            break;
-        case VK_LCONTROL:
-            modifier_flag = PAL_MOD_LCTRL;
-            break;
-        case VK_RCONTROL:
-            modifier_flag = PAL_MOD_RCTRL;
-            break;
-        case VK_LMENU:
-            modifier_flag = PAL_MOD_LALT;
-            break;
-        case VK_RMENU:
-            modifier_flag = PAL_MOD_RALT;
-            // Also handle AltGr (right alt)
-            // TODO: Assuming that right alt = altgr is probably wrong.
-            if (is_key_released) {
-                g_cached_modifiers &= ~PAL_MOD_ALTGR;
-            } else {
-                g_cached_modifiers |= PAL_MOD_ALTGR;
-            }
-            break;
-        case VK_LWIN:
-            modifier_flag = PAL_MOD_LSUPER;
-            break;
-        case VK_RWIN:
-            modifier_flag = PAL_MOD_RSUPER;
-            break;
-        case VK_CAPITAL:
-            // Toggle caps lock state
-            if (!is_key_released) {
-                g_cached_modifiers ^= PAL_MOD_CAPS;
-            }
-            return; // Don't process as regular modifier
-        case VK_NUMLOCK:
-            // Toggle num lock state
-            if (!is_key_released) {
-                g_cached_modifiers ^= PAL_MOD_NUM;
-            }
-            return; // Don't process as regular modifier
-        case VK_SCROLL:
-            // Toggle scroll lock state
-            if (!is_key_released) {
-                g_cached_modifiers ^= PAL_MOD_SCROLL;
-            }
-            return; // Don't process as regular modifier
-        default:
-            return; // Not a modifier key
-    }
-
-    // Update the cached modifier state
-    if (is_key_released) {
-        g_cached_modifiers &= ~modifier_flag;
-    } else {
-        g_cached_modifiers |= modifier_flag;
+    for (int i = 0; i < g_mice.count; i++) {
+        memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+        g_mice.dx[i] = 0;  // Reset delta each frame
+        g_mice.dy[i] = 0;
+        g_mice.wheel[i] = 0;
     }
 }
-
-void win32_handle_keyboard(const RAWINPUT* raw) {
-    // Find keyboard index
-    int kb_index = 0; // Fallback to first keyboard
-    for (int i = 0; i < g_keyboard_count; i++) {
-        if (g_keyboards[i].device_handle == raw->header.hDevice) {
-            kb_index = i;
-            break;
-        }
-    }
-
-    pal_keyboard_state* kb = &g_keyboards[kb_index];
-
-    USHORT vk = raw->data.keyboard.VKey;
-    USHORT makecode = raw->data.keyboard.MakeCode;
-    USHORT flags = raw->data.keyboard.Flags;
-    pal_event event = {0};
-
-    pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
-    pal_bool is_extended = (flags & RI_KEY_E0) != 0;
-
-    pal_bool is_repeat = 0;
-    if (vk < 256) {
-        if (!is_key_released && kb->key_is_down[vk]) {
-            is_repeat = 1;
-        }
-        kb->key_is_down[vk] = !is_key_released;
-    }
-
-    update_modifier_state(vk, is_key_released);
-
-    int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
-    int pal_scancode = 0;
-
-    if (is_extended) {
-        if (makecode < 256) {
-            pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
-        }
-    } else {
-        if (makecode < 256) {
-            pal_scancode = win32_makecode_to_pal_scancode[makecode];
-        }
-    }
-
-    if (is_key_released) {
-        event.type = PAL_EVENT_KEY_UP;
-        event.key = (pal_keyboard_event){
-            .virtual_key = pal_key,
-            .scancode = pal_scancode,
-            .pressed = 0,
-            .repeat = 0,
-            .modifiers = g_cached_modifiers,
-            .keyboard_id = kb_index};
-        kb->keys[pal_key] = 0;
-        kb->keys_processed[pal_key] = 0;
-    } else {
-        event.type = PAL_EVENT_KEY_DOWN;
-        event.key = (pal_keyboard_event){
-            .virtual_key = pal_key,
-            .scancode = pal_scancode,
-            .pressed = 1,
-            .repeat = is_repeat,
-            .modifiers = g_cached_modifiers,
-            .keyboard_id = kb_index};
-        kb->keys[pal_key] = 1;
-    }
-
-    pal__eventq_push(&g_event_queue, event);
-}
-
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     pal_window* window = g_current_window;
     pal_event event = {0};

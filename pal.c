@@ -70,166 +70,200 @@ PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *
 ###########################################
 
 */
+// ========== Keyboard Functions ==========
 
-// Keyboard input
 PALAPI int pal_get_keyboard_count(void) {
-    return g_keyboard_count;
+    return g_keyboards.count;
+}
+
+PALAPI const char *pal_get_keyboard_name(int keyboard_id) {
+    if (keyboard_id < 0 || keyboard_id >= g_keyboards.count) {
+        return NULL;
+    }
+    return g_keyboards.names[keyboard_id];
 }
 
 PALAPI int pal_get_keyboard_indices(int key, int *keyboard_indices) {
-    int count = 0;
-    
-    if (key == -1) {
-        // Check if ANY key is pressed on each keyboard
-        for (int i = 0; i < g_keyboard_count && count < MAX_KEYBOARDS; i++) {
-            pal_keyboard_state *kb = &g_keyboards[i];
-            for (int k = 0; k < 256; k++) {
-                if (kb->keys[k] && !kb->keys_processed[k]) {
-                    keyboard_indices[count++] = i;
-                    kb->keys_processed[k] = 1;  // Mark as processed
-                    break;  // Found a key on this keyboard, move to next keyboard
-                }
-            }
-        }
-    } else {
-        // Check specific key
-        for (int i = 0; i < g_keyboard_count && count < MAX_KEYBOARDS; i++) {
-            pal_keyboard_state *kb = &g_keyboards[i];
-            if (kb->keys[key] && !kb->keys_processed[key]) {
-                keyboard_indices[count++] = i;
-                kb->keys_processed[key] = 1;  // Mark as processed
-            }
-        }
-    }
-    
-    return count;
-}
-
-PALAPI const char* pal_get_keyboard_name(int keyboard_id) {
-    if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return NULL;
-    return g_keyboards[keyboard_id].device_name;
-}
-
-PALAPI pal_bool pal_is_key_down(int keyboard_id, int key) {
-    // Check all keyboards if keyboard_id is -1
-    if (keyboard_id == -1) {
-        for (int i = 0; i < g_keyboard_count; i++) {
-            if (g_keyboards[i].keys[key]) return 1;
-        }
+    if (!keyboard_indices || key < 0 || key >= MAX_KEYS) {
         return 0;
     }
     
-    if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return 0;
-    return g_keyboards[keyboard_id].keys[key];
+    int count = 0;
+    for (int i = 0; i < g_keyboards.count; i++) {
+        if (g_keyboards.keys[i][key]) {
+            keyboard_indices[count++] = i;
+        }
+    }
+    return count;
 }
 
 PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int key) {
-    // Check all keyboards if keyboard_id is -1
-    if (keyboard_id == -1) {
-        for (int i = 0; i < g_keyboard_count; i++) {
-            pal_keyboard_state *kb = &g_keyboards[i];
-            if (kb->keys[key] && !kb->keys_processed[key]) {
-                kb->keys_processed[key] = 1;
-                return 1;
-            }
-        }
-        return 0;
+    if (key < 0 || key >= MAX_KEYS) {
+        return pal_false;
     }
     
-    if (keyboard_id < 0 || keyboard_id >= g_keyboard_count) return 0;
-    pal_keyboard_state *kb = &g_keyboards[keyboard_id];
-    if (kb->keys[key] && !kb->keys_processed[key]) {
-        kb->keys_processed[key] = 1;
-        return 1;
+    // -1 means check ANY keyboard
+    if (keyboard_id == -1) {
+        for (int i = 0; i < g_keyboards.count; i++) {
+            if (g_keyboards.keys_toggled[i][key] && g_keyboards.keys[i][key]) {
+                return pal_true;
+            }
+        }
+        return pal_false;
     }
-    return 0;
+    
+    if (keyboard_id < 0 || keyboard_id >= g_keyboards.count) {
+        return pal_false;
+    }
+    
+    // Return true only if the key was toggled this frame AND is currently down
+    return (g_keyboards.keys_toggled[keyboard_id][key] && g_keyboards.keys[keyboard_id][key]) ? pal_true : pal_false;
 }
+
+PALAPI pal_bool pal_is_key_down(int keyboard_id, int key) {
+    if (key < 0 || key >= MAX_KEYS) {
+        return pal_false;
+    }
+    
+    // -1 means check ANY keyboard
+    if (keyboard_id == -1) {
+        for (int i = 0; i < g_keyboards.count; i++) {
+            if (g_keyboards.keys[i][key]) {
+                return pal_true;
+            }
+        }
+        return pal_false;
+    }
+    
+    if (keyboard_id < 0 || keyboard_id >= g_keyboards.count) {
+        return pal_false;
+    }
+    
+    // Return true as long as the key is held down
+    return g_keyboards.keys[keyboard_id][key] ? pal_true : pal_false;
+}
+
+// ========== Mouse Functions ==========
 
 PALAPI int pal_get_mouse_count(void) {
-    return g_mouse_count;
+    return g_mice.count;
 }
 
-PALAPI const char* pal_get_mouse_name(int mouse_id) {
-    if (mouse_id < 0 || mouse_id >= g_mouse_count) return NULL;
-    return g_mice[mouse_id].device_name;
+PALAPI const char *pal_get_mouse_name(int mouse_id) {
+    if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        return NULL;
+    }
+    return g_mice.names[mouse_id];
 }
 
 PALAPI int pal_get_mouse_indices(int *mouse_indices) {
-    int count = 0;
-    
-    for (int i = 0; i < g_mouse_count && count < MAX_MICE; i++) {
-        pal_mouse_state *m = &g_mice[i];
-        
-        // Check if mouse has delta movement
-        if (m->delta_x != 0 || m->delta_y != 0) {
-            mouse_indices[count++] = i;
-            continue;
-        }
-        
-        // Check if any button is pressed
-        for (int b = 0; b < 8; b++) {
-            if (m->buttons[b] && !m->buttons_processed[b]) {
-                mouse_indices[count++] = i;
-                m->buttons_processed[b] = 1;
-                break;
-            }
-        }
+    if (!mouse_indices) {
+        return 0;
     }
     
-    return count;
+    for (int i = 0; i < g_mice.count; i++) {
+        mouse_indices[i] = i;
+    }
+    return g_mice.count;
 }
 
 PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
-    if (mouse_id == -1) {
-        for (int i = 0; i < g_mouse_count; i++) {
-            if (g_mice[i].buttons[button]) return 1;
-        }
-        return 0;
+    if (button < 0 || button >= MAX_MOUSE_BUTTONS) {
+        return pal_false;
     }
     
-    if (mouse_id < 0 || mouse_id >= g_mouse_count) return 0;
-    return g_mice[mouse_id].buttons[button];
-}
-PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
+    // -1 means check ANY mouse
     if (mouse_id == -1) {
-        for (int i = 0; i < g_mouse_count; i++) {
-            pal_mouse_state *m = &g_mice[i];
-            if (m->buttons[button] && !m->buttons_processed[button]) {
-                m->buttons_processed[button] = 1;
-                return 1;
+        for (int i = 0; i < g_mice.count; i++) {
+            if (g_mice.buttons[i][button]) {
+                return pal_true;
             }
         }
-        return 0;
+        return pal_false;
     }
     
-    if (mouse_id < 0 || mouse_id >= g_mouse_count) return 0;
-    pal_mouse_state *m = &g_mice[mouse_id];
-    if (m->buttons[button] && !m->buttons_processed[button]) {
-        m->buttons_processed[button] = 1;
-        return 1;
+    if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        return pal_false;
     }
-    return 0;
+    
+    // Return true as long as the button is held down
+    return g_mice.buttons[mouse_id][button] ? pal_true : pal_false;
 }
 
-// Get delta for specific mouse (useful if you want per-mouse tracking)
-PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
-    pal_vec2 mouse_delta;
-
-    if (mouse_id < 0 || mouse_id >= g_mouse_count) {
-        mouse_delta.x = 0;
-        mouse_delta.y = 0;
-        return mouse_delta;
+PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
+    if (button < 0 || button >= MAX_MOUSE_BUTTONS) {
+        return pal_false;
     }
+    
+    // -1 means check ANY mouse
+    if (mouse_id == -1) {
+        for (int i = 0; i < g_mice.count; i++) {
+            if (g_mice.buttons_toggled[i][button] && g_mice.buttons[i][button]) {
+                return pal_true;
+            }
+        }
+        return pal_false;
+    }
+    
+    if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        return pal_false;
+    }
+    
+    // Return true only if the button was toggled this frame AND is currently down
+    return (g_mice.buttons_toggled[mouse_id][button] && g_mice.buttons[mouse_id][button]) ? pal_true : pal_false;
+}
 
-    mouse_delta.x = (float)g_mice[mouse_id].delta_x;
-    mouse_delta.y = (float)g_mice[mouse_id].delta_y;
-    return mouse_delta;
+PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
+    pal_vec2 delta;
+    delta.x = 0.0f;
+    delta.y = 0.0f;
+    
+    // -1 means get combined delta from ALL mice
+    if (mouse_id == -1) {
+        for (int i = 0; i < g_mice.count; i++) {
+            delta.x += (float)g_mice.dx[i];
+            delta.y += (float)g_mice.dy[i];
+        }
+        return delta;
+    }
+    
+    if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        return delta;
+    }
+    
+    // Return delta for specific mouse
+    delta.x = (float)g_mice.dx[mouse_id];
+    delta.y = (float)g_mice.dy[mouse_id];
+    return delta;
+}
+
+PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
+    pal_vec2 pos;
+    
+    if (!window) {
+        pos.x = 0.0f;
+        pos.y = 0.0f;
+        return pos;
+    }
+    
+    Window root_return, child_return;
+    int root_x, root_y, win_x, win_y;
+    unsigned int mask_return;
+    
+    XQueryPointer(g_display, window->window, 
+                  &root_return, &child_return,
+                  &root_x, &root_y, &win_x, &win_y,
+                  &mask_return);
+    
+    pos.x = (float)win_x;
+    pos.y = (float)win_y;
+    return pos;
 }
 
 void pal__reset_mouse_deltas(void) {
-    for (int i = 0; i < g_mouse_count; i++) {
-        g_mice[i].delta_x = 0;
-        g_mice[i].delta_y = 0;
+    for (int i = 0; i < g_mice.count; i++) {
+        g_mice.dx[i] = 0;
+        g_mice.dy[i] = 0;
     }
 }
 
