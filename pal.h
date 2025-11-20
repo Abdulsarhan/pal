@@ -751,6 +751,22 @@ typedef struct pal_ivec4 {
 #define PAL_NUMLOCK 0x90
 #define PAL_SCROLLLOCK 0x91
 
+#define PAL_BACKSLASH 0x92
+#define PAL_FORWARD_SLASH 0x93
+#define PAL_COMMA 0x94
+#define PAL_PERIOD 0x95
+#define PAL_DOT PAL_PERIOD
+
+#define PAL_BACKTICK 0x97
+#define PAL_GRAVE PAL_BACKTICK 0x98
+
+#define PAL_RIGHTBRACE 0x99
+#define PAL_LEFTBRACE 0x9a
+#define PAL_SEMICOLON 0x9b
+#define PAL_APOSTROPHE 0x9c
+#define PAL_MINUS 0x9d
+#define PAL_EQUAL 0x9e
+
 //---------------------------------------------------------------------------------
 // Modifier Keys
 //---------------------------------------------------------------------------------
