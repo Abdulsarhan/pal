@@ -684,57 +684,57 @@ typedef struct pal_ivec4 {
 #define PAL_KEY_8 0x38
 #define PAL_KEY_9 0x39
 
-#define PAL_KEY_A 0x41
-#define PAL_KEY_B 0x42
-#define PAL_KEY_C 0x43
-#define PAL_KEY_D 0x44
-#define PAL_KEY_E 0x45
-#define PAL_KEY_F 0x46
-#define PAL_KEY_G 0x47
-#define PAL_KEY_H 0x48
-#define PAL_KEY_I 0x49
-#define PAL_KEY_J 0x4A
-#define PAL_KEY_K 0x4B
-#define PAL_KEY_L 0x4C
-#define PAL_KEY_M 0x4D
-#define PAL_KEY_N 0x4E
-#define PAL_KEY_O 0x4F
-#define PAL_KEY_P 0x50
-#define PAL_KEY_Q 0x51
-#define PAL_KEY_R 0x52
-#define PAL_KEY_S 0x53
-#define PAL_KEY_T 0x54
-#define PAL_KEY_U 0x55
-#define PAL_KEY_V 0x56
-#define PAL_KEY_W 0x57
-#define PAL_KEY_X 0x58
-#define PAL_KEY_Y 0x59
-#define PAL_KEY_Z 0x5A
-
-#define PAL_KEY_LWIN 0x5B
-#define PAL_KEY_RWIN 0x5C
+#define PAL_KEY_LWIN 0x3a
+#define PAL_KEY_RWIN 0x 3b
 #define PAL_KEY_LSUPER PAL_KEY_LWIN
 #define PAL_KEY_RSUPER PAL_KEY_RWIN
 #define PAL_KEY_LCOMMAND PAL_KEY_LWIN
 #define PAL_KEY_RCOMMAND PAL_KEY_RWIN
-#define PAL_KEY_APPS 0x5D
+#define PAL_KEY_APPS 0x3c
 
-#define PAL_KEY_NUMPAD_0 0x60
-#define PAL_KEY_NUMPAD_1 0x61
-#define PAL_KEY_NUMPAD_2 0x62
-#define PAL_KEY_NUMPAD_3 0x63
-#define PAL_KEY_NUMPAD_4 0x64
-#define PAL_KEY_NUMPAD_5 0x65
-#define PAL_KEY_NUMPAD_6 0x66
-#define PAL_KEY_NUMPAD_7 0x67
-#define PAL_KEY_NUMPAD_8 0x68
-#define PAL_KEY_NUMPAD_9 0x69
-#define PAL_KEY_MULTIPLY 0x6A
-#define PAL_KEY_ADD 0x6B
-#define PAL_KEY_SEPARATOR 0x6C // Most modern Keyboards don't have this.
-#define PAL_KEY_SUBTRACT 0x6D
-#define PAL_KEY_DECIMAL 0x6E
-#define PAL_KEY_DIVIDE 0x6F
+#define PAL_KEY_NUMPAD_0 0x3d
+#define PAL_KEY_NUMPAD_1 0x3e
+#define PAL_KEY_NUMPAD_2 0x3f
+#define PAL_KEY_NUMPAD_3 0x40
+#define PAL_KEY_NUMPAD_4 0x41
+#define PAL_KEY_NUMPAD_5 0x42
+#define PAL_KEY_NUMPAD_6 0x43
+#define PAL_KEY_NUMPAD_7 0x44
+#define PAL_KEY_NUMPAD_8 0x45
+#define PAL_KEY_NUMPAD_9 0x46
+#define PAL_KEY_MULTIPLY 0x47
+#define PAL_KEY_ADD 0x48
+#define PAL_KEY_SEPARATOR 0x49 // Most modern Keyboards don't have this.
+#define PAL_KEY_SUBTRACT 0x4a
+#define PAL_KEY_DECIMAL 0x4b
+#define PAL_KEY_DIVIDE 0x4c
+
+#define PAL_KEY_A 0x4d
+#define PAL_KEY_B 0x4e
+#define PAL_KEY_C 0x4f
+#define PAL_KEY_D 0x50
+#define PAL_KEY_E 0x51
+#define PAL_KEY_F 0x52
+#define PAL_KEY_G 0x53
+#define PAL_KEY_H 0x54
+#define PAL_KEY_I 0x55
+#define PAL_KEY_J 0x56
+#define PAL_KEY_K 0x57
+#define PAL_KEY_L 0x58
+#define PAL_KEY_M 0x59
+#define PAL_KEY_N 0x5A
+#define PAL_KEY_O 0x5B
+#define PAL_KEY_P 0x5c
+#define PAL_KEY_Q 0x5d
+#define PAL_KEY_R 0x5e
+#define PAL_KEY_S 0x5f
+#define PAL_KEY_T 0x60
+#define PAL_KEY_U 0x61
+#define PAL_KEY_V 0x62
+#define PAL_KEY_W 0x63
+#define PAL_KEY_X 0x64
+#define PAL_KEY_Y 0x65
+#define PAL_KEY_Z 0x66
 
 #define PAL_KEY_F1 0x70
 #define PAL_KEY_F2 0x71
@@ -748,6 +748,19 @@ typedef struct pal_ivec4 {
 #define PAL_KEY_F10 0x79
 #define PAL_KEY_F11 0x7A
 #define PAL_KEY_F12 0x7B
+
+#define PAL_KEY_F13 0x7c
+#define PAL_KEY_F14 0x7d
+#define PAL_KEY_F15 0x7e
+#define PAL_KEY_F16 0x7f
+#define PAL_KEY_F17 0x80
+#define PAL_KEY_F18 0x81
+#define PAL_KEY_F19 0x82
+#define PAL_KEY_F20 0x83
+#define PAL_KEY_F21 0x84
+#define PAL_KEY_F22 0x85
+#define PAL_KEY_F23 0x86
+#define PAL_KEY_F24 0x87
 
 #define PAL_KEY_NUMLOCK 0x90
 #define PAL_KEY_SCROLLLOCK 0x91
