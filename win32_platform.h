@@ -1819,6 +1819,18 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
 	return final_window;
 }
 
+PALAPI void pal_close_window(pal_window *window)
+{
+    if (!window || !window->hwnd)
+        return;
+
+    DestroyWindow(window->hwnd);
+    window->hwnd = NULL;
+    pal_event event = {0};
+    event.type = PAL_EVENT_WINDOW_CLOSED;
+    pal__eventq_push(&g_event_queue, event);
+}
+
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     RECT rect;
     GetClientRect(window->hwnd, &rect);

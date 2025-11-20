@@ -478,7 +478,7 @@ static const int linux_keycode_to_pal_vk[KEY_MAX] = {
 // Helper function to convert Linux key code to PAL virtual key
 int linux_keycode_to_pal_virtual_key(int linux_code) {
     if (linux_code < 0 || linux_code >= KEY_MAX) {
-        return 0;
+        return PAL_KEY_NONE;
     }
     return linux_keycode_to_pal_vk[linux_code];
 }
@@ -486,27 +486,27 @@ int linux_keycode_to_pal_virtual_key(int linux_code) {
 for (int i = 0; i < g_keyboards.count; i++, index++) {
     while (read(fds[index].fd, &ev, sizeof(ev)) > 0) {
         if (ev.type == EV_KEY && ev.code < MAX_KEYS) {
-            unsigned char old_state = g_keyboards.keys[i][ev.code];
+
+            pal_key key = linux_keycode_to_pal_virtual_key(ev.code);
+            if (key == PAL_KEY_NONE)
+                continue;
+
+            unsigned char old_state = g_keyboards.keys[i][key];
             unsigned char new_state = ev.value;
-            
-            g_keyboards.keys[i][ev.code] = new_state;
-            
+
+            g_keyboards.keys[i][key] = new_state;
+
             if (old_state != new_state) {
-                g_keyboards.keys_toggled[i][ev.code] = 1;
-                
-                // Push event immediately
-                if (new_state) {
-                    event.type = PAL_EVENT_KEY_DOWN;
-                    event.key.pressed = 1;
-                } else {
-                    event.type = PAL_EVENT_KEY_UP;
-                    event.key.pressed = 0;
-                }
-                event.key.scancode = ev.code;
-                event.key.virtual_key = linux_keycode_to_pal_virtual_key(ev.code);
-                event.key.repeat = 0;
+                g_keyboards.keys_toggled[i][key] = 1;
+
+                event.type = new_state ? PAL_EVENT_KEY_DOWN : PAL_EVENT_KEY_UP;
+                event.key.pressed     = new_state;
+                event.key.scancode    = key;  // store pal_key, not ev.code
+                event.key.virtual_key = key;  // if virtual_key == pal_key
+                event.key.repeat      = 0;
                 event.key.keyboard_id = i;
-                event.key.modifiers = PAL_MOD_NONE;
+                event.key.modifiers   = PAL_MOD_NONE;
+
                 pal__eventq_push(&g_event_queue, event);
             }
         }
@@ -765,13 +765,18 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *title, u
 
     return window;
 }
-PALAPI void pal_destroy_window(pal_window *window) {
+
+PALAPI void pal_close_window(pal_window *window) {
     if(window->graphics_context) {
         XFreeGC(g_display, window->graphics_context);
     }
     if(window->window) {
         XDestroyWindow(g_display, window->window);
     }
+
+    pal_event event = {0};
+    event.type = PAL_EVENT_WINDOW_CLOSED;
+    pal__eventq_push(&g_event_queue, event);
 }
 
 static void linux_x11_send_wm_state_message(Window win, long action, Atom property) {

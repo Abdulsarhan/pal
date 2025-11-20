@@ -648,6 +648,7 @@ typedef struct pal_ivec4 {
 //----------------------------------------------------------------------------------
 // Keys
 //----------------------------------------------------------------------------------
+#define PAL_KEY_NONE 0
 #define PAL_BACKSPACE 0x08
 #define PAL_TAB 0x09
 #define PAL_ENTER 0x0D
@@ -1159,6 +1160,7 @@ PALAPI void pal_shutdown(void);
 
 // Video and Windowing subsystem.
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
+PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
 PALAPI int pal_show_cursor(pal_window *window);
