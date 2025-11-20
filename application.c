@@ -108,7 +108,7 @@ int main() {
         }
         // The is_* functions only work after all the events have been polled.
         // do not call this in the message loop.
-        if (pal_is_key_down(3, PAL_W)) {
+        if (pal_is_key_down(3, PAL_KEY_W)) {
             printf("PRESSED W!\n");
         }
         if (pal_is_mouse_pressed(-1, PAL_MOUSE_LEFT)) {

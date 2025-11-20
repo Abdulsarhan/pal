@@ -185,12 +185,12 @@ static const uint16_t win32_key_to_pal_key[] = {
     [0x8C] = 0x8C, [0x8D] = 0x8D, [0x8E] = 0x8E, [0x8F] = 0x8F,
 
     [0x90] = 0x90, [0x91] = 0x91, // NumLock, ScrollLock
-    [0xBA] = PAL_SEMICOLON,  [0xBB] = PAL_EQUAL,
-    [0xBC] = PAL_COMMA,      [0xBD] = PAL_MINUS,
-    [0xBE] = PAL_PERIOD,     [0xBF] = PAL_FORWARD_SLASH,
-    [0xC0] = PAL_BACKTICK,   [0xDB] = PAL_LEFTBRACE,
-    [0xDC] = PAL_BACKSLASH,  [0xDD] = PAL_RIGHTBRACE,
-    [0xDE] = PAL_APOSTROPHE, [0xE2] = PAL_BACKSLASH,
+    [0xBA] = PAL_KEY_SEMICOLON,  [0xBB] = PAL_KEY_EQUAL,
+    [0xBC] = PAL_KEY_COMMA,      [0xBD] = PAL_KEY_MINUS,
+    [0xBE] = PAL_KEY_PERIOD,     [0xBF] = PAL_KEY_FORWARD_SLASH,
+    [0xC0] = PAL_KEY_BACKTICK,   [0xDB] = PAL_KEY_LEFTBRACE,
+    [0xDC] = PAL_KEY_BACKSLASH,  [0xDD] = PAL_KEY_RIGHTBRACE,
+    [0xDE] = PAL_KEY_APOSTROPHE, [0xE2] = PAL_KEY_BACKSLASH,
 };
 
 // clang-format on
@@ -1169,9 +1169,6 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             break;
         }
     }
-
-    // CLEAR TOGGLES FOR THIS KEYBOARD HERE
-    memset(g_keyboards.keys_toggled[kb_index], 0, MAX_KEYS);
 
     USHORT vk = raw->data.keyboard.VKey;
     USHORT makecode = raw->data.keyboard.MakeCode;

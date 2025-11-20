@@ -264,6 +264,7 @@ int is_mouse(int fd) {
     // It's a mouse/touchpad if it has relative motion OR absolute positioning
     return has_rel || has_abs;
 }
+
 // -------- Initialization --------
 void linux_x11_init_raw_input() {
     g_udev = udev_new();
@@ -369,110 +370,110 @@ void linux_x11_poll_raw_input() {
 
 // Mapping table from Linux input key codes to PAL virtual key codes
 static const int linux_keycode_to_pal_vk[KEY_MAX] = {
-    [KEY_ESC]           = PAL_ESCAPE,
-    [KEY_1]             = PAL_1,
-    [KEY_2]             = PAL_2,
-    [KEY_3]             = PAL_3,
-    [KEY_4]             = PAL_4,
-    [KEY_5]             = PAL_5,
-    [KEY_6]             = PAL_6,
-    [KEY_7]             = PAL_7,
-    [KEY_8]             = PAL_8,
-    [KEY_9]             = PAL_9,
-    [KEY_0]             = PAL_0,
-    [KEY_MINUS]         = PAL_MINUS,
-    [KEY_EQUAL]         = PAL_EQUAL,
-    [KEY_BACKSPACE]     = PAL_BACKSPACE,
-    [KEY_TAB]           = PAL_TAB,
-    [KEY_Q]             = PAL_Q,
-    [KEY_W]             = PAL_W,
-    [KEY_E]             = PAL_E,
-    [KEY_R]             = PAL_R,
-    [KEY_T]             = PAL_T,
-    [KEY_Y]             = PAL_Y,
-    [KEY_U]             = PAL_U,
-    [KEY_I]             = PAL_I,
-    [KEY_O]             = PAL_O,
-    [KEY_P]             = PAL_P,
-    [KEY_LEFTBRACE]     = PAL_LEFTBRACE,  // VK_OEM_4 '['
-    [KEY_RIGHTBRACE]    = PAL_RIGHTBRACE,  // VK_OEM_6 ']'
-    [KEY_ENTER]         = PAL_ENTER,
-    [KEY_LEFTCTRL]      = PAL_CONTROL,
-    [KEY_A]             = PAL_A,
-    [KEY_S]             = PAL_S,
-    [KEY_D]             = PAL_D,
-    [KEY_F]             = PAL_F,
-    [KEY_G]             = PAL_G,
-    [KEY_H]             = PAL_H,
-    [KEY_J]             = PAL_J,
-    [KEY_K]             = PAL_K,
-    [KEY_L]             = PAL_L,
-    [KEY_SEMICOLON]     = PAL_SEMICOLON,  // VK_OEM_1 ';'
-    [KEY_APOSTROPHE]    = PAL_APOSTROPHE,  // VK_OEM_7 '''
-    [KEY_GRAVE]         = PAL_BACKTICK,  // VK_OEM_3 '`'
-    [KEY_LEFTSHIFT]     = PAL_SHIFT,
-    [KEY_BACKSLASH]     = PAL_BACKSLASH,  // VK_OEM_5 '\'
-    [KEY_Z]             = PAL_Z,
-    [KEY_X]             = PAL_X,
-    [KEY_C]             = PAL_C,
-    [KEY_V]             = PAL_V,
-    [KEY_B]             = PAL_B,
-    [KEY_N]             = PAL_N,
-    [KEY_M]             = PAL_M,
-    [KEY_COMMA]         = PAL_COMMA,  // VK_OEM_COMMA
-    [KEY_DOT]           = PAL_DOT,  // VK_OEM_PERIOD
-    [KEY_SLASH]         = PAL_FORWARD_SLASH,  // VK_OEM_2 '/'
-    [KEY_RIGHTSHIFT]    = PAL_SHIFT,
-    [KEY_KPASTERISK]    = PAL_MULTIPLY,
-    [KEY_LEFTALT]       = PAL_ALT,
-    [KEY_SPACE]         = PAL_SPACE,
-    [KEY_CAPSLOCK]      = PAL_CAPSLOCK,
-    [KEY_F1]            = PAL_F1,
-    [KEY_F2]            = PAL_F2,
-    [KEY_F3]            = PAL_F3,
-    [KEY_F4]            = PAL_F4,
-    [KEY_F5]            = PAL_F5,
-    [KEY_F6]            = PAL_F6,
-    [KEY_F7]            = PAL_F7,
-    [KEY_F8]            = PAL_F8,
-    [KEY_F9]            = PAL_F9,
-    [KEY_F10]           = PAL_F10,
-    [KEY_NUMLOCK]       = PAL_NUMLOCK,
-    [KEY_SCROLLLOCK]    = PAL_SCROLLLOCK,
-    [KEY_KP7]           = PAL_NUMPAD_7,
-    [KEY_KP8]           = PAL_NUMPAD_8,
-    [KEY_KP9]           = PAL_NUMPAD_9,
-    [KEY_KPMINUS]       = PAL_SUBTRACT,
-    [KEY_KP4]           = PAL_NUMPAD_4,
-    [KEY_KP5]           = PAL_NUMPAD_5,
-    [KEY_KP6]           = PAL_NUMPAD_6,
-    [KEY_KPPLUS]        = PAL_ADD,
-    [KEY_KP1]           = PAL_NUMPAD_1,
-    [KEY_KP2]           = PAL_NUMPAD_2,
-    [KEY_KP3]           = PAL_NUMPAD_3,
-    [KEY_KP0]           = PAL_NUMPAD_0,
-    [KEY_KPDOT]         = PAL_DECIMAL,
-    [KEY_F11]           = PAL_F11,
-    [KEY_F12]           = PAL_F12,
-    [KEY_KPENTER]       = PAL_ENTER,
-    [KEY_RIGHTCTRL]     = PAL_CONTROL,
-    [KEY_KPSLASH]       = PAL_DIVIDE,
-    [KEY_SYSRQ]         = PAL_PRINTSCREEN,
-    [KEY_RIGHTALT]      = PAL_ALT,
-    [KEY_HOME]          = PAL_HOME,
-    [KEY_UP]            = PAL_UP,
-    [KEY_PAGEUP]        = PAL_PAGEUP,
-    [KEY_LEFT]          = PAL_LEFT,
-    [KEY_RIGHT]         = PAL_RIGHT,
-    [KEY_END]           = PAL_END,
-    [KEY_DOWN]          = PAL_DOWN,
-    [KEY_PAGEDOWN]      = PAL_PAGEDOWN,
-    [KEY_INSERT]        = PAL_INSERT,
-    [KEY_DELETE]        = PAL_DELETE,
-    [KEY_PAUSE]         = PAL_PAUSE,
-    [KEY_LEFTMETA]      = PAL_LWIN,
-    [KEY_RIGHTMETA]     = PAL_RWIN,
-    [KEY_MENU]          = PAL_APPS,
+    [KEY_ESC]           = PAL_KEY_ESCAPE,
+    [KEY_1]             = PAL_KEY_1,
+    [KEY_2]             = PAL_KEY_2,
+    [KEY_3]             = PAL_KEY_3,
+    [KEY_4]             = PAL_KEY_4,
+    [KEY_5]             = PAL_KEY_5,
+    [KEY_6]             = PAL_KEY_6,
+    [KEY_7]             = PAL_KEY_7,
+    [KEY_8]             = PAL_KEY_8,
+    [KEY_9]             = PAL_KEY_9,
+    [KEY_0]             = PAL_KEY_0,
+    [KEY_MINUS]         = PAL_KEY_MINUS,
+    [KEY_EQUAL]         = PAL_KEY_EQUAL,
+    [KEY_BACKSPACE]     = PAL_KEY_BACKSPACE,
+    [KEY_TAB]           = PAL_KEY_TAB,
+    [KEY_Q]             = PAL_KEY_Q,
+    [KEY_W]             = PAL_KEY_W,
+    [KEY_E]             = PAL_KEY_E,
+    [KEY_R]             = PAL_KEY_R,
+    [KEY_T]             = PAL_KEY_T,
+    [KEY_Y]             = PAL_KEY_Y,
+    [KEY_U]             = PAL_KEY_U,
+    [KEY_I]             = PAL_KEY_I,
+    [KEY_O]             = PAL_KEY_O,
+    [KEY_P]             = PAL_KEY_P,
+    [KEY_LEFTBRACE]     = PAL_KEY_LEFTBRACE,  // VK_OEM_4 '['
+    [KEY_RIGHTBRACE]    = PAL_KEY_RIGHTBRACE,  // VK_OEM_6 ']'
+    [KEY_ENTER]         = PAL_KEY_ENTER,
+    [KEY_LEFTCTRL]      = PAL_KEY_CONTROL,
+    [KEY_A]             = PAL_KEY_A,
+    [KEY_S]             = PAL_KEY_S,
+    [KEY_D]             = PAL_KEY_D,
+    [KEY_F]             = PAL_KEY_F,
+    [KEY_G]             = PAL_KEY_G,
+    [KEY_H]             = PAL_KEY_H,
+    [KEY_J]             = PAL_KEY_J,
+    [KEY_K]             = PAL_KEY_K,
+    [KEY_L]             = PAL_KEY_L,
+    [KEY_SEMICOLON]     = PAL_KEY_SEMICOLON,  // VK_OEM_1 ';'
+    [KEY_APOSTROPHE]    = PAL_KEY_APOSTROPHE,  // VK_OEM_7 '''
+    [KEY_GRAVE]         = PAL_KEY_BACKTICK,  // VK_OEM_3 '`'
+    [KEY_LEFTSHIFT]     = PAL_KEY_SHIFT,
+    [KEY_BACKSLASH]     = PAL_KEY_BACKSLASH,  // VK_OEM_5 '\'
+    [KEY_Z]             = PAL_KEY_Z,
+    [KEY_X]             = PAL_KEY_X,
+    [KEY_C]             = PAL_KEY_C,
+    [KEY_V]             = PAL_KEY_V,
+    [KEY_B]             = PAL_KEY_B,
+    [KEY_N]             = PAL_KEY_N,
+    [KEY_M]             = PAL_KEY_M,
+    [KEY_COMMA]         = PAL_KEY_COMMA,  // VK_OEM_COMMA
+    [KEY_DOT]           = PAL_KEY_DOT,  // VK_OEM_PERIOD
+    [KEY_SLASH]         = PAL_KEY_FORWARD_SLASH,  // VK_OEM_2 '/'
+    [KEY_RIGHTSHIFT]    = PAL_KEY_SHIFT,
+    [KEY_KPASTERISK]    = PAL_KEY_MULTIPLY,
+    [KEY_LEFTALT]       = PAL_KEY_ALT,
+    [KEY_SPACE]         = PAL_KEY_SPACE,
+    [KEY_CAPSLOCK]      = PAL_KEY_CAPSLOCK,
+    [KEY_F1]            = PAL_KEY_F1,
+    [KEY_F2]            = PAL_KEY_F2,
+    [KEY_F3]            = PAL_KEY_F3,
+    [KEY_F4]            = PAL_KEY_F4,
+    [KEY_F5]            = PAL_KEY_F5,
+    [KEY_F6]            = PAL_KEY_F6,
+    [KEY_F7]            = PAL_KEY_F7,
+    [KEY_F8]            = PAL_KEY_F8,
+    [KEY_F9]            = PAL_KEY_F9,
+    [KEY_F10]           = PAL_KEY_F10,
+    [KEY_NUMLOCK]       = PAL_KEY_NUMLOCK,
+    [KEY_SCROLLLOCK]    = PAL_KEY_SCROLLLOCK,
+    [KEY_KP7]           = PAL_KEY_NUMPAD_7,
+    [KEY_KP8]           = PAL_KEY_NUMPAD_8,
+    [KEY_KP9]           = PAL_KEY_NUMPAD_9,
+    [KEY_KPMINUS]       = PAL_KEY_SUBTRACT,
+    [KEY_KP4]           = PAL_KEY_NUMPAD_4,
+    [KEY_KP5]           = PAL_KEY_NUMPAD_5,
+    [KEY_KP6]           = PAL_KEY_NUMPAD_6,
+    [KEY_KPPLUS]        = PAL_KEY_ADD,
+    [KEY_KP1]           = PAL_KEY_NUMPAD_1,
+    [KEY_KP2]           = PAL_KEY_NUMPAD_2,
+    [KEY_KP3]           = PAL_KEY_NUMPAD_3,
+    [KEY_KP0]           = PAL_KEY_NUMPAD_0,
+    [KEY_KPDOT]         = PAL_KEY_DECIMAL,
+    [KEY_F11]           = PAL_KEY_F11,
+    [KEY_F12]           = PAL_KEY_F12,
+    [KEY_KPENTER]       = PAL_KEY_ENTER,
+    [KEY_RIGHTCTRL]     = PAL_KEY_CONTROL,
+    [KEY_KPSLASH]       = PAL_KEY_DIVIDE,
+    [KEY_SYSRQ]         = PAL_KEY_PRINTSCREEN,
+    [KEY_RIGHTALT]      = PAL_KEY_ALT,
+    [KEY_HOME]          = PAL_KEY_HOME,
+    [KEY_UP]            = PAL_KEY_UP,
+    [KEY_PAGEUP]        = PAL_KEY_PAGEUP,
+    [KEY_LEFT]          = PAL_KEY_LEFT,
+    [KEY_RIGHT]         = PAL_KEY_RIGHT,
+    [KEY_END]           = PAL_KEY_END,
+    [KEY_DOWN]          = PAL_KEY_DOWN,
+    [KEY_PAGEDOWN]      = PAL_KEY_PAGEDOWN,
+    [KEY_INSERT]        = PAL_KEY_INSERT,
+    [KEY_DELETE]        = PAL_KEY_DELETE,
+    [KEY_PAUSE]         = PAL_KEY_PAUSE,
+    [KEY_LEFTMETA]      = PAL_KEY_LWIN,
+    [KEY_RIGHTMETA]     = PAL_KEY_RWIN,
+    [KEY_MENU]          = PAL_KEY_APPS,
 };
 
 // Helper function to convert Linux key code to PAL virtual key
@@ -487,7 +488,7 @@ for (int i = 0; i < g_keyboards.count; i++, index++) {
     while (read(fds[index].fd, &ev, sizeof(ev)) > 0) {
         if (ev.type == EV_KEY && ev.code < MAX_KEYS) {
 
-            pal_key key = linux_keycode_to_pal_virtual_key(ev.code);
+            int key = linux_keycode_to_pal_virtual_key(ev.code);
             if (key == PAL_KEY_NONE)
                 continue;
 
@@ -516,7 +517,7 @@ for (int i = 0; i < g_keyboards.count; i++, index++) {
 for (int i = 0; i < g_mice.count; i++, index++) {
     int motion_accumulated = 0;
     int wheel_accumulated = 0;
-    
+
     while (read(fds[index].fd, &ev, sizeof(ev)) > 0) {
         if (ev.type == EV_KEY) {
             // Convert Linux button code to PAL button code
@@ -524,12 +525,12 @@ for (int i = 0; i < g_mice.count; i++, index++) {
             if (pal_button >= 0 && pal_button < MAX_MOUSE_BUTTONS) {
                 int old_state = g_mice.buttons[i][pal_button];
                 int new_state = ev.value;
-                
+
                 g_mice.buttons[i][pal_button] = new_state;
-                
+
                 if (old_state != new_state) {
                     g_mice.buttons_toggled[i][pal_button] = 1;
-                    
+
                     // Push button event immediately
                     if (new_state) {
                         event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
@@ -573,7 +574,7 @@ for (int i = 0; i < g_mice.count; i++, index++) {
             event.motion.buttons = 0;
             pal__eventq_push(&g_event_queue, event);
         }
-        
+
         // Push wheel event
         if (wheel_accumulated) {
             event.type = PAL_EVENT_MOUSE_WHEEL;
@@ -604,7 +605,7 @@ for (int i = 0; i < g_mice.count; i++, index++) {
                         strncpy(g_keyboards.names[g_keyboards.count], name, 255);
                         memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
                         memset(g_keyboards.keys_toggled[g_keyboards.count], 0, MAX_KEYS);
-                        
+
                         g_keyboards.count++;
                         printf("[Keyboard Added] %s\n", name);
                     } else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
@@ -615,7 +616,7 @@ for (int i = 0; i < g_mice.count; i++, index++) {
                         g_mice.dx[g_mice.count] = 0;
                         g_mice.dy[g_mice.count] = 0;
                         g_mice.wheel[g_mice.count] = 0;
-                        
+
                         g_mice.count++;
                         printf("[Mouse Added] %s\n", name);
                     } else {
