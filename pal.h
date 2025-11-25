@@ -1,9 +1,9 @@
 #ifndef PAL_INCLUDE_H
 #define PAL_INCLUDE_H
 
-#include <stdint.h>   // For Clearly Defined Types.
+#include <stdint.h>   /* For Clearly Defined Types. */
 #include <stddef.h>
-#include <sys/stat.h> // For time_t and stat.
+#include <sys/stat.h> /* For time_t and stat. */
 
 typedef uint8_t pal_bool;
 typedef void pal_file;
@@ -34,7 +34,7 @@ typedef struct {
 } pal_time;
 #define PAL_MAX_TOUCHES 2
 typedef struct {
-    // Standard gamepad controls
+    /* Standard gamepad controls */
     struct {
         float left_x, left_y;
         float right_x, right_y;
@@ -50,33 +50,33 @@ typedef struct {
         pal_bool touchpad_button;
     } buttons;
 
-    // Identification
+    /* Identification */
     char name[128];
     uint16_t vendor_id;
     uint16_t product_id;
     pal_bool connected;
     pal_bool is_xinput;
 
-    // Battery information
-    float battery_level; // 0.0-1.0
+    /* Battery information */
+    float battery_level; /* 0.0-1.0 */
     pal_bool is_charging;
 
-    // Motion sensors
-    float accel_x, accel_y, accel_z; // In G's
-    float gyro_x, gyro_y, gyro_z;    // In degrees/second
+    /* Motion sensors */
+    float accel_x, accel_y, accel_z; /* In G's */
+    float gyro_x, gyro_y, gyro_z;    /* In degrees/second */
 
-    // Touchpad
+    /* Touchpad */
     struct {
         int touch_count;
         struct {
-            int id;                 // Touch ID
-            float x, y;             // Normalized coordinates (0-1)
-            pal_bool down;          // Is touch active
-        } touches[PAL_MAX_TOUCHES]; // Two fingers on the touch pad at the same time. Kinky. commonly used for scrolling, zooming and rotating.
+            int id;                 /* Touch ID */
+            float x, y;             /* Normalized coordinates (0-1) */
+            pal_bool down;          /* Is touch active */
+        } touches[PAL_MAX_TOUCHES]; /* Two fingers on the touch pad at the same time. Kinky. commonly used for scrolling, zooming and rotating. */
     } touchpad;
 } pal_gamepad_state;
 
-// events.
+/* events. */
 typedef enum pal_event_type {
     PAL_EVENT_NONE = 0x0,
     PAL_EVENT_QUIT = 0x100,
@@ -215,7 +215,8 @@ typedef struct pal_text_editing_candidates_event {
 } pal_text_editing_candidates_event;
 
 typedef struct pal_text_input_event {
-    char utf8_text[8];
+    char text[8];
+    int keyboard_id;
 } pal_text_input_event;
 
 typedef struct pal_mouse_device_event {
@@ -248,7 +249,7 @@ typedef struct pal_mouse_wheel_event {
     float x;
     float y;
     uint32_t modifiers;
-    int wheel_direction; // some weird ahh mice have horizontal scroll wheels
+    int wheel_direction; /* some weird ahh mice have horizontal scroll wheels */
     int32_t mouse_id;
 } pal_mouse_wheel_event;
 
@@ -284,7 +285,7 @@ typedef struct pal_joy_button_event {
 
 typedef struct pal_joy_battery_event {
     int32_t device_id;
-    uint8_t level; // 0-100
+    uint8_t level; /* 0-100 */
     uint8_t charging;
 } pal_joy_battery_event;
 
@@ -402,7 +403,7 @@ typedef struct pal_clipboard_event {
 
 typedef struct pal_event {
     uint32_t type; /**< Event type, shared with all events, Uint32 to cover user events which are not in the pal_event_type enumeration */
-                   // Event data:
+                   /* Event data: */
     union {
         pal_common_event common;                           /**< Common event data */
         pal_display_event display;                         /**< Display event data */
@@ -460,24 +461,24 @@ typedef struct pal_event_queue {
 #endif
 
 #if defined(PAL_BUILD_SHARED)
-#define PALAPI __declspec(dllexport) // We are building the library as a Win32 shared library (.dll)
+#define PALAPI __declspec(dllexport) /* We are building the library as a Win32 shared library (.dll) */
 #elif defined(PAL_USE_SHARED)
-#define PALAPI __declspec(dllimport) // We are using the library as a Win32 shared library (.dll)
+#define PALAPI __declspec(dllimport) /* We are using the library as a Win32 shared library (.dll) */
 #endif
 
 #else
 #if defined(PAL_BUILD_SHARED)
-#define PALAPI __attribute__((visibility("default"))) // We are building as a Unix shared library (.so/.dylib)
+#define PALAPI __attribute__((visibility("default"))) /* We are building as a Unix shared library (.so/.dylib) */
 #endif
 #endif
 
 #ifndef PALAPI
-#define PALAPI extern // extern is default, but it doesn't hurt to be explicit.
+#define PALAPI extern /* extern is default, but it doesn't hurt to be explicit. */
 #endif
 
-//----------------------------------------------------------------------------------
-// Math Defines
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Math Defines */
+/*---------------------------------------------------------------------------------- */
 #define PAL_PI 3.14159265358979323846f
 #define PAL_DEG2RAD (PAL_PI / 180.0f)
 #define PAL_RAD2DEG (180.0f / PAL_PI)
@@ -558,9 +559,9 @@ typedef struct pal_ivec4 {
     };
 } pal_ivec4;
 
-//----------------------------------------------------------------------------------
-// Window Flags
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Window Flags */
+/*---------------------------------------------------------------------------------- */
 #define GL_PROFILE 0x1
 #define GL_VERSION_MAJOR 0x2
 #define GL_VERSION_MINOR 0x3
@@ -568,41 +569,41 @@ typedef struct pal_ivec4 {
 #define DOUBLE_BUFFER 0x5
 #define FLOATING 0x6
 
-// window visibility
+/* window visibility */
 #define PAL_WINDOW_FULLSCREEN 0x1
 #define PAL_WINDOW_BORDERLESS 0x10
 #define PAL_WINDOW_MINIMIZED 0x40
 #define PAL_WINDOW_MAXIMIZED 0x80
 #define PAL_WINDOW_RESIZABLE 0x20
-#define PAL_WINDOW_OCCLUDED 0x4 // unimplemented
+#define PAL_WINDOW_OCCLUDED 0x4 /* unimplemented */
 #define PAL_WINDOW_HIDDEN 0x8
-#define PAL_WINDOW_TRANSPARENT 0x400000 // unimplemented
+#define PAL_WINDOW_TRANSPARENT 0x400000 /* unimplemented */
 #define PAL_WINDOW_ALWAYS_ON_TOP 0x8000
 
-// graphics APIs
+/* graphics APIs */
 #define PAL_WINDOW_OPENGL 0x2
-#define PAL_WINDOW_VULKAN 0x100000 // unimplemented
-#define PAL_WINDOW_METAL 0x200000  // unimplemented
+#define PAL_WINDOW_VULKAN 0x100000 /* unimplemented */
+#define PAL_WINDOW_METAL 0x200000  /* unimplemented */
 
-// window type
-#define PAL_WINDOW_MODAL 0x1000 // unimplemented
+/* window type */
+#define PAL_WINDOW_MODAL 0x1000 /* unimplemented */
 #define PAL_WINDOW_UTILITY 0x10000
 #define PAL_WINDOW_TOOLTIP 0x20000
 #define PAL_WINDOW_POPUP_MENU 0x40000
 
-#define PAL_WINDOW_INPUT_FOCUS 0x200 // unimplemented
-#define PAL_WINDOW_MOUSE_FOCUS 0x400 // unimplemented
+#define PAL_WINDOW_INPUT_FOCUS 0x200 /* unimplemented */
+#define PAL_WINDOW_MOUSE_FOCUS 0x400 /* unimplemented */
 #define PAL_WINDOW_MOUSE_CONFINED 0x100
-#define PAL_WINDOW_KEYBOARD_GRABBED 0x80000 // unimplemented
-#define PAL_WINDOW_NOT_FOCUSABLE 0x800000   // unimplemented
-#define PAL_WINDOW_MOUSE_CAPTURE 0x4000     // unimplemented
-// unreleated stuff.
+#define PAL_WINDOW_KEYBOARD_GRABBED 0x80000 /* unimplemented */
+#define PAL_WINDOW_NOT_FOCUSABLE 0x800000   /* unimplemented */
+#define PAL_WINDOW_MOUSE_CAPTURE 0x4000     /* unimplemented */
+/* unreleated stuff. */
 #define PAL_WINDOW_EXTERNAL 0x800
-#define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000 // not implemented
+#define PAL_WINDOW_HIGH_PIXEL_DENSITY 0x2000 /* not implemented */
 
-//----------------------------------------------------------------------------------
-// Mouse Buttons
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Mouse Buttons */
+/*---------------------------------------------------------------------------------- */
 #define PAL_MOUSE_LEFT 0x0
 #define PAL_MOUSE_RIGHT 0x1
 #define PAL_MOUSE_MIDDLE 0x2
@@ -639,151 +640,307 @@ typedef struct pal_ivec4 {
 #define EXTRA_MOUSE_BUTTON29 0x21
 #define EXTRA_MOUSE_BUTTON30 0x22
 
-//----------------------------------------------------------------------------------
-// Mouse Wheel
-//----------------------------------------------------------------------------------
+/*
+----------------------------------------------------------------------------------
+Mouse Wheel
+----------------------------------------------------------------------------------
+*/
 #define PAL_MOUSEWHEEL_VERTICAL 0x0
 #define PAL_MOUSEWHEEL_HORIZONTAL 0x1
 
-//----------------------------------------------------------------------------------
-// Keys
-//----------------------------------------------------------------------------------
-#define PAL_KEY_NONE 0
-#define PAL_KEY_BACKSPACE 0x08
-#define PAL_KEY_TAB 0x09
-#define PAL_KEY_ENTER 0x0D
-#define PAL_KEY_SHIFT 0x10
-#define PAL_KEY_CONTROL 0x11
-#define PAL_KEY_ALT 0x12
-#define PAL_KEY_META PAL_KEY_ALT
-#define PAL_KEY_OPTION PAL_KEY_ALT
-#define PAL_KEY_PAUSE 0x13
-#define PAL_KEY_CAPSLOCK 0x14
-#define PAL_KEY_ESCAPE 0x1B
-#define PAL_KEY_SPACE 0x20
-#define PAL_KEY_PAGEUP 0x21
-#define PAL_KEY_PAGEDOWN 0x22
-#define PAL_KEY_END 0x23
-#define PAL_KEY_HOME 0x24
-#define PAL_KEY_LEFT 0x25
-#define PAL_KEY_UP 0x26
-#define PAL_KEY_RIGHT 0x27
-#define PAL_KEY_DOWN 0x28
-#define PAL_KEY_PRINTSCREEN 0x2C
-#define PAL_KEY_INSERT 0x2D
-#define PAL_KEY_DELETE 0x2E
+/*
+----------------------------------------------------------------------------------
+ Keys
+----------------------------------------------------------------------------------
+*/
 
-#define PAL_KEY_0 0x30
-#define PAL_KEY_1 0x31
-#define PAL_KEY_2 0x32
-#define PAL_KEY_3 0x33
-#define PAL_KEY_4 0x34
-#define PAL_KEY_5 0x35
-#define PAL_KEY_6 0x36
-#define PAL_KEY_7 0x37
-#define PAL_KEY_8 0x38
-#define PAL_KEY_9 0x39
-
-#define PAL_KEY_LWIN 0x3a
-#define PAL_KEY_RWIN 0x 3b
-#define PAL_KEY_LSUPER PAL_KEY_LWIN
-#define PAL_KEY_RSUPER PAL_KEY_RWIN
-#define PAL_KEY_LCOMMAND PAL_KEY_LWIN
-#define PAL_KEY_RCOMMAND PAL_KEY_RWIN
-#define PAL_KEY_APPS 0x3c
-
-#define PAL_KEY_NUMPAD_0 0x3d
-#define PAL_KEY_NUMPAD_1 0x3e
-#define PAL_KEY_NUMPAD_2 0x3f
-#define PAL_KEY_NUMPAD_3 0x40
-#define PAL_KEY_NUMPAD_4 0x41
-#define PAL_KEY_NUMPAD_5 0x42
-#define PAL_KEY_NUMPAD_6 0x43
-#define PAL_KEY_NUMPAD_7 0x44
-#define PAL_KEY_NUMPAD_8 0x45
-#define PAL_KEY_NUMPAD_9 0x46
-#define PAL_KEY_MULTIPLY 0x47
-#define PAL_KEY_ADD 0x48
-#define PAL_KEY_SEPARATOR 0x49 // Most modern Keyboards don't have this.
-#define PAL_KEY_SUBTRACT 0x4a
-#define PAL_KEY_DECIMAL 0x4b
-#define PAL_KEY_DIVIDE 0x4c
-
-#define PAL_KEY_A 0x4d
-#define PAL_KEY_B 0x4e
-#define PAL_KEY_C 0x4f
-#define PAL_KEY_D 0x50
-#define PAL_KEY_E 0x51
-#define PAL_KEY_F 0x52
-#define PAL_KEY_G 0x53
-#define PAL_KEY_H 0x54
-#define PAL_KEY_I 0x55
-#define PAL_KEY_J 0x56
-#define PAL_KEY_K 0x57
-#define PAL_KEY_L 0x58
-#define PAL_KEY_M 0x59
-#define PAL_KEY_N 0x5A
-#define PAL_KEY_O 0x5B
-#define PAL_KEY_P 0x5c
-#define PAL_KEY_Q 0x5d
-#define PAL_KEY_R 0x5e
-#define PAL_KEY_S 0x5f
-#define PAL_KEY_T 0x60
-#define PAL_KEY_U 0x61
-#define PAL_KEY_V 0x62
-#define PAL_KEY_W 0x63
-#define PAL_KEY_X 0x64
-#define PAL_KEY_Y 0x65
-#define PAL_KEY_Z 0x66
-
-#define PAL_KEY_F1 0x70
-#define PAL_KEY_F2 0x71
-#define PAL_KEY_F3 0x72
-#define PAL_KEY_F4 0x73
-#define PAL_KEY_F5 0x74
-#define PAL_KEY_F6 0x75
-#define PAL_KEY_F7 0x76
-#define PAL_KEY_F8 0x77
-#define PAL_KEY_F9 0x78
-#define PAL_KEY_F10 0x79
-#define PAL_KEY_F11 0x7A
-#define PAL_KEY_F12 0x7B
-
-#define PAL_KEY_F13 0x7c
-#define PAL_KEY_F14 0x7d
-#define PAL_KEY_F15 0x7e
-#define PAL_KEY_F16 0x7f
-#define PAL_KEY_F17 0x80
-#define PAL_KEY_F18 0x81
-#define PAL_KEY_F19 0x82
-#define PAL_KEY_F20 0x83
-#define PAL_KEY_F21 0x84
-#define PAL_KEY_F22 0x85
-#define PAL_KEY_F23 0x86
-#define PAL_KEY_F24 0x87
-
-#define PAL_KEY_NUMLOCK 0x90
-#define PAL_KEY_SCROLLLOCK 0x91
-
-#define PAL_KEY_BACKSLASH 0x92
-#define PAL_KEY_FORWARD_SLASH 0x93
-#define PAL_KEY_COMMA 0x94
-#define PAL_KEY_PERIOD 0x95
+#define PAL_KEY_EXTENDED_MASK              (1u << 29)
+#define PAL_KEY_SCANCODE_MASK              (1u << 30)
+#define PAL_SCANCODE_TO_KEYCODE(X)         (X | PAL_KEY_SCANCODE_MASK)
+#define PAL_KEY_NONE                       0x00000000u /**< 0 */
+#define PAL_KEY_RETURN                     0x0000000du /**< '\r' */
+#define PAL_KEY_ENTER PAL_KEY_RETURN
+#define PAL_KEY_ESCAPE                     0x0000001bu /**< '\x1B' */
+#define PAL_KEY_BACKSPACE                  0x00000008u /**< '\b' */
+#define PAL_KEY_TAB                        0x00000009u /**< '\t' */
+#define PAL_KEY_SPACE                      0x00000020u /**< ' ' */
+#define PAL_KEY_EXCLAIM                    0x00000021u /**< '!' */
+#define PAL_KEY_DBLAPOSTROPHE              0x00000022u /**< '"' */
+#define PAL_KEY_HASH                       0x00000023u /**< '#' */
+#define PAL_KEY_DOLLAR                     0x00000024u /**< '$' */
+#define PAL_KEY_PERCENT                    0x00000025u /**< '%' */
+#define PAL_KEY_AMPERSAND                  0x00000026u /**< '&' */
+#define PAL_KEY_APOSTROPHE                 0x00000027u /**< '\'' */
+#define PAL_KEY_LEFTPAREN                  0x00000028u /**< '(' */
+#define PAL_KEY_RIGHTPAREN                 0x00000029u /**< ')' */
+#define PAL_KEY_ASTERISK                   0x0000002au /**< '*' */
+#define PAL_KEY_STAR PAL_KEY_ASTERISK
+#define PAL_KEY_MULTIPLY PAL_KEY_ASTERISK
+#define PAL_KEY_PLUS                       0x0000002bu /**< '+' */
+#define PAL_KEY_ADD PAL_KEY_PLUS
+#define PAL_KEY_COMMA                      0x0000002cu /**< ',' */
+#define PAL_KEY_MINUS                      0x0000002du /**< '-' */
+#define PAL_KEY_SUBTRACT PAL_KEY_MINUS
+#define PAL_KEY_PERIOD                     0x0000002eu /**< '.' */
 #define PAL_KEY_DOT PAL_KEY_PERIOD
+#define PAL_KEY_SLASH                      0x0000002fu /**< '/' */
+#define PAL_KEY_DIVIDE PAL_KEY_SLASH
+#define PAL_KEY_FORWARD_SLASH PAL_KEY_SLASH
+#define PAL_KEY_0                          0x00000030u /**< '0' */
+#define PAL_KEY_1                          0x00000031u /**< '1' */
+#define PAL_KEY_2                          0x00000032u /**< '2' */
+#define PAL_KEY_3                          0x00000033u /**< '3' */
+#define PAL_KEY_4                          0x00000034u /**< '4' */
+#define PAL_KEY_5                          0x00000035u /**< '5' */
+#define PAL_KEY_6                          0x00000036u /**< '6' */
+#define PAL_KEY_7                          0x00000037u /**< '7' */
+#define PAL_KEY_8                          0x00000038u /**< '8' */
+#define PAL_KEY_9                          0x00000039u /**< '9' */
+#define PAL_KEY_COLON                      0x0000003au /**< ':' */
+#define PAL_KEY_SEMICOLON                  0x0000003bu /**< ';' */
+#define PAL_KEY_LESS                       0x0000003cu /**< '<' */
+#define PAL_KEY_EQUALS                     0x0000003du /**< '=' */
+#define PAL_KEY_EQUAL PAL_KEY_EQUALS
+#define PAL_KEY_GREATER                    0x0000003eu /**< '>' */
+#define PAL_KEY_QUESTION                   0x0000003fu /**< '?' */
+#define PAL_KEY_AT                         0x00000040u /**< '@' */
+#define PAL_KEY_LEFTBRACKET                0x0000005bu /**< '[' */
+#define PAL_KEY_BACKSLASH                  0x0000005cu /**< '\\' */
+#define PAL_KEY_RIGHTBRACKET               0x0000005du /**< ']' */
+#define PAL_KEY_CARET                      0x0000005eu /**< '^' */
+#define PAL_KEY_UNDERSCORE                 0x0000005fu /**< '_' */
+#define PAL_KEY_GRAVE                      0x00000060u /**< '`' */
+#define PAL_KEY_BACKTICK PAL_KEY_GRAVE
+#define PAL_KEY_A                          0x00000061u /**< 'a' */
+#define PAL_KEY_B                          0x00000062u /**< 'b' */
+#define PAL_KEY_C                          0x00000063u /**< 'c' */
+#define PAL_KEY_D                          0x00000064u /**< 'd' */
+#define PAL_KEY_E                          0x00000065u /**< 'e' */
+#define PAL_KEY_F                          0x00000066u /**< 'f' */
+#define PAL_KEY_G                          0x00000067u /**< 'g' */
+#define PAL_KEY_H                          0x00000068u /**< 'h' */
+#define PAL_KEY_I                          0x00000069u /**< 'i' */
+#define PAL_KEY_J                          0x0000006au /**< 'j' */
+#define PAL_KEY_K                          0x0000006bu /**< 'k' */
+#define PAL_KEY_L                          0x0000006cu /**< 'l' */
+#define PAL_KEY_M                          0x0000006du /**< 'm' */
+#define PAL_KEY_N                          0x0000006eu /**< 'n' */
+#define PAL_KEY_O                          0x0000006fu /**< 'o' */
+#define PAL_KEY_P                          0x00000070u /**< 'p' */
+#define PAL_KEY_Q                          0x00000071u /**< 'q' */
+#define PAL_KEY_R                          0x00000072u /**< 'r' */
+#define PAL_KEY_S                          0x00000073u /**< 's' */
+#define PAL_KEY_T                          0x00000074u /**< 't' */
+#define PAL_KEY_U                          0x00000075u /**< 'u' */
+#define PAL_KEY_V                          0x00000076u /**< 'v' */
+#define PAL_KEY_W                          0x00000077u /**< 'w' */
+#define PAL_KEY_X                          0x00000078u /**< 'x' */
+#define PAL_KEY_Y                          0x00000079u /**< 'y' */
+#define PAL_KEY_Z                          0x0000007au /**< 'z' */
+#define PAL_KEY_LEFTBRACE                  0x0000007bu /**< '{' */
+#define PAL_KEY_PIPE                       0x0000007cu /**< '|' */
+#define PAL_KEY_BAR PAL_KEY_PIPE
+#define PAL_KEY_VERTICAL_BAR PAL_KEY_PIPE
+#define PAL_KEY_RIGHTBRACE                 0x0000007du /**< '}' */
+#define PAL_KEY_TILDE                      0x0000007eu /**< '~' */
+#define PAL_KEY_DELETE                     0x0000007fu /**< '\x7F' */
 
-#define PAL_KEY_BACKTICK 0x96
-#define PAL_KEY_GRAVE PAL_KEY_BACKTICK
+#define PAL_KEY_PLUSMINUS                  0x000000b1u /**< '\xB1' */
+#define PAL_KEY_CAPSLOCK                   0x40000039u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CAPSLOCK) */
+#define PAL_KEY_F1                         0x4000003au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F1) */
+#define PAL_KEY_F2                         0x4000003bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F2) */
+#define PAL_KEY_F3                         0x4000003cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F3) */
+#define PAL_KEY_F4                         0x4000003du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F4) */
+#define PAL_KEY_F5                         0x4000003eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F5) */
+#define PAL_KEY_F6                         0x4000003fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F6) */
+#define PAL_KEY_F7                         0x40000040u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F7) */
+#define PAL_KEY_F8                         0x40000041u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F8) */
+#define PAL_KEY_F9                         0x40000042u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F9) */
+#define PAL_KEY_F10                        0x40000043u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F10) */
+#define PAL_KEY_F11                        0x40000044u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F11) */
+#define PAL_KEY_F12                        0x40000045u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F12) */
+#define PAL_KEY_PRINTSCREEN                0x40000046u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_PRINTSCREEN) */
+#define PAL_KEY_SCROLLLOCK                 0x40000047u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SCROLLLOCK) */
+#define PAL_KEY_PAUSE                      0x40000048u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_PAUSE) */
+#define PAL_KEY_INSERT                     0x40000049u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_INSERT) */
+#define PAL_KEY_HOME                       0x4000004au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_HOME) */
+#define PAL_KEY_PAGEUP                     0x4000004bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_PAGEUP) */
+#define PAL_KEY_END                        0x4000004du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_END) */
+#define PAL_KEY_PAGEDOWN                   0x4000004eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_PAGEDOWN) */
+#define PAL_KEY_RIGHT                      0x4000004fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_RIGHT) */
+#define PAL_KEY_LEFT                       0x40000050u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_LEFT) */
+#define PAL_KEY_DOWN                       0x40000051u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_DOWN) */
+#define PAL_KEY_UP                         0x40000052u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_UP) */
+#define PAL_KEY_NUMLOCKCLEAR               0x40000053u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMLOCKCLEAR) */
+#define PAL_KEY_NUMPAD_DIVIDE              0x40000054u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_DIVIDE) */
+#define PAL_KEY_NUMPAD_MULTIPLY            0x40000055u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MULTIPLY) */
+#define PAL_KEY_NUMPAD_MINUS               0x40000056u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MINUS) */
+#define PAL_KEY_NUMPAD_PLUS                0x40000057u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_PLUS) */
+#define PAL_KEY_NUMPAD_ENTER               0x40000058u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_ENTER) */
+#define PAL_KEY_NUMPAD_1                   0x40000059u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_1) */
+#define PAL_KEY_NUMPAD_2                   0x4000005au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_2) */
+#define PAL_KEY_NUMPAD_3                   0x4000005bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_3) */
+#define PAL_KEY_NUMPAD_4                   0x4000005cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_4) */
+#define PAL_KEY_NUMPAD_5                   0x4000005du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_5) */
+#define PAL_KEY_NUMPAD_6                   0x4000005eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_6) */
+#define PAL_KEY_NUMPAD_7                   0x4000005fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_7) */
+#define PAL_KEY_NUMPAD_8                   0x40000060u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_8) */
+#define PAL_KEY_NUMPAD_9                   0x40000061u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_9) */
+#define PAL_KEY_NUMPAD_0                   0x40000062u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_0) */
+#define PAL_KEY_NUMPAD_PERIOD              0x40000063u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_PERIOD) */
+#define PAL_KEY_APPLICATION                0x40000065u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_APPLICATION) */
+#define PAL_KEY_POWER                      0x40000066u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_POWER) */
+#define PAL_KEY_NUMPAD_EQUALS              0x40000067u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_EQUALS) */
+#define PAL_KEY_F13                        0x40000068u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F13) */
+#define PAL_KEY_F14                        0x40000069u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F14) */
+#define PAL_KEY_F15                        0x4000006au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F15) */
+#define PAL_KEY_F16                        0x4000006bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F16) */
+#define PAL_KEY_F17                        0x4000006cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F17) */
+#define PAL_KEY_F18                        0x4000006du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F18) */
+#define PAL_KEY_F19                        0x4000006eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F19) */
+#define PAL_KEY_F20                        0x4000006fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F20) */
+#define PAL_KEY_F21                        0x40000070u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F21) */
+#define PAL_KEY_F22                        0x40000071u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F22) */
+#define PAL_KEY_F23                        0x40000072u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F23) */
+#define PAL_KEY_F24                        0x40000073u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_F24) */
+#define PAL_KEY_EXECUTE                    0x40000074u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_EXECUTE) */
+#define PAL_KEY_HELP                       0x40000075u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_HELP) */
+#define PAL_KEY_MENU                       0x40000076u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MENU) */
+#define PAL_KEY_SELECT                     0x40000077u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SELECT) */
+#define PAL_KEY_STOP                       0x40000078u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_STOP) */
+#define PAL_KEY_AGAIN                      0x40000079u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AGAIN) */
+#define PAL_KEY_UNDO                       0x4000007au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_UNDO) */
+#define PAL_KEY_CUT                        0x4000007bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CUT) */
+#define PAL_KEY_COPY                       0x4000007cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_COPY) */
+#define PAL_KEY_PASTE                      0x4000007du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_PASTE) */
+#define PAL_KEY_FIND                       0x4000007eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_FIND) */
+#define PAL_KEY_MUTE                       0x4000007fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MUTE) */
+#define PAL_KEY_VOLUMEUP                   0x40000080u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_VOLUMEUP) */
+#define PAL_KEY_VOLUMEDOWN                 0x40000081u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_VOLUMEDOWN) */
+#define PAL_KEY_NUMPAD_COMMA               0x40000085u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_COMMA) */
+#define PAL_KEY_NUMPAD_EQUALSAS400         0x40000086u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_EQUALSAS400) */
+#define PAL_KEY_ALTERASE                   0x40000099u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_ALTERASE) */
+#define PAL_KEY_SYSREQ                     0x4000009au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SYSREQ) */
+#define PAL_KEY_CANCEL                     0x4000009bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CANCEL) */
+#define PAL_KEY_CLEAR                      0x4000009cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CLEAR) */
+#define PAL_KEY_PRIOR                      0x4000009du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_PRIOR) */
+#define PAL_KEY_RETURN2                    0x4000009eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_RETURN2) */
+#define PAL_KEY_SEPARATOR                  0x4000009fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SEPARATOR) */
+#define PAL_KEY_OUT                        0x400000a0u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_OUT) */
+#define PAL_KEY_OPER                       0x400000a1u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_OPER) */
+#define PAL_KEY_CLEARAGAIN                 0x400000a2u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CLEARAGAIN) */
+#define PAL_KEY_CRSEL                      0x400000a3u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CRSEL) */
+#define PAL_KEY_EXSEL                      0x400000a4u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_EXSEL) */
+#define PAL_KEY_NUMPAD_00                  0x400000b0u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_00) */
+#define PAL_KEY_NUMPAD_000                 0x400000b1u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_000) */
+#define PAL_KEY_THOUSANDSSEPARATOR         0x400000b2u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_THOUSANDSSEPARATOR) */
+#define PAL_KEY_DECIMALSEPARATOR           0x400000b3u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_DECIMALSEPARATOR) */
+#define PAL_KEY_CURRENCYUNIT               0x400000b4u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CURRENCYUNIT) */
+#define PAL_KEY_CURRENCYSUBUNIT            0x400000b5u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CURRENCYSUBUNIT) */
+#define PAL_KEY_NUMPAD_LEFTPAREN           0x400000b6u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_LEFTPAREN) */
+#define PAL_KEY_NUMPAD_RIGHTPAREN          0x400000b7u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_RIGHTPAREN) */
+#define PAL_KEY_NUMPAD_LEFTBRACE           0x400000b8u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_LEFTBRACE) */
+#define PAL_KEY_NUMPAD_RIGHTBRACE          0x400000b9u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_RIGHTBRACE) */
+#define PAL_KEY_NUMPAD_TAB                 0x400000bau /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_TAB) */
+#define PAL_KEY_NUMPAD_BACKSPACE           0x400000bbu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_BACKSPACE) */
+#define PAL_KEY_NUMPAD_A                   0x400000bcu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_A) */
+#define PAL_KEY_NUMPAD_B                   0x400000bdu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_B) */
+#define PAL_KEY_NUMPAD_C                   0x400000beu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_C) */
+#define PAL_KEY_NUMPAD_D                   0x400000bfu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_D) */
+#define PAL_KEY_NUMPAD_E                   0x400000c0u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_E) */
+#define PAL_KEY_NUMPAD_F                   0x400000c1u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_F) */
+#define PAL_KEY_NUMPAD_XOR                 0x400000c2u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_XOR) */
+#define PAL_KEY_NUMPAD_POWER               0x400000c3u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_POWER) */
+#define PAL_KEY_NUMPAD_PERCENT             0x400000c4u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_PERCENT) */
+#define PAL_KEY_NUMPAD_LESS                0x400000c5u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_LESS) */
+#define PAL_KEY_NUMPAD_GREATER             0x400000c6u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_GREATER) */
+#define PAL_KEY_NUMPAD_AMPERSAND           0x400000c7u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_AMPERSAND) */
+#define PAL_KEY_NUMPAD_DBLAMPERSAND        0x400000c8u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_DBLAMPERSAND) */
+#define PAL_KEY_NUMPAD_VERTICALBAR         0x400000c9u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_VERTICALBAR) */
+#define PAL_KEY_NUMPAD_DBLVERTICALBAR      0x400000cau /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_DBLVERTICALBAR) */
+#define PAL_KEY_NUMPAD_COLON               0x400000cbu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_COLON) */
+#define PAL_KEY_NUMPAD_HASH                0x400000ccu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_HASH) */
+#define PAL_KEY_NUMPAD_SPACE               0x400000cdu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_SPACE) */
+#define PAL_KEY_NUMPAD_AT                  0x400000ceu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_AT) */
+#define PAL_KEY_NUMPAD_EXCLAM              0x400000cfu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_EXCLAM) */
+#define PAL_KEY_NUMPAD_MEMSTORE            0x400000d0u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMSTORE) */
+#define PAL_KEY_NUMPAD_MEMRECALL           0x400000d1u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMRECALL) */
+#define PAL_KEY_NUMPAD_MEMCLEAR            0x400000d2u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMCLEAR) */
+#define PAL_KEY_NUMPAD_MEMADD              0x400000d3u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMADD) */
+#define PAL_KEY_NUMPAD_MEMSUBTRACT         0x400000d4u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMSUBTRACT) */
+#define PAL_KEY_NUMPAD_MEMMULTIPLY         0x400000d5u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMMULTIPLY) */
+#define PAL_KEY_NUMPAD_MEMDIVIDE           0x400000d6u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_MEMDIVIDE) */
+#define PAL_KEY_NUMPAD_PLUSMINUS           0x400000d7u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_PLUSMINUS) */
+#define PAL_KEY_NUMPAD_CLEAR               0x400000d8u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_CLEAR) */
+#define PAL_KEY_NUMPAD_CLEARENTRY          0x400000d9u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_CLEARENTRY) */
+#define PAL_KEY_NUMPAD_BINARY              0x400000dau /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_BINARY) */
+#define PAL_KEY_NUMPAD_OCTAL               0x400000dbu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_OCTAL) */
+#define PAL_KEY_NUMPAD_DECIMAL             0x400000dcu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_DECIMAL) */
+#define PAL_KEY_NUMPAD_HEXADECIMAL         0x400000ddu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_NUMPAD_HEXADECIMAL) */
+#define PAL_KEY_LCTRL                      0x400000e0u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_LCTRL) */
+#define PAL_KEY_LSHIFT                     0x400000e1u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_LSHIFT) */
+#define PAL_KEY_LALT                       0x400000e2u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_LALT) */
+#define PAL_KEY_LOPTION PAL_KEY_LALT
+#define PAL_KEY_LGUI                       0x400000e3u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_LGUI) */
+#define PAL_KEY_LWIN PAL_KEY_LGUI
+#define PAL_KEY_LSUPER PAL_KEY_LGUI
+#define PAL_KEY_LCOMMAND PAL_KEY_LGUI
+#define PAL_KEY_RCTRL                      0x400000e4u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_RCTRL) */
+#define PAL_KEY_RSHIFT                     0x400000e5u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_RSHIFT) */
+#define PAL_KEY_RALT                       0x400000e6u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_RALT) */
+#define PAL_KEY_ROPTION PAL_KEY_RALT
+#define PAL_KEY_RGUI                       0x400000e7u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_RGUI) */
+#define PAL_KEY_RWIN PAL_KEY_RGUI
+#define PAL_KEY_RSUPER PAL_KEY_RGUI
+#define PAL_KEY_RCOMMAND PAL_KEY_RGUI
+#define PAL_KEY_MODE                       0x40000101u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MODE) */
+#define PAL_KEY_SLEEP                      0x40000102u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SLEEP) */
+#define PAL_KEY_WAKE                       0x40000103u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WAKE) */
+#define PAL_KEY_CHANNEL_INCREMENT          0x40000104u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CHANNEL_INCREMENT) */
+#define PAL_KEY_CHANNEL_DECREMENT          0x40000105u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CHANNEL_DECREMENT) */
+#define PAL_KEY_MEDIA_PLAY                 0x40000106u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_PLAY) */
+#define PAL_KEY_MEDIA_PAUSE                0x40000107u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_PAUSE) */
+#define PAL_KEY_MEDIA_RECORD               0x40000108u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_RECORD) */
+#define PAL_KEY_MEDIA_FAST_FORWARD         0x40000109u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_FAST_FORWARD) */
+#define PAL_KEY_MEDIA_REWIND               0x4000010au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_REWIND) */
+#define PAL_KEY_MEDIA_NEXT_TRACK           0x4000010bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_NEXT_TRACK) */
+#define PAL_KEY_MEDIA_PREVIOUS_TRACK       0x4000010cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_PREVIOUS_TRACK) */
+#define PAL_KEY_MEDIA_STOP                 0x4000010du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_STOP) */
+#define PAL_KEY_MEDIA_EJECT                0x4000010eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_EJECT) */
+#define PAL_KEY_MEDIA_PLAY_PAUSE           0x4000010fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_PLAY_PAUSE) */
+#define PAL_KEY_MEDIA_SELECT               0x40000110u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_MEDIA_SELECT) */
+#define PAL_KEY_AC_NEW                     0x40000111u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_NEW) */
+#define PAL_KEY_AC_OPEN                    0x40000112u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_OPEN) */
+#define PAL_KEY_AC_CLOSE                   0x40000113u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_CLOSE) */
+#define PAL_KEY_AC_EXIT                    0x40000114u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_EXIT) */
+#define PAL_KEY_AC_SAVE                    0x40000115u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_SAVE) */
+#define PAL_KEY_AC_PRINT                   0x40000116u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_PRINT) */
+#define PAL_KEY_AC_PROPERTIES              0x40000117u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_PROPERTIES) */
+#define PAL_KEY_AC_SEARCH                  0x40000118u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_SEARCH) */
+#define PAL_KEY_AC_HOME                    0x40000119u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_HOME) */
+#define PAL_KEY_AC_BACK                    0x4000011au /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_BACK) */
+#define PAL_KEY_AC_FORWARD                 0x4000011bu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_FORWARD) */
+#define PAL_KEY_AC_STOP                    0x4000011cu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_STOP) */
+#define PAL_KEY_AC_REFRESH                 0x4000011du /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_REFRESH) */
+#define PAL_KEY_AC_BOOKMARKS               0x4000011eu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_AC_BOOKMARKS) */
+#define PAL_KEY_SOFTLEFT                   0x4000011fu /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SOFTLEFT) */
+#define PAL_KEY_SOFTRIGHT                  0x40000120u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_SOFTRIGHT) */
+#define PAL_KEY_CALL                       0x40000121u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_CALL) */
+#define PAL_KEY_ENDCALL                    0x40000122u /**< SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_ENDCALL) */
+#define PAL_KEY_LEFT_TAB                   0x20000001u /**< Extended key Left Tab */
+#define PAL_KEY_LEVEL5_SHIFT               0x20000002u /**< Extended key Level 5 Shift */
+#define PAL_KEY_MULTI_KEY_COMPOSE          0x20000003u /**< Extended key Multi-key Compose */
+#define PAL_KEY_LMETA                      0x20000004u /**< Extended key Left Meta */
+#define PAL_KEY_RMETA                      0x20000005u /**< Extended key Right Meta */
+#define PAL_KEY_LHYPER                     0x20000006u /**< Extended key Left Hyper */
+#define PAL_KEY_RHYPER                     0x20000007u /**< Extended key Right Hyper */
 
-#define PAL_KEY_RIGHTBRACE 0x97
-#define PAL_KEY_LEFTBRACE 0x98
-#define PAL_KEY_SEMICOLON 0x99
-#define PAL_KEY_APOSTROPHE 0x9a
-#define PAL_KEY_MINUS 0x9b
-#define PAL_KEY_EQUAL 0x9c
+/*
+---------------------------------------------------------------------------------
+Modifier Keys
+---------------------------------------------------------------------------------
+*/
 
-//---------------------------------------------------------------------------------
-// Modifier Keys
-//---------------------------------------------------------------------------------
 #define PAL_MOD_NONE 0x0
 #define PAL_MOD_LSHIFT 0x1
 #define PAL_MOD_RSHIFT 0x2
@@ -801,9 +958,13 @@ typedef struct pal_ivec4 {
 #define PAL_MOD_NUM 0x2000
 #define PAL_MOD_SCROLL 0x4000
 
-//----------------------------------------------------------------------------------
-// Scancodes
-//----------------------------------------------------------------------------------
+/*
+----------------------------------------------------------------------------------
+Scancodes
+----------------------------------------------------------------------------------
+*/
+
+#define PAL_SCAN_NONE 0
 #define PAL_SCAN_A 4
 #define PAL_SCAN_B 5
 #define PAL_SCAN_C 6
@@ -1062,7 +1223,7 @@ typedef struct pal_ivec4 {
 #define PAL_SCAN_KP_OCTAL 219
 #define PAL_SCAN_KP_DECIMAL 220
 #define PAL_SCAN_KP_HEXADECIMAL 221
-// 222 - 223 reserved
+/* 222 - 223 reserved */
 #define PAL_SCAN_LCTRL 224
 #define PAL_SCAN_LSHIFT 225
 #define PAL_SCAN_LALT 226 /**< alt option */
@@ -1144,15 +1305,19 @@ typedef struct pal_ivec4 {
 
 #define PAL_SCAN_COUNT 512 /**< not a key just marks the number of scancodes for array bounds */
 
-//----------------------------------------------------------------------------------
-// True and False defines
-//----------------------------------------------------------------------------------
+/*
+----------------------------------------------------------------------------------
+True and False defines
+----------------------------------------------------------------------------------
+*/
 #define pal_true 1
 #define pal_false 0
 
-//----------------------------------------------------------------------------------
-// File Permissions.
-//----------------------------------------------------------------------------------
+/*
+----------------------------------------------------------------------------------
+File Permissions.
+----------------------------------------------------------------------------------
+*/
 #define PAL_READ 0x01
 #define PAL_WRITE 0x02
 #define PAL_EXECUTE 0x04
@@ -1167,11 +1332,11 @@ typedef struct pal_ivec4 {
 extern "C" {
 #endif
 
-// Init and Shutdown
+/* Init and Shutdown */
 PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
 
-// Video and Windowing subsystem.
+/* Video and Windowing subsystem. */
 PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
@@ -1186,8 +1351,8 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window);
 PALAPI pal_bool pal_maximize_window(pal_window *window);
 PALAPI pal_bool pal_minimize_window(pal_window *window);
 PALAPI void pal_set_window_icon(pal_window *window, const char *image_path);
-// I am thinking that a better way of doing legacy stuff is with macros.
-// Just have a macro like WINDOWS_XP_OR_LATER or WINDOWS_VISTA_OR_LATER.
+/* I am thinking that a better way of doing legacy stuff is with macros.
+ Just have a macro like WINDOWS_XP_OR_LATER or WINDOWS_VISTA_OR_LATER. */
 PALAPI void pal_set_window_icon_legacy(pal_window *window, const char *image_path);
 PALAPI void pal_set_taskbar_icon(pal_window *taskbar, const char *image_path);
 PALAPI void pal_set_taskbar_icon_legacy(pal_window *taskbar, const char *image_path);
@@ -1199,20 +1364,20 @@ PALAPI void *pal_gl_get_proc_address(const char *proc);
 PALAPI pal_bool pal_poll_events(pal_event *event);
 PALAPI int pal_make_context_current(pal_window *window);
 
-// Rendering functions (implemented using GDI on windows and X11 on linux)
+/* Rendering functions (implemented using GDI on windows and X11 on linux) */
 PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_vec4 color);
 
-// Image Loading
+/* Image Loading */
 PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp);
 
-// Keyboard input
+/* Keyboard input */
 PALAPI int pal_get_keyboard_count(void);
 PALAPI const char *pal_get_keyboard_name(int keyboard_id);
 PALAPI int pal_get_keyboard_indices(int key, int *keyboard_indices);
 PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int key);
 PALAPI pal_bool pal_is_key_down(int keyboard_id, int key);
 
-// Mouse input
+/* Mouse input */
 PALAPI int pal_get_mouse_count(void);
 PALAPI const char *pal_get_mouse_name(int mouse_id);
 PALAPI int pal_get_mouse_indices(int *mouse_indices);
@@ -1221,17 +1386,17 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button);
 PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id);
 PALAPI pal_vec2 pal_get_mouse_position(pal_window *window);
 
-// Gamepad Input
+/* Gamepad Input */
 PALAPI int pal_get_gamepad_count(void);
 PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state);
 PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger);
 PALAPI void pal_stop_gamepad_vibration(int controller_id);
 
-// Rendering stuff.
+/* Rendering stuff. */
 PALAPI void pal_swap_buffers(pal_window *window);
 PALAPI void pal_swap_interval(int interval);
 
-// Sound
+/* Sound */
 PALAPI pal_sound *pal_load_sound(const char *filename);
 PALAPI int pal_play_sound(pal_sound *sound, float volume);
 PALAPI int pal_stop_sound(pal_sound *sound);
@@ -1239,10 +1404,10 @@ PALAPI void pal_free_sound(pal_sound *sound);
 
 PALAPI pal_sound *pal_load_music(const char *filename);
 PALAPI int pal_play_music(pal_sound *sound, float volume);
-PALAPI int pal_stop_music(pal_sound *sound); // unimplemented
+PALAPI int pal_stop_music(pal_sound *sound); /* unimplemented */
 PALAPI void pal_free_music(pal_sound *sound);
 
-// File I/O
+/* File I/O */
 PALAPI pal_bool pal_does_file_exist(const char *file_path);
 PALAPI size_t pal_get_last_write_time(const char *file);
 PALAPI size_t pal_get_last_read_time(const char *file);
@@ -1253,36 +1418,36 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 
-// Directory Listing
+/* Directory Listing */
 PALAPI pal_bool pal_path_is_dir(const char *path);
 
-// Open File I/O
+/* Open File I/O */
 PALAPI pal_file *pal_open_file(const char *file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer);
 PALAPI pal_bool pal_close_file(pal_file *file);
 
-// Random Number Generation
+/* Random Number Generation */
 PALAPI void pal_srand(uint64_t *state, uint64_t seed);
 PALAPI uint32_t pal_rand(uint64_t *state);
 
-// Clip board
+/* Clip board */
 PALAPI void pal_clipboard_set(const char *text);
 PALAPI char *pal_clipboard_get(void);
 
-// File dialog / requester
+/* File dialog / requester */
 PALAPI void pal_create_save_dialog(char **types, uint32_t type_count, void *id);
 PALAPI void pal_create_load_dialog(char **types, uint32_t type_count, void *id);
 PALAPI char *pal_show_save_dialog(void *id);
 PALAPI char *pal_show_load_dialog(void *id);
 
-// URL launch
+/* URL launch */
 PALAPI void pal_url_launch(char *url);
 
-// Mouse Warp
+/* Mouse Warp */
 PALAPI void pal_mouse_warp(int x, int y);
 PALAPI void pal_mouse_warp_relative(int dx, int dy);
 
-// File Parsing
+/* File Parsing */
 PALAPI pal_bool pal_is_uppercase(char ch);
 PALAPI pal_bool pal_is_lowercase(char ch);
 PALAPI pal_bool pal_is_letter(char ch);
@@ -1298,7 +1463,7 @@ PALAPI pal_bool pal_are_strings_equal(const char *s1, const char *s2);
 PALAPI int pal_strcmp(const char *s1, const char *s2);
 PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n);
 
-// Time functions
+/* Time functions */
 PALAPI pal_time pal_get_date_and_time_utc(void);
 PALAPI pal_time pal_get_date_and_time_local(void);
 PALAPI pal_time pal_get_time_since_boot(void);
@@ -1306,7 +1471,7 @@ PALAPI double pal_get_time_since_pal_started(void);
 PALAPI uint64_t pal_get_timer(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
 
-// Multi-threadding functions
+/* Multi-threadding functions */
 PALAPI pal_mutex *pal_create_mutex();
 PALAPI void pal_lock_mutex(pal_mutex *mutex);
 PALAPI pal_bool pal_lock_mutex_try(pal_mutex *mutex);
@@ -1324,7 +1489,7 @@ PALAPI pal_bool pal_start_thread(pal_thread *thread);
 PALAPI pal_bool pal_join_thread(pal_thread *thread);
 PALAPI void pal_destroy_thread(pal_thread *thread);
 
-// .dll/.so/.dylib loading
+/* .dll/.so/.dylib loading */
 PALAPI void *pal_load_dynamic_library(const char *dll);
 PALAPI void *pal_load_dynamic_function(void *dll, char *func_name);
 PALAPI pal_bool pal_free_dynamic_library(void *dll);
@@ -1333,4 +1498,4 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll);
 }
 #endif
 
-#endif // PAL_INCLUDE_H
+#endif /* PAL_INCLUDE_H */

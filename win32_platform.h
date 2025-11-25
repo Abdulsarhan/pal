@@ -423,9 +423,10 @@ typedef struct {
 #pragma pack(pop)
 
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
+    DEVMODEA dm = {0};
+
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
 
-    DEVMODEA dm = {0};
     dm.dmSize = sizeof(dm);
     dm.dmPelsWidth = width;
     dm.dmPelsHeight = height;
@@ -444,10 +445,11 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int
 }
 
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
-    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
     int width = (int)window->width;
     int height = (int)window->height;
     DEVMODEA dm = {0};
+
+    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
     EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
     dm.dmSize = sizeof(dm);
     dm.dmPelsWidth = (DWORD)window->width;
@@ -466,12 +468,13 @@ PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
 }
 
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
+    HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = {.cbSize = sizeof(mi)};
+
     // Save the current window style and rect
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
 
     // Get the monitor bounds
-    HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi = {.cbSize = sizeof(mi)};
     if (!GetMonitorInfo(monitor, &mi)) {
         MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
         return pal_false;
@@ -488,6 +491,7 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
 }
 
 PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
+    RECT rect;
     // Restore display mode (in case exclusive mode was used)
     ChangeDisplaySettings(NULL, 0);
 
@@ -496,7 +500,6 @@ PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
         MessageBoxA(window->hwnd, "Failed to restore window style.", "Error", MB_OK);
         return pal_false;
     }
-    RECT rect;
     GetWindowRect(window->hwnd, &rect);
     // Restore the window's size and position
     if (!SetWindowPos(window->hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED)) {
@@ -508,22 +511,30 @@ PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
 }
 
 PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, int hotspot_x, int hotspot_y) {
+    FILE* f = fopen(filepath, "rb");
+    unsigned char header[12] = {0};
+    HCURSOR hCursor = NULL;
+    int width, height, channels;
+    unsigned char *pixels = NULL, *resized = NULL;
+    HDC hdc = GetDC(NULL);
+    BITMAPV5HEADER bi = {0};
+    void* bitmapData = NULL;
+    HBITMAP hBitmap = NULL;
+    ICONINFO ii = {0};
+
     if (size <= 0)
         size = 32;
     if (size > 256)
         size = 256;
 
-    FILE* f = fopen(filepath, "rb");
     if (!f) {
         MessageBoxA(window->hwnd, "Failed to open cursor file.", "SetCustomCursor Error", MB_ICONERROR);
         return;
     }
 
-    unsigned char header[12] = {0};
     fread(header, 1, sizeof(header), f);
     fclose(f);
 
-    HCURSOR hCursor = NULL;
 
     if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "ACON", 4) == 0) {
         hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
@@ -538,14 +549,13 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
             return;
         }
     } else {
-        int width, height, channels;
-        unsigned char* pixels = stbi_load(filepath, &width, &height, &channels, 4);
+        pixels = stbi_load(filepath, &width, &height, &channels, 4);
         if (!pixels) {
             MessageBoxA(window->hwnd, "Failed to load image with stb_image.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
 
-        unsigned char* resized = malloc(size * size * 4);
+        resized = malloc(size * size * 4);
         if (!resized) {
             stbi_image_free(pixels);
             MessageBoxA(window->hwnd, "Failed to allocate memory for resized image.", "SetCustomCursor Error", MB_ICONERROR);
@@ -556,9 +566,6 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
             pixels, width, height, width * 4, resized, size, size, size * 4, STBIR_RGBA);
         stbi_image_free(pixels);
 
-        HDC hdc = GetDC(NULL);
-
-        BITMAPV5HEADER bi = {0};
         bi.bV5Size = sizeof(BITMAPV5HEADER);
         bi.bV5Width = size;
         bi.bV5Height = -size;
@@ -570,8 +577,7 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
         bi.bV5BlueMask = 0x000000FF;
         bi.bV5AlphaMask = 0xFF000000;
 
-        void* bitmapData = NULL;
-        HBITMAP hBitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
+        hBitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
         ReleaseDC(NULL, hdc);
 
         if (!hBitmap || !bitmapData) {
@@ -593,7 +599,6 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
 
         free(resized);
 
-        ICONINFO ii = {0};
         ii.fIcon = pal_false;
         ii.xHotspot = hotspot_x;
         ii.yHotspot = hotspot_y;
@@ -619,10 +624,28 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
 // and only then can we use it.
 static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     FILE* file = fopen(image_path, "rb");
+    uint8_t header[8];
+    const unsigned char png_sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+    BOOL is_png;
+    uint8_t* png_data = NULL;
+    long size = 0;
+    size_t header_size, total_size = 0;
+    uint8_t* ico_data = NULL;
+    ICONDIR* icon_dir;
+    ICONDIRENTRY* entry;
+    HICON hIcon = NULL;
+    int width, height, channels;
+    uint8_t* rgba = NULL;
+    BITMAPV5HEADER bi = {0};
+    void* dib_pixels = NULL;
+    HDC hdc = GetDC(NULL);
+    HBITMAP color_bitmap, mask_bitmap;
+    ICONINFO ii = {0};
+    HICON hIcon;
+
     if (!file)
         return NULL;
 
-    uint8_t header[8];
     if (fread(header, 1, sizeof(header), file) < sizeof(header)) {
         fclose(file);
         return NULL;
@@ -636,20 +659,19 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     }
 
     // Check for PNG header
-    const unsigned char png_sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-    BOOL is_png = (memcmp(header, png_sig, 8) == 0);
+    is_png = (memcmp(header, png_sig, 8) == 0);
     fseek(file, 0, SEEK_SET);
 
     if (is_png && !legacy) {
         fseek(file, 0, SEEK_END);
-        long size = ftell(file);
+        size = ftell(file);
         rewind(file);
         if (size <= 0) {
             fclose(file);
             return NULL;
         }
 
-        uint8_t* png_data = (uint8_t*)malloc(size);
+        png_data = (uint8_t*)malloc(size);
         if (!png_data) {
             fclose(file);
             return NULL;
@@ -657,20 +679,20 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
         fread(png_data, 1, size, file);
         fclose(file);
 
-        size_t header_size = sizeof(ICONDIR) + sizeof(ICONDIRENTRY);
-        size_t total_size = header_size + size;
-        uint8_t* ico_data = (uint8_t*)malloc(total_size);
+        header_size = sizeof(ICONDIR) + sizeof(ICONDIRENTRY);
+        total_size = header_size + size;
+        ico_data = (uint8_t*)malloc(total_size);
         if (!ico_data) {
             free(png_data);
             return NULL;
         }
 
-        ICONDIR* icon_dir = (ICONDIR*)ico_data;
+        icon_dir = (ICONDIR*)ico_data;
         icon_dir->idReserved = 0;
         icon_dir->idType = 1;
         icon_dir->idCount = 1;
 
-        ICONDIRENTRY* entry = (ICONDIRENTRY*)(ico_data + sizeof(ICONDIR));
+        entry = (ICONDIRENTRY*)(ico_data + sizeof(ICONDIR));
         entry->bWidth = 0;
         entry->bHeight = 0;
         entry->bColorCount = 0;
@@ -682,8 +704,7 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
 
         memcpy(ico_data + header_size, png_data, size);
         free(png_data);
-
-        HICON hIcon = CreateIconFromResourceEx(
+        hIcon = CreateIconFromResourceEx(
             ico_data + entry->dwImageOffset,
             entry->dwBytesInRes,
             pal_true,
@@ -698,8 +719,7 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
 
     // Fallback: decode image with stb_image (PNG in legacy mode, JPEG, BMP)
     fclose(file);
-    int width, height, channels;
-    uint8_t* rgba = stbi_load(image_path, &width, &height, &channels, 4);
+    rgba = stbi_load(image_path, &width, &height, &channels, 4);
     if (!rgba)
         return NULL;
 
@@ -715,7 +735,6 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
         rgba[i * 4 + 3] = a;
     }
 
-    BITMAPV5HEADER bi = {0};
     bi.bV5Size = sizeof(BITMAPV5HEADER);
     bi.bV5Width = width;
     bi.bV5Height = -height;
@@ -727,9 +746,7 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     bi.bV5BlueMask = 0x000000FF;
     bi.bV5AlphaMask = 0xFF000000;
 
-    void* dib_pixels = NULL;
-    HDC hdc = GetDC(NULL);
-    HBITMAP color_bitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &dib_pixels, NULL, 0);
+    color_bitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &dib_pixels, NULL, 0);
     ReleaseDC(NULL, hdc);
 
     if (!color_bitmap || !dib_pixels) {
@@ -739,15 +756,13 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
 
     memcpy(dib_pixels, rgba, width * height * 4);
     stbi_image_free(rgba);
+    mask_bitmap = CreateBitmap(width, height, 1, 1, NULL);
 
-    HBITMAP mask_bitmap = CreateBitmap(width, height, 1, 1, NULL);
-
-    ICONINFO ii = {0};
     ii.fIcon = pal_true;
     ii.hbmMask = mask_bitmap;
     ii.hbmColor = color_bitmap;
 
-    HICON hIcon = CreateIconIndirect(&ii);
+    hIcon = CreateIconIndirect(&ii);
 
     DeleteObject(color_bitmap);
     DeleteObject(mask_bitmap);
@@ -805,9 +820,6 @@ void win32_handle_raw_input(HRAWINPUT raw_input) {
 }
 
 void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
-}
-
-static void win32_update_xinput() {
 }
 
 // --- pal_get_gamepad_count ---
@@ -1007,14 +1019,16 @@ PALAPI pal_bool pal_close_window(pal_window* window) {
 #define MAX_MICE 16
 #define MAX_KEYBOARDS 16
 #define MAX_KEYS 256
+#define MAX_SCANCODES 512
 #define MAX_MOUSE_BUTTONS 8
 
 typedef struct {
     HANDLE handles[MAX_KEYBOARDS];
     char names[MAX_KEYBOARDS][256];
     int count;
-    unsigned char keys[MAX_KEYBOARDS][MAX_KEYS];
-    unsigned char keys_toggled[MAX_KEYBOARDS][MAX_KEYS];
+    unsigned char keys[MAX_KEYBOARDS][MAX_SCANCODES];
+    unsigned char keys_toggled[MAX_KEYBOARDS][MAX_SCANCODES];
+    int cached_modifiers[MAX_KEYBOARDS];
 } pal_keyboard_state;
 
 typedef struct {
@@ -1031,7 +1045,6 @@ typedef struct {
 static pal_keyboard_state g_keyboards = {0};
 static pal_mouse_state g_mice = {0};
 static uint32_t g_cached_mouse_buttons = 0;
-static int g_cached_modifiers = PAL_MOD_NONE;
 
 void win32_enumerate_keyboards(void) {
     UINT numDevices;
@@ -1055,8 +1068,8 @@ void win32_enumerate_keyboards(void) {
             }
 
             // Initialize state arrays for this keyboard
-            memset(g_keyboards.keys[idx], 0, MAX_KEYS);
-            memset(g_keyboards.keys_toggled[idx], 0, MAX_KEYS);
+            memset(g_keyboards.keys[idx], 0, MAX_SCANCODES);
+            memset(g_keyboards.keys_toggled[idx], 0, MAX_SCANCODES);
 
             g_keyboards.count++;
         }
@@ -1100,8 +1113,7 @@ void win32_enumerate_mice(void) {
     free(deviceList);
 }
 
-// Function to update modifier state based on raw input
-static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
+static void update_modifier_state(USHORT vk, pal_bool is_key_released, int keyboard_index) {
     int modifier_flag = 0;
 
     switch (vk) {
@@ -1123,9 +1135,9 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
         case VK_RMENU:
             modifier_flag = PAL_MOD_RALT;
             if (is_key_released) {
-                g_cached_modifiers &= ~PAL_MOD_ALTGR;
+                g_keyboards.cached_modifiers[keyboard_index] &= ~PAL_MOD_ALTGR;
             } else {
-                g_cached_modifiers |= PAL_MOD_ALTGR;
+                g_keyboards.cached_modifiers[keyboard_index] |= PAL_MOD_ALTGR;
             }
             break;
         case VK_LWIN:
@@ -1136,17 +1148,17 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
             break;
         case VK_CAPITAL:
             if (!is_key_released) {
-                g_cached_modifiers ^= PAL_MOD_CAPS;
+                g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_CAPS;
             }
             return;
         case VK_NUMLOCK:
             if (!is_key_released) {
-                g_cached_modifiers ^= PAL_MOD_NUM;
+                g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_NUM;
             }
             return;
         case VK_SCROLL:
             if (!is_key_released) {
-                g_cached_modifiers ^= PAL_MOD_SCROLL;
+                g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_SCROLL;
             }
             return;
         default:
@@ -1154,9 +1166,9 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released) {
     }
 
     if (is_key_released) {
-        g_cached_modifiers &= ~modifier_flag;
+        g_keyboards.cached_modifiers[keyboard_index] &= ~modifier_flag;
     } else {
-        g_cached_modifiers |= modifier_flag;
+        g_keyboards.cached_modifiers[keyboard_index] |= modifier_flag;
     }
 }
 
@@ -1187,7 +1199,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         key_is_down[kb_index][vk] = !is_key_released;
     }
 
-    update_modifier_state(vk, is_key_released);
+    update_modifier_state(vk, is_key_released, keyboard_index);
 
     int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
     int pal_scancode = 0;
@@ -1205,11 +1217,12 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             .scancode = pal_scancode,
             .pressed = 0,
             .repeat = 0,
-            .modifiers = g_cached_modifiers,
-            .keyboard_id = kb_index};
+            .modifiers = g_keyboards.cached_modifiers[kb_index],
+            .keyboard_id = kb_index
+        };
 
-        g_keyboards.keys[kb_index][pal_key] = 0;
-        g_keyboards.keys_toggled[kb_index][pal_key] = 0;
+        g_keyboards.keys[kb_index][pal_scancode] = 0;
+        g_keyboards.keys_toggled[kb_index][pal_scancode] = 0;
     } else {
         event.type = PAL_EVENT_KEY_DOWN;
         event.key = (pal_keyboard_event){
@@ -1217,17 +1230,17 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             .scancode = pal_scancode,
             .pressed = 1,
             .repeat = is_repeat,
-            .modifiers = g_cached_modifiers,
-            .keyboard_id = kb_index};
+            .modifiers = g_keyboards.cached_modifiers[kb_index],
+            .keyboard_id = kb_index
+        };
 
-        unsigned char old_state = g_keyboards.keys[kb_index][pal_key];
-        g_keyboards.keys[kb_index][pal_key] = 1;
+        unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
+        g_keyboards.keys[kb_index][pal_scancode] = 1;
 
         if (old_state != 1) {
-            g_keyboards.keys_toggled[kb_index][pal_key] = 1;
+            g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
         }
     }
-
     pal__eventq_push(&g_event_queue, event);
 }
 
@@ -1263,7 +1276,8 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             .delta_x = dx,
             .delta_y = dy,
             .buttons = g_cached_mouse_buttons,
-            .mouse_id = mouse_index};
+            .mouse_id = mouse_index
+        };
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -1315,13 +1329,17 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             
             g_cached_mouse_buttons |= (1 << i);
 
+            int cached_modifers = 0;
+            for(int i =0; i < g_keyboards.count; i++) {
+                cached_modifiers |= g_keyboards.cached_modifiers[i];
+            }
             event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
             event.button = (pal_mouse_button_event){
                 .x = point.x,
                 .y = point.y,
                 .pressed = 1,
                 .clicks = 1,
-                .modifiers = g_cached_modifiers,
+                .modifiers = cached_modifiers,
                 .button = pal_button,
                 .mouse_id = mouse_index};
             pal__eventq_push(&g_event_queue, event);
@@ -1336,7 +1354,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 .y = point.y,
                 .pressed = 0,
                 .clicks = 1,
-                .modifiers = g_cached_modifiers,
+                .modifiers = cached_modifiers,
                 .button = pal_button,
                 .mouse_id = mouse_index};
             pal__eventq_push(&g_event_queue, event);
@@ -1356,58 +1374,65 @@ void win32_clear_input_toggles(void) {
         g_mice.wheel[i] = 0;
     }
 }
+
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     pal_window* window = g_current_window;
     pal_event event = {0};
-    switch (msg) {
+    WINDOWPOS* pos;
+    HDROP hDrop;
+    UINT count;
+    RECT rect;
+    POINT tl;
+    POINT br;
+    const char** paths;
+    WCHAR buffer[MAX_PATH];
+    int len;
+    char* utf8;
+
+     switch (msg) {
         case WM_CLOSE:
             event.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
-            event.window = (pal_window_event){
-                .x = LOWORD(lparam),
-                .y = HIWORD(lparam),
-                .width = 0,
-                .height = 0,
-                .focused = 1,
-                .visible = 0};
+            event.window.x = LOWORD(lparam);
+            event.window.y = HIWORD(lparam);
+            event.window.width = 0;
+            event.window.height = 0;
+            event.window.focused = 1;
+            event.window.visible = 0;
             break;
         case WM_DESTROY:
             event.type = PAL_EVENT_WINDOW_CLOSED;
-            event.window = (pal_window_event){
-                .x = LOWORD(lparam),
-                .y = HIWORD(lparam),
-                .width = 0,
-                .height = 0,
-                .focused = 0,
-                .visible = 0};
+            event.window.x = LOWORD(lparam);
+            event.window.y = HIWORD(lparam);
+            event.window.width = 0;
+            event.window.height = 0;
+            event.window.focused = 0;
+            event.window.visible = 0;
             break;
         case WM_QUIT: // we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing.
             event.type = PAL_EVENT_QUIT;
-            event.quit = (pal_quit_event){.code = 0};
+            event.quit.code = 0;
             break;
         case WM_MOVE:
             event.type = PAL_EVENT_WINDOW_MOVED;
-            event.window = (pal_window_event){
-                .x = LOWORD(lparam),
-                .y = HIWORD(lparam),
-                .width = 0,
-                .height = 0,
-                .focused = 1,
-                .visible = 1};
+            event.window.x = LOWORD(lparam);
+            event.window.y = HIWORD(lparam);
+            event.window.width = 0;
+            event.window.height = 0;
+            event.window.focused = 1;
+            event.window.visible = 1;
             break;
         case WM_SIZE:
             event.type = PAL_EVENT_WINDOW_RESIZED;
-            event.window = (pal_window_event){
-                .event_code = WM_SIZE,
-                .x = 0,
-                .y = 0,
-                .width = LOWORD(lparam),
-                .height = HIWORD(lparam),
-                .focused = 1,
-                .visible = 1};
+            event.window.event_code = WM_SIZE;
+            event.window.x = 0;
+            event.window.y = 0;
+            event.window.width = LOWORD(lparam);
+            event.window.height = HIWORD(lparam);
+            event.window.focused = 1;
+            event.window.visible = 1;
             break;
 
         case WM_MOUSEMOVE: {
-
             if (window->confine_mouse) {
                 TRACKMOUSEEVENT tme = {
                     .cbSize = sizeof(tme),
@@ -1415,10 +1440,9 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     .hwndTrack = window->hwnd,
                     .dwHoverTime = HOVER_DEFAULT};
                 TrackMouseEvent(&tme);
-                RECT rect;
                 GetClientRect(window->hwnd, &rect);
-                POINT tl = {rect.left, rect.top};
-                POINT br = {rect.right, rect.bottom};
+                tl = {rect.left, rect.top};
+                br = {rect.right, rect.bottom};
                 ClientToScreen(window->hwnd, &tl);
                 ClientToScreen(window->hwnd, &br);
                 rect.left = tl.x;
@@ -1429,11 +1453,9 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             }
             // Mouse just entered the window
             event.type = PAL_EVENT_MOUSE_MOTION;
-            event.motion = (pal_mouse_motion_event){
-                .x = GET_X_LPARAM(lparam),
-                .y = GET_Y_LPARAM(lparam),
-                .buttons = (uint32_t)wparam};
-
+            event.motion.x = GET_X_LPARAM(lparam);
+            event.motion.y = GET_Y_LPARAM(lparam);
+            event.motion.buttons = (uint32_t)wparam};
         } break;
 
         case WM_MOUSELEAVE:
@@ -1442,58 +1464,52 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
+            pos = (WINDOWPOS*)lparam;
             event.type = PAL_EVENT_WINDOW_MOVED;
-            WINDOWPOS* pos = (WINDOWPOS*)lparam;
-            event.window = (pal_window_event){
-                .event_code = msg,
-                .x = pos->x,
-                .y = pos->y,
-                .width = pos->cx,
-                .height = pos->cy,
-                .focused = 1, // This is wrong, fix.
-                .visible = 1};
+            event.window.event_code = msg;
+            event.window.x = pos->x;
+            event.window.y = pos->y;
+            event.window.width = pos->cx;
+            event.window.height = pos->cy;
+            event.window.focused = 1; // This is wrong; fixevent.window.
+            event.window.visible = 1;
             break;
 
         case WM_INPUT: {
-
             win32_handle_raw_input((HRAWINPUT)lparam);
             event.type = PAL_EVENT_SENSOR_UPDATE;
-            event.sensor = (pal_sensor_event){
-                .device_id = 0,
-                .x = 0,
-                .y = 0,
-                .z = 0,
-                .sensor_type = 0};
+            event.sensor.device_id = 0;
+            event.sensor.x = 0;
+            event.sensor.y = 0;
+            event.sensor.z = 0;
+            event.sensor.sensor_type = 0;
         }; break;
 
         case WM_DROPFILES: {
-            event.type = PAL_EVENT_DROP_FILE;
-            HDROP hDrop = (HDROP)wparam;
-            UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
-            const char** paths = malloc(sizeof(char*) * count);
+            hDrop = (HDROP)wparam;
+            count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+            paths = malloc(sizeof(char*) * count);
             for (UINT i = 0; i < count; ++i) {
-                WCHAR buffer[MAX_PATH];
                 DragQueryFileW(hDrop, i, buffer, MAX_PATH);
-                int len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
-                char* utf8 = malloc(len);
+                len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
+                utf8 = malloc(len);
                 WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
                 paths[i] = utf8;
             }
-            event.drop = (pal_drop_event){
-                .paths = paths,
-                .count = count};
+            event.type = PAL_EVENT_DROP_FILE;
+            event.drop.paths = paths;
+            event.drop.count = count;
             DragFinish(hDrop);
             break;
         }
 
         case WM_ACTIVATEAPP: {
-            event.window = (pal_window_event){
-                .event_code = WM_MOVE,
-                .x = LOWORD(lparam),
-                .y = HIWORD(lparam),
-                .width = 0,
-                .height = 0,
-                .visible = 1};
+            event.window.event_code = WM_MOVE;
+            event.window.x = LOWORD(lparam);
+            event.window.y = HIWORD(lparam);
+            event.window.width = 0;
+            event.window.height = 0;
+            event.window.visible = 1;
             if ((BOOL)wparam == FALSE) {
                 event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
                 event.window.focused = 0;
@@ -1810,7 +1826,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
 	SetFocus(final_window->hwnd);
 	// save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen.
 	// The fullscreen function is supposed to save this state whenever the user calls it,
-	// but if the user doesn't, the pal_make__window_windowed() function uses a state that's all zeroes,
+	// but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes,
 	// so we have to save it here. - Abdelrahman june 13, 2024
 	final_window->windowedStyle = GetWindowLongA(final_window->hwnd, GWL_STYLE); // style of the final_window.
 	return final_window;
@@ -1818,32 +1834,35 @@ PALAPI pal_window* pal_create_window(int width, int height, const char* window_t
 
 PALAPI void pal_close_window(pal_window *window)
 {
+    pal_event event = {0};
     if (!window || !window->hwnd)
         return;
 
     DestroyWindow(window->hwnd);
     window->hwnd = NULL;
-    pal_event event = {0};
     event.type = PAL_EVENT_WINDOW_CLOSED;
     pal__eventq_push(&g_event_queue, event);
 }
 
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     RECT rect;
+    HDC hdc;
+    int dpi_x, dpi_y;
+    float scale_x, scale_y;
     GetClientRect(window->hwnd, &rect);
 
-    HDC hdc = GetDC(window->hwnd);
-    int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
-    int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+    hdc = GetDC(window->hwnd);
+    dpi_x = GetDeviceCaps(hdc, LOGPIXELSX);
+    dpi_y = GetDeviceCaps(hdc, LOGPIXELSY);
     ReleaseDC(window->hwnd, hdc);
 
     // Convert logical pixels to physical pixels
-    float scaleX = dpiX / 96.0f;
-    float scaleY = dpiY / 96.0f;
+    float scale_x = dpi_x / 96.0f;
+    float scale_y = dpi_y / 96.0f;
 
     pal_ivec2 border_size;
-    border_size.x = (int)((rect.right - rect.left) * scaleX);
-    border_size.y = (int)((rect.bottom - rect.top) * scaleY);
+    border_size.x = (int)((rect.right - rect.left) * scale_x);
+    border_size.y = (int)((rect.bottom - rect.top) * scale_y);
     return border_size;
 }
 
@@ -1888,6 +1907,8 @@ static int win32_get_raw_input_buffer(void);
 PALAPI void pal__reset_mouse_deltas(void);
 PALAPI pal_bool pal_poll_events(pal_event* event) {
     MSG msg = {0};
+    pal_event_queue* queue = &g_event_queue;
+
     if (!g_message_pump_drained) {
         pal__reset_mouse_deltas();
         win32_get_raw_input_buffer();
@@ -1897,8 +1918,6 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
         }
         g_message_pump_drained = pal_true;
     }
-
-    pal_event_queue* queue = &g_event_queue;
 
     if (queue->size) { // if queue is not empty,
 
@@ -1929,13 +1948,16 @@ PALAPI pal_monitor* pal_get_primary_monitor(void) {
 
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     MONITORINFOEX mi = {.cbSize = sizeof(MONITORINFOEX)};
+    DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
+    pal_video_mode* mode;
+
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
 
-    DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
     if (!EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
         return 0;
-    pal_video_mode* mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
+
+    mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
     mode->width = dm.dmPelsWidth;
     mode->height = dm.dmPelsHeight;
     mode->refresh_rate = dm.dmDisplayFrequency;
@@ -1967,8 +1989,8 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
 
 PALAPI void* pal_gl_get_proc_address(const char* proc) {
     static HMODULE opengl_module = NULL; // Cached across all calls
-
     void* p = (void*)wglGetProcAddress(proc);
+
     if (p == NULL || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
         // Load opengl32.dll once on first call, reuse handle afterwards
         if (opengl_module == NULL) {
@@ -1995,15 +2017,16 @@ PALAPI void pal_swap_interval(int interval) {
 // Handler function signatures
 typedef void (*RawInputHandler)(const RAWINPUT*);
 
-// Helper struct to hold reusable buffers
 PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
     POINT cursor_pos = {0};
+    pal_vec2 returned_pos = {0};
+
     GetCursorPos(&cursor_pos);
 
     ScreenToClient(window->hwnd, &cursor_pos); // Convert to client-area coordinates
-    return (pal_vec2){
-        (float)cursor_pos.x,
-        (float)cursor_pos.y};
+    returned_pos.x = cursor_pos.x;
+    returned_pos.x = cursor_pos.y;
+    return returned_pos;
 }
 
 // Handles Gamepads, Joysticks, Steering wheels, etc...
@@ -2014,7 +2037,8 @@ void win32_handle_hid(const RAWINPUT* raw) {
 RawInputHandler Win32InputHandlers[3] = {
     win32_handle_mouse,
     win32_handle_keyboard,
-    win32_handle_hid};
+    win32_handle_hid
+};
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
@@ -2023,10 +2047,11 @@ static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
 static int win32_get_raw_input_buffer(void) {
     UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
     UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &bufferSize, sizeof(RAWINPUTHEADER));
-
     PRAWINPUT raw = (PRAWINPUT)g_raw_input_buffer;
+    UINT type = 0;
+
     for (UINT i = 0; i < inputEventCount; ++i) {
-        UINT type = raw->header.dwType;
+        type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
             win32_handle_mouse(raw);
         } else if (type == RIM_TYPEKEYBOARD) {
@@ -2063,18 +2088,23 @@ static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
 
 PALAPI pal_bool pal_does_file_exist(const char* file_path) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    DWORD attrs;
+
     if (!wide_path) return 0;
     
-    DWORD attrs = GetFileAttributesW(wide_path);
+    attrs = GetFileAttributesW(wide_path);
     free(wide_path);
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 PALAPI size_t pal_get_file_size(const char* file_path) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    HANDLE file = NULL;
+    LARGE_INTEGER file_size;
+
     if (!wide_path) return 0;
     
-    HANDLE file = CreateFileW(
+    file = CreateFileW(
         wide_path,
         GENERIC_READ,
         FILE_SHARE_READ,
@@ -2089,7 +2119,6 @@ PALAPI size_t pal_get_file_size(const char* file_path) {
         return 0;
     }
 
-    LARGE_INTEGER file_size;
     if (GetFileSizeEx(file, &file_size)) {
         CloseHandle(file);
         return file_size.QuadPart;
@@ -2100,9 +2129,10 @@ PALAPI size_t pal_get_file_size(const char* file_path) {
 
 PALAPI size_t pal_get_last_write_time(const char* file) {
     wchar_t* wide_path = win32_utf8_to_utf16(file);
+    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+
     if (!wide_path) return 0;
     
-    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExW(wide_path, GetFileExInfoStandard, &fileInfo)) {
         free(wide_path);
         return 0;
@@ -2114,9 +2144,10 @@ PALAPI size_t pal_get_last_write_time(const char* file) {
 
 PALAPI size_t pal_get_last_read_time(const char* file) {
     wchar_t* wide_path = win32_utf8_to_utf16(file);
+    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+
     if (!wide_path) return 0;
     
-    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExW(wide_path, GetFileExInfoStandard, &fileInfo)) {
         free(wide_path);
         return 0;
@@ -2127,18 +2158,28 @@ PALAPI size_t pal_get_last_read_time(const char* file) {
 }
 
 PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
+    wchar_t* wide_path = NULL;
+    uint32_t permissions = 0;
+    PACL pDacl = NULL;
+    PSECURITY_DESCRIPTOR pSD = NULL;
+    DWORD dwRes = 0;
+    HANDLE hToken = NULL;
+    GENERIC_MAPPING mapping = {0};
+
+    PRIVILEGE_SET privileges = {0};
+    DWORD privSize = sizeof(privileges);
+    BOOL accessStatus = FALSE;
+    ACCESS_MASK accessRights = 0;
+
     if (!file_path) {
         return 0;
     }
 
-    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    wide_path = win32_utf8_to_utf16(file_path);
     if (!wide_path) return 0;
 
-    uint32_t permissions = 0;
 
-    PACL pDacl = NULL;
-    PSECURITY_DESCRIPTOR pSD = NULL;
-    DWORD dwRes = GetNamedSecurityInfoW(
+    dwRes = GetNamedSecurityInfoW(
         wide_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
@@ -2156,23 +2197,16 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
         return 0;
     }
 
-    HANDLE hToken;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
         LocalFree(pSD);
         return 0;
     }
 
-    GENERIC_MAPPING mapping = {0};
     mapping.GenericRead = FILE_GENERIC_READ;
     mapping.GenericWrite = FILE_GENERIC_WRITE;
     mapping.GenericExecute = FILE_GENERIC_EXECUTE;
     mapping.GenericAll = FILE_ALL_ACCESS;
 
-    PRIVILEGE_SET privileges = {0};
-    DWORD privSize = sizeof(privileges);
-    BOOL accessStatus = FALSE;
-
-    ACCESS_MASK accessRights = 0;
     dwRes = GetEffectiveRightsFromAclA(pDacl, NULL, &accessRights);
 
     if (dwRes == ERROR_SUCCESS) {
@@ -2191,14 +2225,23 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
 }
 
 PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t permission_flags) {
+    wchar_t* wide_path = NULL;
+    DWORD dwAccessRights = 0;
+    HANDLE hToken;
+    DWORD dwSize = 0;
+    PTOKEN_USER pTokenUser = NULL;
+    EXPLICIT_ACCESS_W ea = {0};
+    PACL pOldDACL = NULL, pNewDACL = NULL;
+    PSECURITY_DESCRIPTOR pSD = NULL;
+    DWORD dwRes;
+
     if (!file_path) {
         return 0;
     }
 
-    wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    wide_path = win32_utf8_to_utf16(file_path);
     if (!wide_path) return 0;
 
-    DWORD dwAccessRights = 0;
     if (permission_flags & PAL_READ)
         dwAccessRights |= GENERIC_READ;
     if (permission_flags & PAL_WRITE)
@@ -2211,13 +2254,11 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
         return 0;
     }
 
-    HANDLE hToken;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
         free(wide_path);
         return 0;
     }
 
-    DWORD dwSize = 0;
     GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
     if (dwSize == 0) {
         CloseHandle(hToken);
@@ -2225,7 +2266,7 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
         return 0;
     }
 
-    PTOKEN_USER pTokenUser = (PTOKEN_USER)malloc(dwSize);
+    pTokenUser = (PTOKEN_USER)malloc(dwSize);
     if (!pTokenUser) {
         CloseHandle(hToken);
         free(wide_path);
@@ -2241,7 +2282,6 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
 
     CloseHandle(hToken);
 
-    EXPLICIT_ACCESS_W ea = {0};
     ea.grfAccessPermissions = dwAccessRights;
     ea.grfAccessMode = SET_ACCESS;
     ea.grfInheritance = NO_INHERITANCE;
@@ -2249,10 +2289,8 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
     ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
     ea.Trustee.ptstrName = (LPWSTR)pTokenUser->User.Sid;
 
-    PACL pOldDACL = NULL, pNewDACL = NULL;
-    PSECURITY_DESCRIPTOR pSD = NULL;
 
-    DWORD dwRes = GetNamedSecurityInfoW(
+    dwRes = GetNamedSecurityInfoW(
         wide_path,
         SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION,
@@ -2295,9 +2333,15 @@ PALAPI pal_bool pal_change_file_permissions(const char* file_path, uint32_t perm
 
 PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    HANDLE file = NULL;
+    LARGE_INTEGER file_size;
+    size_t total_size = 0;
+    char *buffer = NULL;
+    size_t total_read = 0;
+
     if (!wide_path) return NULL;
     
-    HANDLE file = CreateFileW(
+    file = CreateFileW(
         wide_path,
         GENERIC_READ,
         FILE_SHARE_READ,
@@ -2313,7 +2357,6 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
         return NULL;
     }
 
-    LARGE_INTEGER file_size;
     if (!GetFileSizeEx(file, &file_size)) {
         CloseHandle(file);
         return NULL;
@@ -2324,14 +2367,13 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
         return NULL;
     }
 
-    size_t total_size = (size_t)file_size.QuadPart;
-    char *buffer = (char *)malloc(total_size + 1);
+    total_size = (size_t)file_size.QuadPart;
+    buffer = (char *)malloc(total_size + 1);
     if (!buffer) {
         CloseHandle(file);
         return NULL;
     }
 
-    size_t total_read = 0;
     while (total_read < total_size) {
         DWORD chunk = (DWORD)((total_size - total_read > MAXDWORD) ? MAXDWORD : (total_size - total_read));
         DWORD read_now = 0;
@@ -2357,9 +2399,15 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 
 PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* buffer) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    HANDLE file;
+    size_t remaining = 0;
+    char* current_pos = NULL;
+    DWORD chunk = 0;
+    DWORD bytes_written = 0;
+
     if (!wide_path) return 1;
     
-    HANDLE file = CreateFileW(
+    file = CreateFileW(
         wide_path,
         GENERIC_WRITE,
         0,
@@ -2374,12 +2422,11 @@ PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* bu
         return 1;
     }
 
-    size_t remaining = file_size;
-    const char* current_pos = buffer;
+    remaining = file_size;
+    current_pos = buffer;
 
     while (remaining > 0) {
-        DWORD chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
-        DWORD bytes_written = 0;
+        chunk = (remaining > MAXDWORD) ? MAXDWORD : (DWORD)remaining;
 
         if (!WriteFile(file, current_pos, chunk, &bytes_written, NULL) ||
             bytes_written != chunk) {
@@ -2398,14 +2445,15 @@ PALAPI pal_bool pal_write_file(const char* file_path, size_t file_size, char* bu
 PALAPI pal_bool pal_copy_file(const char* original_path, const char* copy_path) {
     wchar_t* wide_original = win32_utf8_to_utf16(original_path);
     wchar_t* wide_copy = win32_utf8_to_utf16(copy_path);
-    
+    BOOL result;
+
     if (!wide_original || !wide_copy) {
         if (wide_original) free(wide_original);
         if (wide_copy) free(wide_copy);
         return 1;
     }
     
-    BOOL result = CopyFileW(wide_original, wide_copy, FALSE);
+    result = CopyFileW(wide_original, wide_copy, FALSE);
     
     free(wide_original);
     free(wide_copy);
@@ -2415,9 +2463,10 @@ PALAPI pal_bool pal_copy_file(const char* original_path, const char* copy_path) 
 
 PALAPI pal_file* pal_open_file(const char* file_path) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
+    pal_file* file = NULL;
+
     if (!wide_path) return NULL;
     
-    pal_file* file = NULL;
     if (!file) {
         free(wide_path);
         return NULL;
@@ -2444,27 +2493,29 @@ PALAPI pal_file* pal_open_file(const char* file_path) {
 }
 
 PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t bytes_to_read, char* buffer) {
+    LARGE_INTEGER file_offset = {0};
+    size_t total_read = 0;
+    DWORD to_read = 0;
+    DWORD bytesRead = 0;
+    BOOL success = 0;
+
     if (!file || file == INVALID_HANDLE_VALUE || !buffer) {
         return 0;
     }
 
-    LARGE_INTEGER file_offset = {0};
     file_offset.QuadPart = (LONGLONG)offset;
 
     if (!SetFilePointerEx(file, file_offset, NULL, FILE_BEGIN)) {
         return 0;
     }
 
-    size_t total_read = 0;
-    DWORD to_read;
     while (total_read < bytes_to_read) {
         if ((DWORD)((bytes_to_read - total_read) > MAXDWORD)) {
             to_read = MAXDWORD;
         } else {
             to_read = (DWORD)(bytes_to_read - total_read);
         }
-        DWORD bytesRead = 0;
-        BOOL success = ReadFile(file, buffer + total_read, to_read, &bytesRead, NULL);
+        success = ReadFile(file, buffer + total_read, to_read, &bytesRead, NULL);
         if (!success || bytesRead != to_read) {
             return 0;
         }
@@ -2489,9 +2540,11 @@ PALAPI pal_bool pal_close_file(pal_file* file) {
 //----------------------------------------------------------------------------------
 PALAPI pal_bool pal_path_is_dir(const char *path) {
     wchar_t* wide_path = win32_utf8_to_utf16(path);
+    pal_bool is_dir = pal_false;
+
     if (!wide_path) return 1;
 
-    pal_bool is_dir = PathIsDirectoryW(wide_path) ? pal_true : pal_false;
+    is_dir = PathIsDirectoryW(wide_path) ? pal_true : pal_false;
 
     free(wide_path);
 
@@ -2559,9 +2612,12 @@ static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds)
 
 static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
     size_t bytes_read = 0;
+    size_t remaining = 0;
+    size_t to_read = 0;
+    size_t seek_pos = 0;
 
     if (sound->source_file) {
-        size_t remaining = sound->total_data_size - sound->bytes_streamed;
+        remaining = sound->total_data_size - sound->bytes_streamed;
 
         if (remaining == 0) {
             printf("WAV: No remaining data\n");
@@ -2573,8 +2629,8 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
             return 0;
         }
 
-        size_t to_read = (buffer_size < remaining) ? buffer_size : remaining;
-        size_t seek_pos = sound->data_offset + sound->bytes_streamed;
+        to_read = (buffer_size < remaining) ? buffer_size : remaining;
+        seek_pos = sound->data_offset + sound->bytes_streamed;
 
         printf("WAV: Seeking to %zu (data_offset=%zu + bytes_streamed=%zu), reading %zu bytes\n",
                seek_pos,
@@ -2693,8 +2749,9 @@ static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t bu
 static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
-
     static int buffer_end_count = 0;
+    XAUDIO2_VOICE_STATE state;
+
     printf("OnBufferEnd %d: buffer=%p\n", buffer_end_count++, pBufferContext);
 
     // Free the buffer that just finished playing
@@ -2708,7 +2765,6 @@ static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void*
     }
 
     // Check how many buffers are queued
-    XAUDIO2_VOICE_STATE state;
     sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
 
     // If we have fewer than 2 buffers queued, queue another one
@@ -2750,16 +2806,16 @@ static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* ca
     // OnBufferEnd now handles buffer queuing, so this can be much simpler
     StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
     pal_sound* sound = cb->sound;
+    XAUDIO2_VOICE_STATE state;
+    static int callback_count = 0;
 
     if (!sound->is_streaming || sound->stream_finished) {
         return;
     }
 
     // Just log state for debugging
-    XAUDIO2_VOICE_STATE state;
     sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
 
-    static int callback_count = 0;
     if (callback_count % 100 == 0) { // Log less frequently
         printf("ProcessingPass %d: BuffersQueued=%u, SamplesPlayed=%llu\n",
                callback_count,
@@ -2826,6 +2882,8 @@ static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
 };
 
 PALAPI int pal_play_music(pal_sound* sound, float volume) {
+    XAUDIO2_BUFFER buffer = {0};
+
     if (!g_xaudio2 || !g_mastering_voice) {
         printf("ERROR: XAudio2 not initialized\n");
         return E_FAIL;
@@ -2839,7 +2897,6 @@ PALAPI int pal_play_music(pal_sound* sound, float volume) {
     sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
 
     // Submit initial buffer (the preloaded data)
-    XAUDIO2_BUFFER buffer = {0};
     buffer.AudioBytes = (UINT32)sound->data_size;
     buffer.pAudioData = sound->data;
     buffer.pContext = NULL; // Don't free this buffer - it's owned by the sound object
@@ -2918,11 +2975,20 @@ PALAPI pal_sound* pal_load_sound(const char* filename) {
 
 pal_sound* win32_load_sound(const char* filename, float seconds) {
     FILE* file = fopen(filename, "rb");
+    char header[12];
+    int result = 0;
+
+    static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
+        0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
+
+    static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
+        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
+
+    WAVEFORMATEXTENSIBLE wfex = {0};
 
     if (!file)
         return NULL;
 
-    char header[12];
     if (fread(header, 1, sizeof(header), file) < 12) {
         fclose(file);
         return NULL;
@@ -2935,8 +3001,6 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
         return NULL;
     }
     *sound = (pal_sound){0};
-
-    int result = 0;
 
     if (memcmp(header, "RIFF", 4) == 0 && memcmp(header + 8, "WAVE", 4) == 0) {
         fclose(file);
@@ -2956,13 +3020,6 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
         return NULL;
     }
 
-    static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
-        0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
-
-    static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
-        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
-
-    WAVEFORMATEXTENSIBLE wfex = {0};
     wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
     wfex.Format.nChannels = sound->channels;
     wfex.Format.nSamplesPerSec = sound->sample_rate;
@@ -3262,31 +3319,37 @@ PALAPI pal_time pal_get_date_and_time_utc(void) {
 
 PALAPI pal_time pal_get_date_and_time_local(void) {
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-
     LARGE_INTEGER system_time = {0};
+    LARGE_INTEGER timezone_bias = {0};
+    uint64_t local_time_100ns = 0;
+    uint64_t total_days = 0;
+    uint64_t remaining_100ns = 0;
+    uint64_t days_since_1601 = 0;
+    uint32_t days_in_months[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    uint32_t days_in_year = 365;
+    uint64_t total_seconds = 0;
+    uint32_t year = 0, month = 1, day = 0, hours = 0, minutes = 0, seconds = 0;
+
     do {
         system_time.HighPart = kuser->SystemTime.High1Time;
         system_time.LowPart = kuser->SystemTime.LowPart;
     } while (system_time.HighPart != kuser->SystemTime.High2Time);
 
-    LARGE_INTEGER timezone_bias = {0};
     do {
         timezone_bias.HighPart = kuser->TimeZoneBias.High1Time;
         timezone_bias.LowPart = kuser->TimeZoneBias.LowPart;
     } while (timezone_bias.HighPart != kuser->TimeZoneBias.High2Time);
 
-    uint64_t local_time_100ns = system_time.QuadPart - timezone_bias.QuadPart;
+    local_time_100ns = system_time.QuadPart - timezone_bias.QuadPart;
 
-    uint64_t total_days = local_time_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
-    uint64_t remaining_100ns = local_time_100ns % (10000000ULL * 60 * 60 * 24);
+    total_days = local_time_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
+    remaining_100ns = local_time_100ns % (10000000ULL * 60 * 60 * 24);
 
-    uint32_t year = 1601 + (uint32_t)(total_days / 365.25);
+    year = 1601 + (uint32_t)(total_days / 365.25);
 
-    uint64_t days_since_1601 = total_days;
+    days_since_1601 = total_days;
     year = 1601;
     while (1) {
-        uint32_t days_in_year = 365;
-
         if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
             days_in_year = 366;
         }
@@ -3297,25 +3360,23 @@ PALAPI pal_time pal_get_date_and_time_local(void) {
         year++;
     }
 
-    uint32_t days_in_months[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
     if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
         days_in_months[1] = 29;
     }
 
-    uint32_t month = 1;
     while (month <= 12 && days_since_1601 >= days_in_months[month - 1]) {
         days_since_1601 -= days_in_months[month - 1];
         month++;
     }
 
-    uint32_t day = (uint32_t)days_since_1601 + 1;
+    day = (uint32_t)days_since_1601 + 1;
 
-    uint64_t total_seconds = remaining_100ns / 10000000ULL;
-    uint32_t hours = (uint32_t)(total_seconds / 3600);
+    total_seconds = remaining_100ns / 10000000ULL;
+    hours = (uint32_t)(total_seconds / 3600);
     total_seconds %= 3600;
-    uint32_t minutes = (uint32_t)(total_seconds / 60);
-    uint32_t seconds = (uint32_t)(total_seconds % 60);
+    minutes = (uint32_t)(total_seconds / 60);
+    seconds = (uint32_t)(total_seconds % 60);
 
     pal_time result = {0};
     result.year = year;
@@ -3383,13 +3444,15 @@ void win32_init_timer(void) {
 
 PALAPI double pal_get_time_since_pal_started(void) {
     LARGE_INTEGER counter;
-    QueryPerformanceCounter(&counter);
-
-    uint64_t elapsed_ticks = counter.QuadPart - g_app_start_time;
-
-    // Get frequency from KUSER_SHARED_DATA (Windows 8+) or fall back to API
+    uint64_t elapsed_ticks = 0;
     PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
     uint64_t frequency = kuser->QpcFrequency;
+
+    QueryPerformanceCounter(&counter);
+
+    elapsed_ticks = counter.QuadPart - g_app_start_time;
+
+    // Get frequency from KUSER_SHARED_DATA (Windows 8+) or fall back to API
 
     // Fallback to API if frequency is 0 (older Windows versions)
     if (frequency == 0) {
@@ -3421,29 +3484,35 @@ PALAPI uint64_t pal_get_timer_frequency(void) {
 
     return frequency;
 }
+
 //----------------------------------------------------------------------------------
 // Clip Board Functions.
 //----------------------------------------------------------------------------------
 
 PALAPI char* pal_clipboard_get(void) {
+    HANDLE hData;
+    wchar_t* wtext = NULL;
+    int size_needed = 0;
+    char* text = NULL;
+
     if (!OpenClipboard(NULL))
         return NULL;
 
-    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+    hData = GetClipboardData(CF_UNICODETEXT);
     if (!hData) {
         CloseClipboard();
         return NULL;
     }
 
-    wchar_t* wtext = GlobalLock(hData);
+    wtext = GlobalLock(hData);
     if (!wtext) {
         CloseClipboard();
         return NULL;
     }
 
     // Convert wide char text to UTF-8
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wtext, -1, NULL, 0, NULL, NULL);
-    char* text = (char*)malloc(size_needed);
+    size_needed = WideCharToMultiByte(CP_UTF8, 0, wtext, -1, NULL, 0, NULL, NULL);
+    text = (char*)malloc(size_needed);
     if (text)
         WideCharToMultiByte(CP_UTF8, 0, wtext, -1, text, size_needed, NULL, NULL);
 
@@ -3454,12 +3523,15 @@ PALAPI char* pal_clipboard_get(void) {
 }
 
 PALAPI void pal_clipboard_set(const char* text) {
+    size_t len = 0;
+    HGLOBAL hMem;
+
     if (text == NULL || *text == '\0')
         return;
 
     // Calculate the size of the text, including the null terminator
-    size_t len = strlen(text) + 1;
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
+    len = strlen(text) + 1;
+    hMem = GlobalAlloc(GMEM_MOVEABLE, len);
     if (!hMem)
         return;
 
@@ -3498,11 +3570,13 @@ void pal_mouse_warp_relative(int dx, int dy) {
 // Url Launch Function.
 //----------------------------------------------------------------------------------
 PALAPI void pal_url_launch(char* url) {
+    HINSTANCE result;
+
     if (!url || !*url)
         return;
 
     // ShellExecuteA automatically opens the URL with the default app (e.g., browser)
-    HINSTANCE result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+    result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 
     // Optional: check if it failed
     if ((INT_PTR)result <= 32) {
@@ -3530,12 +3604,14 @@ static PalRequester* win32_get_requester(void* id) {
 }
 
 static void win32_build_filter_string(char** types, uint32_t type_count, char* out, size_t out_size) {
+    const char* ext = types[i];
+    int written = 0;
+
     // Builds Windows filter string like: "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0"
     out[0] = '\0';
     size_t pos = 0;
     for (uint32_t i = 0; i < type_count; i++) {
-        const char* ext = types[i];
-        int written = snprintf(out + pos, out_size - pos, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
+        written = snprintf(out + pos, out_size - pos, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
         pos += written;
         if (pos >= out_size)
             break;
@@ -3546,13 +3622,14 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
 
 void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
+    OPENFILENAMEA ofn = {0};
+    char filter[512];
+    char path[MAX_PATH] = {0};
+
     if (!req)
         return;
 
-    OPENFILENAMEA ofn = {0};
-    char filter[512];
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
-    char path[MAX_PATH] = {0};
 
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = NULL;
@@ -3571,13 +3648,14 @@ void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
 
 void pal_create_load_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
+    OPENFILENAMEA ofn = {0};
+    char filter[512];
+    char path[MAX_PATH] = {0};
+
     if (!req)
         return;
 
-    OPENFILENAMEA ofn = {0};
-    char filter[512];
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
-    char path[MAX_PATH] = {0};
 
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = NULL;
@@ -3688,11 +3766,13 @@ DWORD WINAPI thread_wrapper(LPVOID param) {
 
 PALAPI pal_thread *pal_create_thread(pal_thread_func func, void *arg) {
     thread_wrapper_arg *wrapper = (thread_wrapper_arg *)HeapAlloc(GetProcessHeap(), 0, sizeof(thread_wrapper_arg));
+    HANDLE thread;
+
     if (!wrapper) return NULL;
     wrapper->func = func;
     wrapper->arg = arg;
 
-    HANDLE thread = CreateThread(NULL, 0, thread_wrapper, wrapper, CREATE_SUSPENDED, NULL);
+    thread = CreateThread(NULL, 0, thread_wrapper, wrapper, CREATE_SUSPENDED, NULL);
     return (pal_thread *)thread;
 }
 
