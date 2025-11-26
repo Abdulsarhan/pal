@@ -1,5 +1,5 @@
-﻿#ifndef WIN32_PLATFORM_H
-#define WIN32_PLATFORM_H
+﻿#ifndef PLATFORM_WIN32_H
+#define PLATFORM_WIN32_H
 
 #define _CRT_SECURE_NO_WARNINGS
 // Windows system headers
@@ -3827,4 +3827,4 @@ PALAPI void pal_shutdown(void) {
     pal__eventq_free(g_event_queue);
 }
 
-#endif // WIN32_PLATFORM_H
+#endif // PLATFORM_WIN32_H

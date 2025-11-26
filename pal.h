@@ -1337,7 +1337,7 @@ PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
 
 /* Video and Windowing subsystem. */
-PALAPI pal_window *pal_create_window(int width, int height, const char *windowTitle, uint64_t window_flags);
+PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t window_flags);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);

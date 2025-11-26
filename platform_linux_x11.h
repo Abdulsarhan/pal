@@ -1,5 +1,5 @@
-#ifndef LINUX_X11_PLATFORM_H
-#define LINUX_X11_PLATFORM_H
+#ifndef PLATFORM_LINUX_X11_H
+#define PLATFORM_LINUX_X11_H
 
 /* C standard lib */
 #include <stdio.h>
@@ -209,7 +209,9 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
     }
 
     if (queue->size) {
+        /* peek */
         *event = queue->events[queue->front];
+        /* dequeue */
         queue->front = (queue->front + 1) % queue->capacity;
         queue->size--;
         return 1;
@@ -277,6 +279,24 @@ int is_mouse(int fd) {
 }
 
 /* -------- Initialization -------- */
+
+Window g_dummy_window;
+
+void linux_x11_create_dummy_window() {
+    int screen = DefaultScreen(g_display);
+
+    g_dummy_window = XCreateSimpleWindow(
+        g_display,
+        RootWindow(g_display, screen),
+        0, 0, 1, 1, 0,
+        BlackPixel(g_display, screen),
+        BlackPixel(g_display, screen)
+    );
+
+    XMapWindow(g_display, g_dummy_window);
+    XFlush(g_display);
+}
+
 void linux_x11_init_raw_input() {
     /* Initialize X11 keyboard translation support */
     if (!g_display) {
@@ -291,10 +311,11 @@ void linux_x11_init_raw_input() {
         /* Set up input method for IME support (Chinese, Japanese, Korean, etc.) */
         g_xim = XOpenIM(g_display, NULL, NULL, NULL);
         if (g_xim) {
+            linux_x11_create_dummy_window();
             g_xic = XCreateIC(g_xim,
                 XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
-                XNClientWindow, window->window,
-                XNFocusWindow, window->window,
+                XNClientWindow, g_dummy_window,
+                XNFocusWindow, g_dummy_window,
                 NULL);
             if (!g_xic) {
                 fprintf(stderr, "Warning: Failed to create input context\n");
@@ -382,7 +403,7 @@ void linux_x11_cleanup_raw_input() {
 PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
     pal_vec2 mouse_pos;
 
-    if (!g_display || !window || !window->handle) {
+    if (!g_display || !window || !window->window) {
         mouse_pos.x = 0;
         mouse_pos.y = 0;
         return mouse_pos;
@@ -394,7 +415,7 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
 
     /* Query pointer position relative to the window */
     XQueryPointer(g_display,
-                  window->handle,
+                  window->window,
                   &root_return, &child_return,
                   &root_x, &root_y,
                   &win_x, &win_y,
@@ -1139,30 +1160,7 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
     return 0;
 }
 
-PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
-    pal_vec2 pos;
-    
-    if (!window) {
-        pos.x = 0.0f;
-        pos.y = 0.0f;
-        return pos;
-    }
-    
-    Window root_return, child_return;
-    int root_x, root_y, win_x, win_y;
-    unsigned int mask_return;
-    
-    XQueryPointer(g_display, window->window, 
-                  &root_return, &child_return,
-                  &root_x, &root_y, &win_x, &win_y,
-                  &mask_return);
-    
-    pos.x = (float)win_x;
-    pos.y = (float)win_y;
-    return pos;
-}
-
-PALAPI pal_window *pal_create_window(int width, int height, const char *title, uint64_t flags) {
+PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t flags) {
     pal_window *window = (pal_window*)malloc(sizeof(pal_window));
     if (!window) return NULL;
 
@@ -1249,7 +1247,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *title, u
         return NULL;
     }
 
-    XStoreName(g_display, window->window, title);
+    XStoreName(g_display, window->window, window_title);
 
     /* --- Optional: set class hints, WM protocols, etc. --- */
     XClassHint *class_hint = XAllocClassHint();
@@ -1761,4 +1759,4 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll) {
     }
     return (uint8_t)(result == 0);
 }
-#endif /* LINUX_X11_PLATFORM_H */
+#endif /* PLATFORM_LINUX_X11_H */

@@ -53,11 +53,18 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
 }
 
 #ifdef _WIN32
-#include "win32_platform.h"
+    #include "platform_win32.h"
 #elif __linux__
-#include "linux_x11_platform.h"
+
+#if defined(PLATFORM_LINUX_X11)
+    #include "platform_linux_x11.h"
+#elif defined(PLATFORM_LINUX_WAYLAND)
+    #include "platform_linux_wayland.h"
+#else
+    #include "platform_linux_x11.h"
 #endif
 
+#endif
 
 PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp) {
     return stbi_load(filename, x, y, comp, req_comp);
