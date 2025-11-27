@@ -471,7 +471,6 @@ typedef struct pal_event_queue {
 #define PALAPI __attribute__((visibility("default"))) /* We are building as a Unix shared library (.so/.dylib) */
 #endif
 #endif
-
 #ifndef PALAPI
 #define PALAPI extern /* extern is default, but it doesn't hurt to be explicit. */
 #endif
@@ -1344,12 +1343,16 @@ PALAPI void *pal_get_window_handle(pal_window *window);
 PALAPI int pal_show_cursor(pal_window *window);
 PALAPI int pal_hide_cursor(pal_window *window);
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
+
+/* might change all of these functions into one function, that takes in a different full screen mode. */
 PALAPI pal_bool pal_make_window_fullscreen(pal_window *window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window);
 PALAPI pal_bool pal_make_window_windowed(pal_window *window);
+
 PALAPI pal_bool pal_maximize_window(pal_window *window);
 PALAPI pal_bool pal_minimize_window(pal_window *window);
+
 PALAPI void pal_set_window_icon(pal_window *window, const char *image_path);
 /* I am thinking that a better way of doing legacy stuff is with macros.
  Just have a macro like WINDOWS_XP_OR_LATER or WINDOWS_VISTA_OR_LATER. */
@@ -1451,15 +1454,23 @@ PALAPI void pal_mouse_warp_relative(int dx, int dy);
 PALAPI pal_bool pal_is_uppercase(char ch);
 PALAPI pal_bool pal_is_lowercase(char ch);
 PALAPI pal_bool pal_is_letter(char ch);
-PALAPI pal_bool pal_is_end_of_line(char ch);
-PALAPI pal_bool pal_is_whitespace(char ch);
 PALAPI pal_bool pal_is_number(char ch);
 PALAPI pal_bool pal_is_alphanumeric(char ch);
+
+PALAPI pal_bool pal_is_whitespace(char ch);
+PALAPI pal_bool pal_is_end_of_line(char ch);
 PALAPI pal_bool pal_is_underscore(char ch);
 PALAPI pal_bool pal_is_hyphen(char ch);
 PALAPI pal_bool pal_is_dot(char ch);
 PALAPI pal_bool pal_are_chars_equal(char ch1, char ch2);
 PALAPI pal_bool pal_are_strings_equal(const char *s1, const char *s2);
+
+PALAPI int pal_memcmp(const void *a, const void *b, size_t n);
+PALAPI void *pal_memcpy(void *dest, const void *src, size_t n);
+PALAPI void *pal_memset(void *buf, int value, size_t count);
+
+PALAPI char *pal_strcpy(char *dest, const char *src);
+PALAPI char *pal_strncpy(char *dest, const char *src, size_t n);
 PALAPI int pal_strcmp(const char *s1, const char *s2);
 PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n);
 

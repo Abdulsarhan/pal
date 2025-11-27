@@ -19,7 +19,6 @@
 #include <X11/XKBlib.h>
 
 /* Opengl */
-#include <glad/glad.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
 
@@ -355,15 +354,15 @@ void linux_x11_init_raw_input() {
         
         if (is_keyboard(dev_fd) && g_keyboards.count < MAX_KEYBOARDS) {
             g_keyboards.fds[g_keyboards.count] = dev_fd;
-            strncpy(g_keyboards.names[g_keyboards.count], name, 255);
-            memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
-            memset(g_keyboards.keys_toggled[g_keyboards.count], 0, MAX_KEYS);
+            pal_strncpy(g_keyboards.names[g_keyboards.count], name, 255);
+            pal_memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
+            pal_memset(g_keyboards.keys_toggled[g_keyboards.count], 0, MAX_KEYS);
             g_keyboards.count++;
         } else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
             g_mice.fds[g_mice.count] = dev_fd;
-            strncpy(g_mice.names[g_mice.count], name, 255);
-            memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-            memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            pal_strncpy(g_mice.names[g_mice.count], name, 255);
+            pal_memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            pal_memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
             g_mice.dx[g_mice.count] = 0;
             g_mice.dy[g_mice.count] = 0;
             g_mice.wheel[g_mice.count] = 0;
@@ -730,9 +729,9 @@ void linux_x11_poll_raw_input() {
 
     /* Clear toggle flags */
     for (int i = 0; i < g_keyboards.count; i++)
-        memset(g_keyboards.keys_toggled[i], 0, sizeof(g_keyboards.keys_toggled[i]));
+        pal_memset(g_keyboards.keys_toggled[i], 0, sizeof(g_keyboards.keys_toggled[i]));
     for (int i = 0; i < g_mice.count; i++) {
-        memset(g_mice.buttons_toggled[i], 0, sizeof(g_mice.buttons_toggled[i]));
+        pal_memset(g_mice.buttons_toggled[i], 0, sizeof(g_mice.buttons_toggled[i]));
         g_mice.dx[i] = 0;
         g_mice.dy[i] = 0;
         g_mice.wheel[i] = 0;
@@ -804,7 +803,7 @@ void linux_x11_poll_raw_input() {
                         char text[8] = {0};
                         if (linux_keycode_to_utf8(ev.code, g_keyboards.keys[i], text, sizeof(text))) {
                             event.type = PAL_EVENT_TEXT_INPUT;
-                            strncpy(event.text.text, text, sizeof(event.text.text) - 1);
+                            pal_strncpy(event.text.text, text, sizeof(event.text.text) - 1);
                             event.text.text[sizeof(event.text.text) - 1] = '\0';
                             event.text.keyboard_id = i;
                             pal__eventq_push(&g_event_queue, event);
@@ -896,7 +895,7 @@ void linux_x11_poll_raw_input() {
 
         const char *action = udev_device_get_action(dev);
         const char *devnode = udev_device_get_devnode(dev);
-        if (devnode && action && strcmp(action, "add") == 0) {
+        if (devnode && action && pal_strcmp(action, "add") == 0) {
             int dev_fd = open(devnode, O_RDONLY | O_NONBLOCK);
             if (dev_fd >= 0) {
                 char name[256] = {0};
@@ -904,18 +903,18 @@ void linux_x11_poll_raw_input() {
 
                 if (is_keyboard(dev_fd) && g_keyboards.count < MAX_KEYBOARDS) {
                     g_keyboards.fds[g_keyboards.count] = dev_fd;
-                    strncpy(g_keyboards.names[g_keyboards.count], name, 255);
-                    memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
-                    memset(g_keyboards.keys_toggled[g_keyboards.count], 0, MAX_KEYS);
+                    pal_strncpy(g_keyboards.names[g_keyboards.count], name, 255);
+                    pal_memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
+                    pal_memset(g_keyboards.keys_toggled[g_keyboards.count], 0, MAX_KEYS);
                     g_keyboards.cached_modifiers[g_keyboards.count] = PAL_MOD_NONE;
                     g_keyboards.count++;
                     printf("[Keyboard Added] %s\n", name);
                 }
                 else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
                     g_mice.fds[g_mice.count] = dev_fd;
-                    strncpy(g_mice.names[g_mice.count], name, 255);
-                    memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-                    memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+                    pal_strncpy(g_mice.names[g_mice.count], name, 255);
+                    pal_memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+                    pal_memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
                     g_mice.dx[g_mice.count] = 0;
                     g_mice.dy[g_mice.count] = 0;
                     g_mice.wheel[g_mice.count] = 0;
@@ -1313,7 +1312,7 @@ PALAPI void pal_close_window(pal_window *window) {
 
 static void linux_x11_send_wm_state_message(Window win, long action, Atom property) {
     XEvent e;
-    memset(&e, 0, sizeof(e));
+    pal_memset(&e, 0, sizeof(e));
     e.xclient.type = ClientMessage;
     e.xclient.serial = 0;
     e.xclient.send_event = True;

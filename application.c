@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <assert.h>
 
-#pragma warning(disable : 4996)
 #include <glad/glad.h>
 #include "application.h"
-#include "pal.h"
+#define PAL_IMPLEMENTATION
+#include "pal_single_header.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720

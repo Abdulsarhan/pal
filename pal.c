@@ -1,5 +1,6 @@
 #pragma warning(disable : 4996)
 #include "pal.h"
+#define STB_VORBIS_IMPLEMENTATION
 #include "stb_vorbis.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -656,6 +657,63 @@ PALAPI pal_bool pal_are_strings_equal(const char* s1, const char* s2) {
         s2++;
     }
     return *s1 == *s2;
+}
+
+PALAPI void *pal_memset(void *buf, int value, size_t count) {
+    unsigned char *p = buf;
+    unsigned char v = (unsigned char)value;
+
+    for (size_t i = 0; i < count; i++) {
+        p[i] = v;
+    }
+
+    return buf;
+}
+
+PALAPI int pal_memcmp(const void *a, const void *b, size_t n) {
+    const unsigned char *p1 = a;
+    const unsigned char *p2 = b;
+
+    for (size_t i = 0; i < n; i++) {
+        if (p1[i] != p2[i])
+            return (p1[i] < p2[i]) ? -1 : 1;
+    }
+
+    return 0;
+}
+
+PALAPI void *pal_memcpy(void *dest, const void *src, size_t n) {
+    unsigned char *d = dest;
+    const unsigned char *s = src;
+
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+
+    return dest;
+}
+
+PALAPI char *pal_strcpy(char *dest, const char *src) {
+    char *orig = dest;
+    while ((*dest++ = *src++));
+    return orig;
+}
+
+PALAPI char *pal_strncpy(char *dest, const char *src, size_t n)
+{
+    size_t i = 0;
+
+    // Copy characters from src until either end-of-source or reaching n.
+    for (; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+
+    // Pad the rest with '\0' if needed.
+    for (; i < n; i++) {
+        dest[i] = '\0';
+    }
+
+    return dest;
 }
 
 // String comparison
