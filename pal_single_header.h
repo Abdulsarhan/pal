@@ -134,7 +134,6 @@ Mouse Wheel
 ----------------------------------------------------------------------------------
 */
 #define PAL_MOUSEWHEEL_VERTICAL 0x0
-
 #define PAL_MOUSEWHEEL_HORIZONTAL 0x1
 
 /*
@@ -3188,27 +3187,55 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
 
     if (is_key_released) {
         event.type = PAL_EVENT_KEY_UP;
-        event.key = (pal_keyboard_event){
-            .virtual_key = pal_key,
-            .scancode = pal_scancode,
-            .pressed = 0,
-            .repeat = 0,
-            .modifiers = g_keyboards.cached_modifiers[kb_index],
-            .keyboard_id = kb_index
-        };
+        event.key.virtual_key = pal_key,
+        event.key.scancode = pal_scancode,
+        event.key.pressed = 0,
+        event.key.repeat = 0,
+        event.key.modifiers = g_keyboards.cached_modifiers[kb_index],
+        event.key.keyboard_id = kb_index
 
         g_keyboards.keys[kb_index][pal_scancode] = 0;
         g_keyboards.keys_toggled[kb_index][pal_scancode] = 0;
+        pal__eventq_push(&g_event_queue, event);
     } else {
         event.type = PAL_EVENT_KEY_DOWN;
-        event.key = (pal_keyboard_event){
-            .virtual_key = pal_key,
-            .scancode = pal_scancode,
-            .pressed = 1,
-            .repeat = is_repeat,
-            .modifiers = g_keyboards.cached_modifiers[kb_index],
-            .keyboard_id = kb_index
-        };
+        event.key.virtual_key = pal_key,
+        event.key.scancode = pal_scancode,
+        event.key.pressed = 1,
+        event.key.repeat = is_repeat,
+        event.key.modifiers = g_keyboards.cached_modifiers[kb_index],
+        event.key.keyboard_id = kb_index
+        pal__eventq_push(&g_event_queue, event);
+
+
+        WCHAR utf_16_char[4] = {0};
+        UINT scan_code = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+        int result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
+        
+        if (result > 0) {
+            // Convert UTF-16 to UTF-8
+            char utf8_buffer[8] = {0};
+            int utf8_len = WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                utf16_buffer,
+                result,
+                utf8_buffer,
+                sizeof(utf8_buffer) - 1,
+                NULL,
+                NULL
+            );
+            
+            if (utf8_len > 0) {
+                utf8_buffer[utf8_len] = '\0';
+                event.type = PAL_EVENT_TEXT_INPUT;
+                pal_strncpy(event.text.text, utf8_buffer, sizeof(event.text.text) - 1);
+                event.text.text[sizeof(event.text.text) - 1] = '\0';
+                event.text.keyboard_id = kb_index;
+                pal__eventq_push(&g_event_queue, event);
+            }
+
+        }
 
         unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
         g_keyboards.keys[kb_index][pal_scancode] = 1;
@@ -3217,7 +3244,6 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
         }
     }
-    pal__eventq_push(&g_event_queue, event);
 }
 
 void win32_handle_mouse(const RAWINPUT* raw) {
@@ -5906,7 +5932,7 @@ pal_event_queue g_event_queue;
 
 void linux_x11_translate_event(XEvent *xevent) {
     pal_event event = {0};
-    
+
     switch(xevent->type) {
         case ClientMessage: {
             if ((Atom)xevent->xclient.data.l[0] == g_wm_delete) {
@@ -5916,17 +5942,17 @@ void linux_x11_translate_event(XEvent *xevent) {
             }
             break;
         }
-        
+
         case ConfigureNotify: {
             XConfigureEvent *ce = &xevent->xconfigure;
-            
+
             /* Window moved */
             event.type = PAL_EVENT_WINDOW_MOVED;
             event.window.windowid = (uint32_t)ce->window;
             event.window.x = ce->x;
             event.window.y = ce->y;
             pal__eventq_push(&g_event_queue, event);
-            
+
             /* Window resized */
             event.type = PAL_EVENT_WINDOW_RESIZED;
             event.window.windowid = (uint32_t)ce->window;
@@ -5935,7 +5961,7 @@ void linux_x11_translate_event(XEvent *xevent) {
             pal__eventq_push(&g_event_queue, event);
             break;
         }
-        
+
         case MapNotify: {
             event.type = PAL_EVENT_WINDOW_SHOWN;
             event.window.windowid = (uint32_t)xevent->xmap.window;
@@ -5943,7 +5969,7 @@ void linux_x11_translate_event(XEvent *xevent) {
             pal__eventq_push(&g_event_queue, event);
             break;
         }
-        
+
         case UnmapNotify: {
             event.type = PAL_EVENT_WINDOW_HIDDEN;
             event.window.windowid = (uint32_t)xevent->xunmap.window;
@@ -5951,7 +5977,7 @@ void linux_x11_translate_event(XEvent *xevent) {
             pal__eventq_push(&g_event_queue, event);
             break;
         }
-        
+
         case Expose: {
             if (xevent->xexpose.count == 0) { /* Only on last expose event */
                 event.type = PAL_EVENT_WINDOW_EXPOSED;
@@ -5960,7 +5986,7 @@ void linux_x11_translate_event(XEvent *xevent) {
             }
             break;
         }
-        
+
         case FocusIn: {
             event.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
             event.window.windowid = (uint32_t)xevent->xfocus.window;
@@ -5968,7 +5994,7 @@ void linux_x11_translate_event(XEvent *xevent) {
             pal__eventq_push(&g_event_queue, event);
             break;
         }
-        
+
         case FocusOut: {
             event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
             event.window.windowid = (uint32_t)xevent->xfocus.window;
@@ -5976,18 +6002,19 @@ void linux_x11_translate_event(XEvent *xevent) {
             pal__eventq_push(&g_event_queue, event);
             break;
         }
-        
+
         case DestroyNotify: {
             event.type = PAL_EVENT_WINDOW_CLOSED;
             event.window.windowid = (uint32_t)xevent->xdestroywindow.window;
             pal__eventq_push(&g_event_queue, event);
             break;
         }
-        
+
         default:
             break;
     }
 }
+
 void linux_x11_poll_raw_input();
 
 PALAPI pal_bool pal_poll_events(pal_event* event) {
