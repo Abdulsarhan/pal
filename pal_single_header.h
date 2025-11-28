@@ -1252,8 +1252,6 @@ typedef struct pal_event_queue {
     pal_event *events;
 } pal_event_queue;
 
-
-
 typedef struct {
     int width, height, x, y;
 }pal_rect;
@@ -5819,6 +5817,35 @@ PALAPI void pal_shutdown(void) {
 
 #elif __linux__
 
+PALAPI void *pal_load_dynamic_library(const char *dll) {
+    void *lib = dlopen(dll, RTLD_NOW | RTLD_LOCAL);
+    if (!lib) {
+        fprintf(stderr, "dlopen failed: %s\n", dlerror());
+        assert(0 && "Failed to load shared library");
+    }
+    return lib;
+}
+
+PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
+    dlerror(); /* Clear existing errors */
+    void *symbol = dlsym(dll, func_name);
+    const char *error = dlerror();
+    if (error) {
+        fprintf(stderr, "dlsym failed: %s\n", error);
+        assert(0 && "Failed to load function from shared library");
+    }
+    return symbol;
+}
+
+PALAPI pal_bool pal_free_dynamic_library(void *dll) {
+    int result = dlclose(dll);
+    if (result != 0) {
+        fprintf(stderr, "dlclose failed: %s\n", dlerror());
+        assert(0 && "Failed to unload shared library");
+    }
+    return (uint8_t)(result == 0);
+}
+
 /* Check if the platform is PAL_PLATFORM_LINUX_X11 */
 #if !defined(PAL_PLATFORM_LINUX_WAYLAND) && !defined(PAL_PLATFORM_WINDOWS)
 #ifndef PLATFORM_LINUX_X11_H
@@ -7525,34 +7552,6 @@ PALAPI void *pal_gl_get_proc_address(const char *procname) {
     return (void *)glXGetProcAddress((const GLubyte *)procname);
 }
 
-PALAPI void *pal_load_dynamic_library(const char *dll) {
-    void *lib = dlopen(dll, RTLD_NOW | RTLD_LOCAL);
-    if (!lib) {
-        fprintf(stderr, "dlopen failed: %s\n", dlerror());
-        assert(0 && "Failed to load shared library");
-    }
-    return lib;
-}
-
-PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
-    dlerror(); /* Clear existing errors */
-    void *symbol = dlsym(dll, func_name);
-    const char *error = dlerror();
-    if (error) {
-        fprintf(stderr, "dlsym failed: %s\n", error);
-        assert(0 && "Failed to load function from shared library");
-    }
-    return symbol;
-}
-
-PALAPI pal_bool pal_free_dynamic_library(void *dll) {
-    int result = dlclose(dll);
-    if (result != 0) {
-        fprintf(stderr, "dlclose failed: %s\n", dlerror());
-        assert(0 && "Failed to unload shared library");
-    }
-    return (uint8_t)(result == 0);
-}
 #endif /* PLATFORM_LINUX_X11_H */
 #elif defined(PAL_PLATFORM_LINUX_WAYLAND) && !defined (PAL_PLATFORM_LINUX_X11) && !defined (PAL_PLATFORM_WINDOWS)
 #ifndef PLATFORM_LINUX_WAYLAND_H
@@ -8151,9 +8150,7 @@ static void process_all_events() {
     }
 }
 
-// Public API Implementation
-
-void pal_init() {
+PALAPI void pal_init() {
     struct timeval tv = {0};
     gettimeofday(&tv, NULL);
     srand(tv.tv_sec * 1000000 + tv.tv_usec);
@@ -8170,7 +8167,7 @@ void pal_init() {
     }
 }
 
-void pal_shutdown() {
+PALAPI void pal_shutdown() {
     pal__eventq_free(g_event_queue);
     
     if (g_windows) {
@@ -8541,7 +8538,6 @@ static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
     }
 
     size_t total_decoded = 0;
-    size_t start_position = stb_vorbis_get_sample_offset(vorbis);
 
     while (total_decoded < target_sample_frames) {
         int samples_to_read = (int)(target_sample_frames - total_decoded);
