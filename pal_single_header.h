@@ -3,7 +3,6 @@
 
 #include <stdint.h>   /* For Clearly Defined Types. */
 #include <stddef.h>
-#include <sys/stat.h> /* For time_t and stat. */
 
 /* defines for building or using this library as a shared lib */
 #if defined(_WIN32)
@@ -1418,9 +1417,10 @@ PALAPI size_t pal_get_last_read_time(const char *file);
 PALAPI size_t pal_get_file_size(const char *file_path);
 PALAPI uint32_t pal_get_file_permissions(const char *file_path);
 PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags);
-PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read);
+PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read); // This heap-allocates memory, and give you back a pointer to it. call pal_close_file() to free the memory.
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
+PALAPI pal_bool pal_close_file(const unsigned char *file);
 
 /* Directory Listing */
 PALAPI pal_bool pal_path_is_dir(const char *path);
@@ -1428,7 +1428,7 @@ PALAPI pal_bool pal_path_is_dir(const char *path);
 /* Open File I/O */
 PALAPI pal_file *pal_open_file(const char *file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer);
-PALAPI pal_bool pal_close_file(pal_file *file);
+PALAPI pal_bool pal_close_open_file(pal_file *file);
 
 /* Random Number Generation */
 PALAPI void pal_srand(uint64_t *state, uint64_t seed);
@@ -4511,13 +4511,15 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
     return 1;
 }
 
-PALAPI pal_bool pal_close_file(pal_file* file) {
+PALAPI pal_bool pal_close_file(const unsigned char *file) {
+    free(file);
+}
+
+PALAPI pal_bool pal_close_open_file(pal_file *file) {
     if (!file) return 0;
-    
     if (!CloseHandle(file)) {
         return 0;
     }
-    free(file);
     return 1;
 }
 
@@ -5083,9 +5085,6 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
             printf("OGG streaming setup - CONTINUOUS APPROACH:\n");
             printf("  - Total sample frames: %u\n", total_sample_frames);
             printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
-
-            unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
-            printf("  - Decoder position after preload: %u\n", current_position);
 
             sound->total_data_size = total_sample_frames * bytes_per_sample_frame;
 
@@ -5817,6 +5816,215 @@ PALAPI void pal_shutdown(void) {
 
 #elif __linux__
 
+/* dlopen/dlsym/dlclose */
+#include <dlfcn.h>
+
+/* linux-specific headers */
+#include <linux/input.h>
+#include <sys/ioctl.h>
+#include <sys/poll.h>
+#include <libudev.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+
+//----------------------------------------------------------------------------------
+// File I/O stuff.
+//----------------------------------------------------------------------------------
+
+PALAPI pal_bool pal_does_file_exist(const char *file_path) {
+    return access(file_path, F_OK) == 0;
+}
+
+PALAPI size_t pal_get_last_write_time(const char *file_path) {
+    struct stat fstat;
+    int err = stat(file_path, &fstat);
+    if(!err) {
+        return fstat.st_mtime;
+    } else {
+        return 0;
+    }
+}
+
+PALAPI size_t pal_get_last_read_time(const char *file_path) {
+    struct stat fstat;
+    int err = stat(file_path, &fstat);
+    if(!err) {
+        return fstat.st_atime;
+    } else {
+        return 0;
+    }
+}
+
+PALAPI size_t pal_get_file_size(const char *file_path) {
+    struct stat fstat;
+    int err = stat(file_path, &fstat);
+    if(!err) {
+        return fstat.size;
+    } else {
+        return 0;
+    }
+}
+
+PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
+    uint32_t permissions = 0;
+
+    if (access(path, R_OK) == 0) {
+        permissions |= PAL_READ;
+    }
+
+    if (access(path, W_OK) == 0) {
+        permissions |= PAL_WRITE;
+    }
+
+    if (access(path, X_OK) == 0) {
+        permissions |= PAL_EXECUTE;
+    }
+
+    return permissions;
+}
+
+PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags) {
+    mode_t mode = 0;
+
+    if (permission_flags & PAL_READ) {
+        mode |= S_IRUSR | S_IRGRP | S_IROTH;
+    }
+
+    if (permission_flags & PAL_WRITE) {
+        mode |= S_IWUSR | S_IWGRP | S_IWOTH;
+    }
+
+    if (permission_flags & PAL_EXECUTE) {
+        mode |= S_IXUSR | S_IXGRP | S_IXOTH;
+    }
+
+    if (chmod(file_path, mode) == -1) {
+        return PAL_FALSE;
+    }
+
+    return PAL_TRUE;
+}
+
+PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read) {
+    size_t file_size = pal_get_file_size(file_path);
+    if (file_size == 0) {
+        return NULL;
+    }
+
+    unsigned char *file = malloc(file_size + 1);
+    if (!file) {
+        return NULL;
+    }
+
+    int fd = open(file_path, O_RDWR);
+    if (fd == -1) {
+        free(file);
+        return NULL;
+    }
+
+    size_t total_read = 0;
+
+    while (total_read < file_size) {
+        ssize_t result = read(fd, file + total_read, file_size - total_read);
+        if (result <= 0) {  // error or unexpected EOF
+            close(fd);
+            free(file);
+            return NULL;
+        }
+        total_read += result;
+    }
+
+    close(fd);
+
+    file[file_size] = '\0'; // optional for text files
+    *bytes_read = file_size;
+    return file;
+}
+
+PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer) {
+    int fd = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1) {
+        return PAL_FALSE;
+    }
+
+    size_t total_written = 0;
+
+    while (total_written < file_size) {
+        ssize_t result = write(fd, buffer + total_written, file_size - total_written);
+
+        if (result <= 0) {
+            close(fd);
+            return PAL_FALSE;
+        }
+
+        total_written += result;
+    }
+
+    close(fd);
+    return PAL_TRUE;
+}
+
+PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) {
+    int src = open(original_path, O_RDONLY);
+    if (src == -1) {
+        return PAL_FALSE;
+    }
+
+    int dst = open(copy_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (dst == -1) {
+        close(src);
+        return PAL_FALSE;
+    }
+
+    char buffer[65536];  // 64KB buffer
+    ssize_t bytes_read;
+
+    while ((bytes_read = read(src, buffer, sizeof(buffer))) > 0) {
+        size_t total_written = 0;
+
+        while (total_written < bytes_read) {
+            ssize_t result = write(dst, buffer + total_written,
+                                   bytes_read - total_written);
+
+            if (result <= 0) {
+                close(src);
+                close(dst);
+                return PAL_FALSE;
+            }
+
+            total_written += result;
+        }
+    }
+
+    if (bytes_read < 0) {
+        close(src);
+        close(dst);
+        return PAL_FALSE;
+    }
+
+    close(src);
+    close(dst);
+    return PAL_TRUE;
+}
+
+PALAPI pal_bool pal_close_file(const unsigned char *file) {
+    if(file) {
+        free(file);
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+PALAPI pal_bool pal_close_open_file(pal_file *file) {
+    int err = close(file);
+    return err == 0;
+}
+
+//----------------------------------------------------------------------------------
+// Dynamic Library Functions.
+//----------------------------------------------------------------------------------
 PALAPI void *pal_load_dynamic_library(const char *dll) {
     void *lib = dlopen(dll, RTLD_NOW | RTLD_LOCAL);
     if (!lib) {
@@ -5871,16 +6079,6 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll) {
 #include <GL/gl.h>
 #include <GL/glx.h>
 
-/* dlopen/dlsym/dlclose */
-#include <dlfcn.h>
-
-/* linux-specific headers */
-#include <linux/input.h>
-#include <sys/ioctl.h>
-#include <sys/poll.h>
-#include <libudev.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 struct pal_window {
     Window window;
@@ -8566,19 +8764,13 @@ static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
         }
 
         total_decoded += samples_read;
-
-        unsigned int current_position = stb_vorbis_get_sample_offset(vorbis);
-        printf("OGG Load: Read %d sample frames, total: %zu/%zu, decoder: %u\n",
-               samples_read,
-               total_decoded,
-               target_sample_frames,
-               current_position);
     }
 
     // Clean up temporary buffers
     for (int i = 0; i < channels; i++) {
         free(channel_buffers[i]);
     }
+
     free(channel_buffers);
 
     out->data = (unsigned char*)pcm_data;
