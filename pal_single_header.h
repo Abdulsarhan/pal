@@ -5829,7 +5829,7 @@ PALAPI void pal_shutdown(void) {
 #include <errno.h>
 
 //----------------------------------------------------------------------------------
-// File I/O stuff.
+// File I/O
 //----------------------------------------------------------------------------------
 
 PALAPI pal_bool pal_does_file_exist(const char *file_path) {
@@ -6008,6 +6008,44 @@ PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) 
     return PAL_TRUE;
 }
 
+PALAPI pal_file *pal_open_file(const char *file_path) {
+    int *file = (int*)malloc(sizeof(int));
+    if (file == NULL) {
+        return NULL;
+    }
+    *file = open(file_path, O_RDONLY);
+    if (*file == -1) {
+        free(file);
+        return NULL;
+    }
+    return (pal_file*)file;
+}
+
+PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer) {
+    int fd = *(int*)file;
+    
+    // Seek to the specified offset
+    if (lseek(fd, offset, SEEK_SET) == -1) {
+        return pal_false;
+    }
+    
+    size_t total_read = 0;
+    while (total_read < bytes_to_read) {
+        ssize_t result = read(fd, buffer + total_read, bytes_to_read - total_read);
+        if (result < 0) {
+            // Error occurred
+            return pal_false;
+        }
+        if (result == 0) {
+            // EOF reached before reading all requested bytes
+            return pal_false;
+        }
+        total_read += result;
+    }
+    
+    return pal_true;
+}
+
 PALAPI pal_bool pal_close_file(const unsigned char *file) {
     if(file) {
         free(file);
@@ -6018,8 +6056,10 @@ PALAPI pal_bool pal_close_file(const unsigned char *file) {
 }
 
 PALAPI pal_bool pal_close_open_file(pal_file *file) {
-    int err = close(file);
-    return err == 0;
+    int fd = *(int*)file;
+    int err = close(fd);
+    free(file);
+    return err == 0 ? pal_true : pal_false;
 }
 
 //----------------------------------------------------------------------------------
