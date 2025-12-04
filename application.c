@@ -10,11 +10,12 @@
 #define SCREEN_HEIGHT 720
 
 typedef struct OpenglInfo {
-    const char* vendor;
-    const char* renderer;
-    const char* version;
-    const char* shadingLanguageVersion;
-    char extensions[8124];
+    const char *vendor;
+    const char *renderer;
+    const char *version;
+    const char *shadingLanguageVersion;
+    const char *extensions;
+    char extensionsi[8124];
 } OpenglInfo;
 
 static OpenglInfo get_opengl_info(void) {
@@ -28,11 +29,11 @@ static OpenglInfo get_opengl_info(void) {
         glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
         for (int i = 0; i < numExtensions; i++) {
             const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
-            // strcat(info.extensions, ext);
-            // strcat(info.extensions, " ");
+            strcat(info.extensionsi, ext);
+            strcat(info.extensionsi, " ");
         }
     } else {
-        info.extensions[0] = (char)glGetString(GL_EXTENSIONS);
+        info.extensions = (const char*)glGetString(GL_EXTENSIONS);
     }
 
     return info;

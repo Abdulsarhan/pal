@@ -1345,6 +1345,7 @@ PALAPI int pal_hide_cursor(pal_window *window);
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
 
 /* might change all of these functions into one function, that takes in a different full screen mode. */
+
 PALAPI pal_bool pal_make_window_fullscreen(pal_window *window);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window);
@@ -1470,6 +1471,7 @@ PALAPI int pal_memcmp(const void *a, const void *b, size_t n);
 PALAPI void *pal_memcpy(void *dest, const void *src, size_t n);
 PALAPI void *pal_memset(void *buf, int value, size_t count);
 
+PALAPI size_t pal_strlen(const char *str);
 PALAPI char *pal_strcpy(char *dest, const char *src);
 PALAPI char *pal_strncpy(char *dest, const char *src, size_t n);
 PALAPI int pal_strcmp(const char *s1, const char *s2);
@@ -1479,8 +1481,8 @@ PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n);
 PALAPI pal_time pal_get_date_and_time_utc(void);
 PALAPI pal_time pal_get_date_and_time_local(void);
 PALAPI pal_time pal_get_time_since_boot(void);
-PALAPI double pal_get_time_since_pal_started(void);
-PALAPI uint64_t pal_get_timer(void);
+PALAPI double   pal_get_time_since_pal_init(void);
+PALAPI uint64_t pal_get_ticks(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
 
 /* Multi-threadding functions */
@@ -1957,6 +1959,16 @@ PALAPI void *pal_memcpy(void *dest, const void *src, size_t n) {
     }
 
     return dest;
+}
+
+PALAPI size_t pal_strlen(const char *str) {
+    if (!str) return 0;
+
+    const char *count = str;
+    while (*count != '\0')
+        count++;
+
+    return count - str;
 }
 
 PALAPI char *pal_strcpy(char *dest, const char *src) {
@@ -3270,14 +3282,12 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     // Handle motion
     if (dx || dy) {
         event.type = PAL_EVENT_MOUSE_MOTION;
-        event.motion = (pal_mouse_motion_event){
-            .x = point.x,
-            .y = point.y,
-            .delta_x = dx,
-            .delta_y = dy,
-            .buttons = g_cached_mouse_buttons,
-            .mouse_id = mouse_index
-        };
+        event.motion.x = point.x;
+        event.motion.y = point.y;
+        event.motion.delta_x = dx;
+        event.motion.delta_y = dy;
+        event.motion.buttons = g_cached_mouse_buttons;
+        event.motion.mouse_id = mouse_index;
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -3287,13 +3297,12 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         g_mice.wheel[mouse_index] += wheel_delta / WHEEL_DELTA;
 
         event.type = PAL_EVENT_MOUSE_WHEEL;
-        event.wheel = (pal_mouse_wheel_event){
-            .mouse_x = point.x,
-            .mouse_y = point.y,
-            .x = 0,
-            .y = (float)(wheel_delta / WHEEL_DELTA),
-            .wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
-            .mouse_id = mouse_index};
+        event.wheel.mouse_x = point.x;
+        event.wheel.mouse_y = point.y;
+        event.wheel.x = 0;
+        event.wheel.y = (float)(wheel_delta / WHEEL_DELTA);
+        event.wheel.wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL;
+        event.wheel.mouse_id = mouse_index;
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -3302,13 +3311,12 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         SHORT hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
 
         event.type = PAL_EVENT_MOUSE_WHEEL;
-        event.wheel = (pal_mouse_wheel_event){
-            .mouse_x = point.x,
-            .mouse_y = point.y,
-            .x = (float)(hwheel_delta / WHEEL_DELTA),
-            .y = 0,
-            .wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL,
-            .mouse_id = mouse_index};
+        event.wheel.mouse_x = point.x;
+        event.wheel.mouse_y = point.y;
+        event.wheel.x = (float)(hwheel_delta / WHEEL_DELTA);
+        event.wheel.y = 0;
+        event.wheel.wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL;
+        event.wheel.mouse_id = mouse_index;
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -3334,14 +3342,13 @@ void win32_handle_mouse(const RAWINPUT* raw) {
                 cached_modifiers |= g_keyboards.cached_modifiers[i];
             }
             event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
-            event.button = (pal_mouse_button_event){
-                .x = point.x,
-                .y = point.y,
-                .pressed = 1,
-                .clicks = 1,
-                .modifiers = cached_modifiers,
-                .button = pal_button,
-                .mouse_id = mouse_index};
+            event.button.x = point.x;
+            event.button.y = point.y;
+            event.button.pressed = 1;
+            event.button.clicks = 1;
+            event.button.modifiers = cached_modifiers;
+            event.button.button = pal_button;
+            event.button.mouse_id = mouse_index;
             pal__eventq_push(&g_event_queue, event);
         } else if (up) {
             g_mice.buttons[mouse_index][pal_button] = 0;
@@ -3349,14 +3356,13 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             g_cached_mouse_buttons &= ~(1 << i);
 
             event.type = PAL_EVENT_MOUSE_BUTTON_UP;
-            event.button = (pal_mouse_button_event){
-                .x = point.x,
-                .y = point.y,
-                .pressed = 0,
-                .clicks = 1,
-                .modifiers = cached_modifiers,
-                .button = pal_button,
-                .mouse_id = mouse_index};
+            event.button.x = point.x;
+            event.button.y = point.y;
+            event.button.pressed = 0;
+            event.button.clicks = 1;
+            event.button.modifiers = cached_modifiers;
+            event.button.button = pal_button;
+            event.button.mouse_id = mouse_index;
             pal__eventq_push(&g_event_queue, event);
         }
     }
@@ -4512,7 +4518,9 @@ PALAPI pal_bool pal_read_from_open_file(pal_file* file, size_t offset, size_t by
 }
 
 PALAPI pal_bool pal_close_file(const unsigned char *file) {
-    free(file);
+    if(!file) return 0;
+    free((void*)file);
+    return 1;
 }
 
 PALAPI pal_bool pal_close_open_file(pal_file *file) {
@@ -5095,7 +5103,7 @@ pal_sound* win32_load_sound(const char* filename, float seconds) {
             printf("  - Bytes already streamed (preloaded): %zu\n", sound->bytes_streamed);
 
             // Store filename for reopening decoder if needed
-            size_t filename_len = strlen(filename);
+            size_t filename_len = pal_strlen(filename);
             sound->filename = (char*)malloc(filename_len + 1);
             pal_strcpy(sound->filename, filename);
         }
@@ -5422,53 +5430,33 @@ PALAPI pal_time pal_get_time_since_boot(void) {
 }
 
 void win32_init_timer(void) {
-    LARGE_INTEGER counter;
-    QueryPerformanceCounter(&counter);
-    g_app_start_time = counter.QuadPart;
+    volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
+
+    g_app_start_time = kuser->QpcData.QpcPerformanceCounter;
     assert(g_app_start_time != 0);
 }
 
-PALAPI double pal_get_time_since_pal_started(void) {
-    LARGE_INTEGER counter;
-    uint64_t elapsed_ticks = 0;
-    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
+PALAPI double pal_get_time_since_pal_init(void) {
+    volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
+
+    uint64_t current = kuser->QpcData.QpcPerformanceCounter;
+    uint64_t elapsed_ticks = current - g_app_start_time;
     uint64_t frequency = kuser->QpcFrequency;
 
-    QueryPerformanceCounter(&counter);
-
-    elapsed_ticks = counter.QuadPart - g_app_start_time;
-
-    // Get frequency from KUSER_SHARED_DATA (Windows 8+) or fall back to API
-
-    // Fallback to API if frequency is 0 (older Windows versions)
-    if (frequency == 0) {
-        LARGE_INTEGER freq;
-        QueryPerformanceFrequency(&freq);
-        frequency = freq.QuadPart;
-    }
-
+    // we divide kernel ticks by frequency in order to get that time in seconds.
     return (double)elapsed_ticks / (double)frequency;
 }
 
-PALAPI uint64_t pal_get_timer(void) {
-    LARGE_INTEGER counter;
-    QueryPerformanceCounter(&counter);
-    return counter.QuadPart;
+PALAPI uint64_t pal_get_ticks(void) {
+    volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
+    return kuser->QpcData.QpcPerformanceCounter;
 }
 
 // Gets the frequency of the raw timer that is used by pal, not including any time the computer
 // is sleeping while pal is running.
 PALAPI uint64_t pal_get_timer_frequency(void) {
-    PKUSER_SHARED_DATA kuser = (PKUSER_SHARED_DATA)KUSER_SHARED_DATA_ADDRESS;
-    uint64_t frequency = kuser->QpcFrequency;
-    // Fallback to API if frequency is 0 (older Windows versions)
-    if (frequency == 0) {
-        LARGE_INTEGER freq;
-        QueryPerformanceFrequency(&freq);
-        frequency = freq.QuadPart;
-    }
-
-    return frequency;
+    volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
+    return (uint64_t)kuser->QpcFrequency;
 }
 
 //----------------------------------------------------------------------------------
@@ -5516,7 +5504,7 @@ PALAPI void pal_clipboard_set(const char* text) {
         return;
 
     // Calculate the size of the text, including the null terminator
-    len = strlen(text) + 1;
+    len = pal_strlen(text) + 1;
     hMem = GlobalAlloc(GMEM_MOVEABLE, len);
     if (!hMem)
         return;
@@ -5827,6 +5815,7 @@ PALAPI void pal_shutdown(void) {
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 //----------------------------------------------------------------------------------
 // File I/O
@@ -5860,7 +5849,7 @@ PALAPI size_t pal_get_file_size(const char *file_path) {
     struct stat fstat;
     int err = stat(file_path, &fstat);
     if(!err) {
-        return fstat.size;
+        return fstat.st_size;
     } else {
         return 0;
     }
@@ -5869,15 +5858,15 @@ PALAPI size_t pal_get_file_size(const char *file_path) {
 PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     uint32_t permissions = 0;
 
-    if (access(path, R_OK) == 0) {
+    if (access(file_path, R_OK) == 0) {
         permissions |= PAL_READ;
     }
 
-    if (access(path, W_OK) == 0) {
+    if (access(file_path, W_OK) == 0) {
         permissions |= PAL_WRITE;
     }
 
-    if (access(path, X_OK) == 0) {
+    if (access(file_path, X_OK) == 0) {
         permissions |= PAL_EXECUTE;
     }
 
@@ -5900,10 +5889,10 @@ PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t perm
     }
 
     if (chmod(file_path, mode) == -1) {
-        return PAL_FALSE;
+        return pal_false;
     }
 
-    return PAL_TRUE;
+    return pal_true;
 }
 
 PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read) {
@@ -5945,7 +5934,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer) {
     int fd = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd == -1) {
-        return PAL_FALSE;
+        return pal_false;
     }
 
     size_t total_written = 0;
@@ -5955,30 +5944,30 @@ PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *bu
 
         if (result <= 0) {
             close(fd);
-            return PAL_FALSE;
+            return pal_false;
         }
 
         total_written += result;
     }
 
     close(fd);
-    return PAL_TRUE;
+    return pal_true;
 }
 
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) {
     int src = open(original_path, O_RDONLY);
     if (src == -1) {
-        return PAL_FALSE;
+        return pal_false;
     }
 
     int dst = open(copy_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (dst == -1) {
         close(src);
-        return PAL_FALSE;
+        return pal_false;
     }
 
     char buffer[65536];  // 64KB buffer
-    ssize_t bytes_read;
+    size_t bytes_read = 0;
 
     while ((bytes_read = read(src, buffer, sizeof(buffer))) > 0) {
         size_t total_written = 0;
@@ -5990,22 +5979,22 @@ PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) 
             if (result <= 0) {
                 close(src);
                 close(dst);
-                return PAL_FALSE;
+                return pal_false;
             }
 
             total_written += result;
         }
     }
 
-    if (bytes_read < 0) {
+    if (bytes_read == 0) {
         close(src);
         close(dst);
-        return PAL_FALSE;
+        return pal_false;
     }
 
     close(src);
     close(dst);
-    return PAL_TRUE;
+    return pal_true;
 }
 
 PALAPI pal_file *pal_open_file(const char *file_path) {
@@ -6048,7 +6037,7 @@ PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t by
 
 PALAPI pal_bool pal_close_file(const unsigned char *file) {
     if(file) {
-        free(file);
+        free((void*)file);
         return 0;
     } else {
         return 1;
@@ -7972,7 +7961,7 @@ static int wayland_display_connect() {
         return -1;
     }
 
-    uint64_t xdg_runtime_dir_len = strlen(xdg_runtime_dir);
+    uint64_t xdg_runtime_dir_len = pal_strlen(xdg_runtime_dir);
     struct sockaddr_un addr = {.sun_family = AF_UNIX};
     
     if (xdg_runtime_dir_len > sizeof(addr.sun_path) - 20) {
@@ -7991,7 +7980,7 @@ static int wayland_display_connect() {
         memcpy(addr.sun_path + socket_path_len, wayland_display_default, wayland_display_default_len);
         socket_path_len += wayland_display_default_len;
     } else {
-        uint64_t wayland_display_len = strlen(wayland_display);
+        uint64_t wayland_display_len = pal_strlen(wayland_display);
         memcpy(addr.sun_path + socket_path_len, wayland_display, wayland_display_len);
         socket_path_len += wayland_display_len;
     }
@@ -8246,7 +8235,7 @@ static uint32_t wayland_xdg_surface_get_toplevel(int fd, uint32_t xdg_surface) {
 }
 
 static void wayland_xdg_toplevel_set_title(int fd, uint32_t xdg_toplevel, const char *title) {
-    uint32_t title_len = strlen(title) + 1; // Include null terminator
+    uint32_t title_len = pal_strlen(title) + 1; // Include null terminator
     
     uint64_t msg_size = 0;
     char msg[512] = "";
