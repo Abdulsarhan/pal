@@ -1,9 +1,12 @@
 Now:
-Some functions return 0 on success, others return 1.
+Make error codes more consistent. Some functions return 0 on success, others return 1.
+Add dark mode detection for windows and linux.
+Finish implementing all the events and window flags.
+Don't include the headers directly, only use what you need.
+Create a replacement for all cstdlib functions that we use.
 Integrate gamepad system into the window events.
+Give each window an ID so that the user of the library can tell them appart when they recieve window events.
 
 Later:
-Give each window an ID so that the user of the library can tell them appart when they recieve window events.
 Fully integrate new gamepad system that supports all gamepads.
-Implement linux_x11_platform.h.
-Implement linux_wayland_platform.h
+Finish implementing pal's API on linux_x11 and linux_wayland.
