@@ -1289,76 +1289,32 @@ typedef struct {
 }pal_rect;
 
 typedef struct pal_vec2 {
-    union {
-        float x, r, u, s;
-    };
-    union {
-        float y, g, v, t;
-    };
+    float x, y;
 } pal_vec2;
 
 typedef struct pal_vec3 {
-    union {
-        float x, r, u, s;
-    };
-    union {
-        float y, g, v, t;
-    };
-    union {
-        float z, b;
-    };
+    float x, y, z;
 } pal_vec3;
 
 typedef struct pal_vec4 {
-    union {
-        float x, r, u, s;
-    };
-    union {
-        float y, g, v, t;
-    };
-    union {
-        float z, b;
-    };
-    union {
-        float w, a;
-    };
+    float x, y, z, w;
 } pal_vec4;
 
 typedef struct pal_ivec2 {
-    union {
-        int32_t x, r, u, s;
-    };
-    union {
-        int32_t y, g, v, t;
-    };
+    int x, y;
 } pal_ivec2;
 
 typedef struct pal_ivec3 {
-    union {
-        int32_t x, r, u, s;
-    };
-    union {
-        int32_t y, g, v, t;
-    };
-    union {
-        int32_t z, b;
-    };
+    int x, y, z;
 } pal_ivec3;
 
 typedef struct pal_ivec4 {
-    union {
-        int32_t x, r, u, s;
-    };
-    union {
-        int32_t y, g, v, t;
-    };
-    union {
-        int32_t z, b;
-    };
-    union {
-        int32_t w, a;
-    };
+    int x, y, z, w;
 } pal_ivec4;
+
+typedef struct pal_color {
+    unsigned char r, g, b, a;
+}pal_color;
 
 #ifdef __cplusplus
 extern "C" {
@@ -1402,7 +1358,7 @@ PALAPI pal_bool pal_poll_events(pal_event *event);
 PALAPI int pal_make_context_current(pal_window *window);
 
 /* Rendering functions (implemented using GDI on windows and X11 on linux) */
-PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_vec4 color);
+PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color);
 
 /* Image Loading */
 PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp);
@@ -6210,8 +6166,9 @@ PALAPI void pal_init(void) {
 void linux_x11_cleanup_raw_input();
 PALAPI void pal_shutdown() {
     if(g_display) {
-        XCloseDisplay(g_display);
         linux_x11_cleanup_raw_input();
+        XCloseDisplay(g_display);
+        g_display = NULL;
     }
 }
 
@@ -6462,7 +6419,6 @@ void linux_x11_cleanup_raw_input() {
     if (g_xic) XDestroyIC(g_xic);
     if (g_xim) XCloseIM(g_xim);
     if (g_xkb) XkbFreeKeyboard(g_xkb, XkbAllComponentsMask, True);
-    if (g_display) XCloseDisplay(g_display);
     
     /* Clean up keyboards */
     for (int i = 0; i < g_keyboards.count; i++) {
@@ -7615,7 +7571,7 @@ PALAPI pal_bool pal_minimize_window(pal_window *window)
     return pal_true;
 }
 
-PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_vec4 color) {
+PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color) {
     if (!window) return;
 
     /* Convert float color (0.0 - 1.0) to 24-bit RGB */

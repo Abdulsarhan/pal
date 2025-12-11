@@ -53,10 +53,12 @@ int main() {
     }
 
     // OpenglInfo openglInfo = get_opengl_info();
+#ifdef _WIN32
     pal_sound* music = pal_load_music("sine_wave.wav");
     pal_play_music(music, 0.1f);
     // pal_set_window_icon_legacy(window, "icon.ico");
     // pal_set_taskbar_icon(window, "png.png");
+#endif
     uint8_t running = pal_true;
     pal_event event;
     pal_gamepad_state state;
@@ -129,6 +131,7 @@ int main() {
             printf("Pressed mouse5!\n");
         }
 
+#ifdef _WIN32
         for (int i = 0; i < pal_get_gamepad_count(); i++) {
             if (pal_get_gamepad_state(i, &state)) {
                 /*
@@ -148,6 +151,7 @@ int main() {
                 }
             }
         }
+#endif
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         pal_swap_buffers(window);
