@@ -964,10 +964,12 @@ typedef enum pal_event_type {
 } pal_event_type;
 
 typedef struct pal_common_event {
+    uint32_t type;
     int32_t dummy;
 } pal_common_event;
 
 typedef struct pal_display_event {
+    uint32_t type;
     int32_t display_index;
     int32_t width;
     int32_t height;
@@ -975,6 +977,7 @@ typedef struct pal_display_event {
 } pal_display_event;
 
 typedef struct pal_window_event {
+    uint32_t type;
     uint32_t windowid;
     int32_t event_code;
     int32_t x;
@@ -986,11 +989,13 @@ typedef struct pal_window_event {
 } pal_window_event;
 
 typedef struct pal_keyboard_device_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t connected;
 } pal_keyboard_device_event;
 
 typedef struct pal_keyboard_event {
+    uint32_t type;
     uint32_t virtual_key;
     uint32_t scancode;
     uint8_t pressed;
@@ -1000,27 +1005,32 @@ typedef struct pal_keyboard_event {
 } pal_keyboard_event;
 
 typedef struct pal_text_editing_event {
+    uint32_t type;
     char text[32];
     int32_t start;
     int32_t length;
 } pal_text_editing_event;
 
 typedef struct pal_text_editing_candidates_event {
+    uint32_t type;
     char candidates[8][32];
     int32_t count;
 } pal_text_editing_candidates_event;
 
 typedef struct pal_text_input_event {
+    uint32_t type;
     char text[8];
     int keyboard_id;
 } pal_text_input_event;
 
 typedef struct pal_mouse_device_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t connected;
 } pal_mouse_device_event;
 
 typedef struct pal_mouse_motion_event {
+    uint32_t type;
     int32_t x;
     int32_t y;
     int32_t delta_x;
@@ -1030,6 +1040,7 @@ typedef struct pal_mouse_motion_event {
 } pal_mouse_motion_event;
 
 typedef struct pal_mouse_button_event {
+    uint32_t type;
     int32_t x;
     int32_t y;
     uint8_t pressed;
@@ -1040,6 +1051,7 @@ typedef struct pal_mouse_button_event {
 } pal_mouse_button_event;
 
 typedef struct pal_mouse_wheel_event {
+    uint32_t type;
     int32_t mouse_x;
     int32_t mouse_y;
     float x;
@@ -1050,17 +1062,20 @@ typedef struct pal_mouse_wheel_event {
 } pal_mouse_wheel_event;
 
 typedef struct pal_joy_device_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t connected;
 } pal_joy_device_event;
 
 typedef struct pal_joy_axis_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t axis;
     float value;
 } pal_joy_axis_event;
 
 typedef struct pal_joy_ball_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t ball;
     int32_t delta_x;
@@ -1068,41 +1083,48 @@ typedef struct pal_joy_ball_event {
 } pal_joy_ball_event;
 
 typedef struct pal_joy_hat_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t hat;
     uint8_t value;
 } pal_joy_hat_event;
 
 typedef struct pal_joy_button_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t button;
     uint8_t pressed;
 } pal_joy_button_event;
 
 typedef struct pal_joy_battery_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t level; /* 0-100 */
     uint8_t charging;
 } pal_joy_battery_event;
 
 typedef struct pal_gamepad_device_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t connected;
 } pal_gamepad_device_event;
 
 typedef struct pal_gamepad_axis_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t axis;
     float value;
 } pal_gamepad_axis_event;
 
 typedef struct pal_gamepad_button_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t button;
     uint8_t pressed;
 } pal_gamepad_button_event;
 
 typedef struct pal_gamepad_touchpad_event {
+    uint32_t type;
     int32_t device_id;
     int32_t x;
     int32_t y;
@@ -1110,6 +1132,7 @@ typedef struct pal_gamepad_touchpad_event {
 } pal_gamepad_touchpad_event;
 
 typedef struct pal_gamepad_sensor_event {
+    uint32_t type;
     int32_t device_id;
     float x;
     float y;
@@ -1118,17 +1141,20 @@ typedef struct pal_gamepad_sensor_event {
 } pal_gamepad_sensor_event;
 
 typedef struct pal_audio_device_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t input;
     uint8_t connected;
 } pal_audio_device_event;
 
 typedef struct pal_camera_device_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t connected;
 } pal_camera_device_event;
 
 typedef struct pal_sensor_event {
+    uint32_t type;
     int32_t device_id;
     float x;
     float y;
@@ -1137,16 +1163,19 @@ typedef struct pal_sensor_event {
 } pal_sensor_event;
 
 typedef struct pal_quit_event {
+    uint32_t type;
     int32_t code;
 } pal_quit_event;
 
 typedef struct pal_user_event {
+    uint32_t type;
     int32_t code;
     void *data1;
     void *data2;
 } pal_user_event;
 
 typedef struct pal_touch_finger_event {
+    uint32_t type;
     int64_t touch_id;
     int64_t finger_id;
     float x;
@@ -1156,11 +1185,13 @@ typedef struct pal_touch_finger_event {
 } pal_touch_finger_event;
 
 typedef struct pal_pen_proximity_event {
+    uint32_t type;
     int32_t device_id;
     uint8_t in_range;
 } pal_pen_proximity_event;
 
 typedef struct pal_pen_touch_event {
+    uint32_t type;
     int32_t x;
     int32_t y;
     float pressure;
@@ -1168,17 +1199,20 @@ typedef struct pal_pen_touch_event {
 } pal_pen_touch_event;
 
 typedef struct pal_pen_motion_event {
+    uint32_t type;
     int32_t x;
     int32_t y;
     float pressure;
 } pal_pen_motion_event;
 
 typedef struct pal_pen_button_event {
+    uint32_t type;
     uint8_t button;
     uint8_t pressed;
 } pal_pen_button_event;
 
 typedef struct pal_pen_axis_event {
+    uint32_t type;
     float tilt_x;
     float tilt_y;
     float rotation;
@@ -1189,56 +1223,55 @@ typedef struct pal_render_event {
 } pal_render_event;
 
 typedef struct pal_drop_event {
+    uint32_t type;
     const char **paths;
     int32_t count;
 } pal_drop_event;
 
 typedef struct pal_clipboard_event {
+    uint32_t type;
     const char *text;
 } pal_clipboard_event;
 
-typedef struct pal_event {
-    uint32_t type; /**< Event type, shared with all events, Uint32 to cover user events which are not in the pal_event_type enumeration */
-                   /* Event data: */
-    union {
-        pal_common_event common;                           /**< Common event data */
-        pal_display_event display;                         /**< Display event data */
-        pal_window_event window;                           /**< Window event data */
-        pal_keyboard_device_event kdevice;                 /**< Keyboard device change event data */
-        pal_keyboard_event key;                            /**< Keyboard event data */
-        pal_text_editing_event edit;                       /**< Text editing event data */
-        pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
-        pal_text_input_event text;                         /**< Text input event data */
-        pal_mouse_device_event mdevice;                    /**< Mouse device change event data */
-        pal_mouse_motion_event motion;                     /**< Mouse motion event data */
-        pal_mouse_button_event button;                     /**< Mouse button event data */
-        pal_mouse_wheel_event wheel;                       /**< Mouse wheel event data */
-        pal_joy_device_event jdevice;                      /**< Joystick device change event data */
-        pal_joy_axis_event jaxis;                          /**< Joystick axis event data */
-        pal_joy_ball_event jball;                          /**< Joystick ball event data */
-        pal_joy_hat_event jhat;                            /**< Joystick hat event data */
-        pal_joy_button_event jbutton;                      /**< Joystick button event data */
-        pal_joy_battery_event jbattery;                    /**< Joystick battery event data */
-        pal_gamepad_device_event gdevice;                  /**< Gamepad device event data */
-        pal_gamepad_axis_event gaxis;                      /**< Gamepad axis event data */
-        pal_gamepad_button_event gbutton;                  /**< Gamepad button event data */
-        pal_gamepad_touchpad_event gtouchpad;              /**< Gamepad touchpad event data */
-        pal_gamepad_sensor_event gsensor;                  /**< Gamepad sensor event data */
-        pal_audio_device_event adevice;                    /**< Audio device event data */
-        pal_camera_device_event cdevice;                   /**< Camera device event data */
-        pal_sensor_event sensor;                           /**< Sensor event data */
-        pal_quit_event quit;                               /**< Quit request event data */
-        pal_user_event user;                               /**< Custom event data */
-        pal_touch_finger_event tfinger;                    /**< Touch finger event data */
-        pal_pen_proximity_event pproximity;                /**< Pen proximity event data */
-        pal_pen_touch_event ptouch;                        /**< Pen tip touching event data */
-        pal_pen_motion_event pmotion;                      /**< Pen motion event data */
-        pal_pen_button_event pbutton;                      /**< Pen button event data */
-        pal_pen_axis_event paxis;                          /**< Pen axis event data */
-        pal_render_event render;                           /**< Render event data */
-        pal_drop_event drop;                               /**< Drag and drop event data */
-        pal_clipboard_event clipboard;                     /**< Clipboard event data */
-    };
+typedef union pal_event {
+    uint32_t type;
+    pal_common_event common;                           /**< Common event data */
+    pal_display_event display;                         /**< Display event data */
+    pal_window_event window;                           /**< Window event data */
+    pal_keyboard_device_event kdevice;                 /**< Keyboard device change event data */
+    pal_keyboard_event key;                            /**< Keyboard event data */
+    pal_text_editing_event edit;                       /**< Text editing event data */
+    pal_text_editing_candidates_event edit_candidates; /**< Text editing candidates event data */
+    pal_text_input_event text;                         /**< Text input event data */
+    pal_mouse_device_event mdevice;                    /**< Mouse device change event data */
+    pal_mouse_motion_event motion;                     /**< Mouse motion event data */
+    pal_mouse_button_event button;                     /**< Mouse button event data */
+    pal_mouse_wheel_event wheel;                       /**< Mouse wheel event data */
+    pal_joy_device_event jdevice;                      /**< Joystick device change event data */
+    pal_joy_axis_event jaxis;                          /**< Joystick axis event data */
+    pal_joy_ball_event jball;                          /**< Joystick ball event data */
+    pal_joy_hat_event jhat;                            /**< Joystick hat event data */
+    pal_joy_button_event jbutton;                      /**< Joystick button event data */
+    pal_joy_battery_event jbattery;                    /**< Joystick battery event data */
+    pal_gamepad_device_event gdevice;                  /**< Gamepad device event data */
+    pal_gamepad_axis_event gaxis;                      /**< Gamepad axis event data */
+    pal_gamepad_button_event gbutton;                  /**< Gamepad button event data */
+    pal_gamepad_touchpad_event gtouchpad;              /**< Gamepad touchpad event data */
+    pal_gamepad_sensor_event gsensor;                  /**< Gamepad sensor event data */
+    pal_audio_device_event adevice;                    /**< Audio device event data */
+    pal_camera_device_event cdevice;                   /**< Camera device event data */
+    pal_sensor_event sensor;                           /**< Sensor event data */
+    pal_quit_event quit;                               /**< Quit request event data */
+    pal_user_event user;                               /**< Custom event data */
+    pal_touch_finger_event tfinger;                    /**< Touch finger event data */
+    pal_pen_proximity_event pproximity;                /**< Pen proximity event data */
+    pal_pen_touch_event ptouch;                        /**< Pen tip touching event data */
+    pal_pen_motion_event pmotion;                      /**< Pen motion event data */
+    pal_pen_button_event pbutton;                      /**< Pen button event data */
+    pal_pen_axis_event paxis;                          /**< Pen axis event data */
+    pal_render_event render;                           /**< Render event data */
+    pal_drop_event drop;                               /**< Drag and drop event data */
+    pal_clipboard_event clipboard;                     /**< Clipboard event data */
 
     uint8_t padding[128];
 } pal_event;
@@ -3196,7 +3229,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     }
 
     if (is_key_released) {
-        event.type = PAL_EVENT_KEY_UP;
+        event.key.type = PAL_EVENT_KEY_UP;
         event.key.virtual_key = pal_key,
         event.key.scancode = pal_scancode,
         event.key.pressed = 0,
@@ -3208,7 +3241,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         g_keyboards.keys_toggled[kb_index][pal_scancode] = 0;
         pal__eventq_push(&g_event_queue, event);
     } else {
-        event.type = PAL_EVENT_KEY_DOWN;
+        event.key.type = PAL_EVENT_KEY_DOWN;
         event.key.virtual_key = pal_key,
         event.key.scancode = pal_scancode,
         event.key.pressed = 1,
@@ -3238,7 +3271,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             
             if (utf8_len > 0) {
                 utf8_buffer[utf8_len] = '\0';
-                event.type = PAL_EVENT_TEXT_INPUT;
+                event.text.type = PAL_EVENT_TEXT_INPUT;
                 pal_strncpy(event.text.text, utf8_buffer, sizeof(event.text.text) - 1);
                 event.text.text[sizeof(event.text.text) - 1] = '\0';
                 event.text.keyboard_id = kb_index;
@@ -3281,7 +3314,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
 
     // Handle motion
     if (dx || dy) {
-        event.type = PAL_EVENT_MOUSE_MOTION;
+        event.motion.type = PAL_EVENT_MOUSE_MOTION;
         event.motion.x = point.x;
         event.motion.y = point.y;
         event.motion.delta_x = dx;
@@ -3296,7 +3329,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         SHORT wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
         g_mice.wheel[mouse_index] += wheel_delta / WHEEL_DELTA;
 
-        event.type = PAL_EVENT_MOUSE_WHEEL;
+        event.wheel.type = PAL_EVENT_MOUSE_WHEEL;
         event.wheel.mouse_x = point.x;
         event.wheel.mouse_y = point.y;
         event.wheel.x = 0;
@@ -3310,7 +3343,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     if (buttons & RI_MOUSE_HWHEEL) {
         SHORT hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
 
-        event.type = PAL_EVENT_MOUSE_WHEEL;
+        event.wheel.type = PAL_EVENT_MOUSE_WHEEL;
         event.wheel.mouse_x = point.x;
         event.wheel.mouse_y = point.y;
         event.wheel.x = (float)(hwheel_delta / WHEEL_DELTA);
@@ -3341,7 +3374,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             for(int i =0; i < g_keyboards.count; i++) {
                 cached_modifiers |= g_keyboards.cached_modifiers[i];
             }
-            event.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
+            event.button.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
             event.button.x = point.x;
             event.button.y = point.y;
             event.button.pressed = 1;
@@ -3355,7 +3388,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             g_mice.buttons_toggled[mouse_index][pal_button] = 0;
             g_cached_mouse_buttons &= ~(1 << i);
 
-            event.type = PAL_EVENT_MOUSE_BUTTON_UP;
+            event.button.type = PAL_EVENT_MOUSE_BUTTON_UP;
             event.button.x = point.x;
             event.button.y = point.y;
             event.button.pressed = 0;
@@ -3384,7 +3417,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
      switch (msg) {
         case WM_CLOSE:
-            event.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
+            event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
             event.window.width = 0;
@@ -3393,7 +3426,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.visible = 0;
             break;
         case WM_DESTROY:
-            event.type = PAL_EVENT_WINDOW_CLOSED;
+            event.window.type = PAL_EVENT_WINDOW_CLOSED;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
             event.window.width = 0;
@@ -3402,11 +3435,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.visible = 0;
             break;
         case WM_QUIT: // we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing.
-            event.type = PAL_EVENT_QUIT;
+            event.quit.type = PAL_EVENT_QUIT;
             event.quit.code = 0;
             break;
         case WM_MOVE:
-            event.type = PAL_EVENT_WINDOW_MOVED;
+            event.window.type = PAL_EVENT_WINDOW_MOVED;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
             event.window.width = 0;
@@ -3415,7 +3448,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.visible = 1;
             break;
         case WM_SIZE:
-            event.type = PAL_EVENT_WINDOW_RESIZED;
+            event.window.type = PAL_EVENT_WINDOW_RESIZED;
             event.window.event_code = WM_SIZE;
             event.window.x = 0;
             event.window.y = 0;
@@ -3445,7 +3478,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 ClipCursor(&rect);
             }
             // Mouse just entered the window
-            event.type = PAL_EVENT_MOUSE_MOTION;
+            event.motion.type = PAL_EVENT_MOUSE_MOTION;
             event.motion.x = GET_X_LPARAM(lparam);
             event.motion.y = GET_Y_LPARAM(lparam);
             event.motion.buttons = (uint32_t)wparam};
@@ -3458,7 +3491,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
             pos = (WINDOWPOS*)lparam;
-            event.type = PAL_EVENT_WINDOW_MOVED;
+            event.window.type = PAL_EVENT_WINDOW_MOVED;
             event.window.event_code = msg;
             event.window.x = pos->x;
             event.window.y = pos->y;
@@ -3470,7 +3503,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
         case WM_INPUT: {
             win32_handle_raw_input((HRAWINPUT)lparam);
-            event.type = PAL_EVENT_SENSOR_UPDATE;
+            event.sensor.type = PAL_EVENT_SENSOR_UPDATE;
             event.sensor.device_id = 0;
             event.sensor.x = 0;
             event.sensor.y = 0;
@@ -3489,7 +3522,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
                 paths[i] = utf8;
             }
-            event.type = PAL_EVENT_DROP_FILE;
+            event.drop.type = PAL_EVENT_DROP_FILE;
             event.drop.paths = paths;
             event.drop.count = count;
             DragFinish(hDrop);
@@ -3504,11 +3537,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.height = 0;
             event.window.visible = 1;
             if ((BOOL)wparam == FALSE) {
-                event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
+                event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
                 event.window.focused = 0;
                 printf("PAL: Lost Focus!\n");
             } else {
-                event.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
+                event.window.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
                 event.window.focused = 1;
                 printf("PAL: Gained Focus!\n");
             }
@@ -3833,7 +3866,7 @@ PALAPI void pal_close_window(pal_window *window)
 
     DestroyWindow(window->hwnd);
     window->hwnd = NULL;
-    event.type = PAL_EVENT_WINDOW_CLOSED;
+    event.window.type = PAL_EVENT_WINDOW_CLOSED;
     pal__eventq_push(&g_event_queue, event);
 }
 
@@ -6191,7 +6224,7 @@ void linux_x11_translate_event(XEvent *xevent) {
     switch(xevent->type) {
         case ClientMessage: {
             if ((Atom)xevent->xclient.data.l[0] == g_wm_delete) {
-                event.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
+                event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
                 event.window.windowid = (uint32_t)xevent->xclient.window;
                 pal__eventq_push(&g_event_queue, event);
             }
@@ -6202,14 +6235,14 @@ void linux_x11_translate_event(XEvent *xevent) {
             XConfigureEvent *ce = &xevent->xconfigure;
 
             /* Window moved */
-            event.type = PAL_EVENT_WINDOW_MOVED;
+            event.window.type = PAL_EVENT_WINDOW_MOVED;
             event.window.windowid = (uint32_t)ce->window;
             event.window.x = ce->x;
             event.window.y = ce->y;
             pal__eventq_push(&g_event_queue, event);
 
             /* Window resized */
-            event.type = PAL_EVENT_WINDOW_RESIZED;
+            event.window.type = PAL_EVENT_WINDOW_RESIZED;
             event.window.windowid = (uint32_t)ce->window;
             event.window.width = ce->width;
             event.window.height = ce->height;
@@ -6218,7 +6251,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         }
 
         case MapNotify: {
-            event.type = PAL_EVENT_WINDOW_SHOWN;
+            event.window.type = PAL_EVENT_WINDOW_SHOWN;
             event.window.windowid = (uint32_t)xevent->xmap.window;
             event.window.visible = 1;
             pal__eventq_push(&g_event_queue, event);
@@ -6226,7 +6259,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         }
 
         case UnmapNotify: {
-            event.type = PAL_EVENT_WINDOW_HIDDEN;
+            event.window.type = PAL_EVENT_WINDOW_HIDDEN;
             event.window.windowid = (uint32_t)xevent->xunmap.window;
             event.window.visible = 0;
             pal__eventq_push(&g_event_queue, event);
@@ -6235,7 +6268,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case Expose: {
             if (xevent->xexpose.count == 0) { /* Only on last expose event */
-                event.type = PAL_EVENT_WINDOW_EXPOSED;
+                event.window.type = PAL_EVENT_WINDOW_EXPOSED;
                 event.window.windowid = (uint32_t)xevent->xexpose.window;
                 pal__eventq_push(&g_event_queue, event);
             }
@@ -6243,7 +6276,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         }
 
         case FocusIn: {
-            event.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
+            event.window.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
             event.window.windowid = (uint32_t)xevent->xfocus.window;
             event.window.focused = 1;
             pal__eventq_push(&g_event_queue, event);
@@ -6251,7 +6284,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         }
 
         case FocusOut: {
-            event.type = PAL_EVENT_WINDOW_LOST_FOCUS;
+            event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
             event.window.windowid = (uint32_t)xevent->xfocus.window;
             event.window.focused = 0;
             pal__eventq_push(&g_event_queue, event);
@@ -6259,7 +6292,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         }
 
         case DestroyNotify: {
-            event.type = PAL_EVENT_WINDOW_CLOSED;
+            event.window.type = PAL_EVENT_WINDOW_CLOSED;
             event.window.windowid = (uint32_t)xevent->xdestroywindow.window;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6835,7 +6868,7 @@ void linux_x11_poll_raw_input() {
                         g_keyboards.keys_toggled[i][sc] = 1;
                     }
 
-                    event.type = new_state ? PAL_EVENT_KEY_DOWN : PAL_EVENT_KEY_UP;
+                    event.key.type = new_state ? PAL_EVENT_KEY_DOWN : PAL_EVENT_KEY_UP;
                     event.key.pressed = new_state;
                     event.key.scancode = sc;
                     event.key.virtual_key = pal_vk;
@@ -6849,7 +6882,7 @@ void linux_x11_poll_raw_input() {
                     if (new_state || is_repeat) {
                         char text[8] = {0};
                         if (linux_keycode_to_utf8(ev.code, g_keyboards.keys[i], text, sizeof(text))) {
-                            event.type = PAL_EVENT_TEXT_INPUT;
+                            event.text.type = PAL_EVENT_TEXT_INPUT;
                             pal_strncpy(event.text.text, text, sizeof(event.text.text) - 1);
                             event.text.text[sizeof(event.text.text) - 1] = '\0';
                             event.text.keyboard_id = i;
@@ -6887,7 +6920,7 @@ void linux_x11_poll_raw_input() {
                         combined_modifiers |= g_keyboards.cached_modifiers[k];
                     }
 
-                    event.type = new_state ? PAL_EVENT_MOUSE_BUTTON_DOWN : PAL_EVENT_MOUSE_BUTTON_UP;
+                    event.button.type = new_state ? PAL_EVENT_MOUSE_BUTTON_DOWN : PAL_EVENT_MOUSE_BUTTON_UP;
                     event.button.pressed = new_state;
                     event.button.button = pal_button;
                     event.button.clicks = 1;
@@ -6906,7 +6939,7 @@ void linux_x11_poll_raw_input() {
         }
 
         if (motion_accumulated) {
-            event.type = PAL_EVENT_MOUSE_MOTION;
+            event.motion.type = PAL_EVENT_MOUSE_MOTION;
             event.motion.delta_x = g_mice.dx[i];
             event.motion.delta_y = g_mice.dy[i];
             event.motion.mouse_id = i;
@@ -6923,7 +6956,7 @@ void linux_x11_poll_raw_input() {
                 combined_modifiers |= g_keyboards.cached_modifiers[k];
             }
 
-            event.type = PAL_EVENT_MOUSE_WHEEL;
+            event.wheel.type = PAL_EVENT_MOUSE_WHEEL;
             event.wheel.y = (float)g_mice.wheel[i];
             event.wheel.x = 0.0f;
             event.wheel.mouse_id = i;
@@ -7353,7 +7386,7 @@ PALAPI void pal_close_window(pal_window *window) {
     }
 
     pal_event event = {0};
-    event.type = PAL_EVENT_WINDOW_CLOSED;
+    event.window.type = PAL_EVENT_WINDOW_CLOSED;
     pal__eventq_push(&g_event_queue, event);
 }
 
@@ -8310,7 +8343,7 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
         // Queue resize event if dimensions changed
         if ((w > 0 && w != window->width) || (h > 0 && h != window->height)) {
             pal_event event = {0};
-            event.type = PAL_EVENT_WINDOW_RESIZED;
+            event.window.type = PAL_EVENT_WINDOW_RESIZED;
             event.window.windowid = window->id;
             event.window.width = w > 0 ? w : window->width;
             event.window.height = h > 0 ? h : window->height;
@@ -8325,7 +8358,7 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
         
         // Queue close event
         pal_event event = {0};
-        event.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
+        event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
         event.window.windowid = window->id;
         pal__eventq_push(&g_event_queue, event);
     }
@@ -8509,7 +8542,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         
         // Queue window shown event
         pal_event event = {0};
-        event.type = PAL_EVENT_WINDOW_SHOWN;
+        event.window.type = PAL_EVENT_WINDOW_SHOWN;
         event.window.windowid = window->id;
         event.window.width = window->width;
         event.window.height = window->height;
@@ -8526,7 +8559,7 @@ PALAPI void pal_close_window(pal_window *window) {
 
     // Queue window closed event
     pal_event event = {0};
-    event.type = PAL_EVENT_WINDOW_CLOSED;
+    event.window.type = PAL_EVENT_WINDOW_CLOSED;
     event.window.windowid = window->id;
     pal__eventq_push(&g_event_queue, event);
 
