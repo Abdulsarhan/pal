@@ -6395,6 +6395,30 @@ struct pal_window {
 };
 uint32_t g_next_window_id = 1;
 
+// X11 window registry (uses same g_windows from cross-platform section)
+static pal_window* x11_find_window_by_xwindow(Window xwin) {
+    for (int i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] && g_windows.windows[i]->window == xwin) {
+            return g_windows.windows[i];
+        }
+    }
+    return NULL;
+}
+
+static pal_window* x11_find_window_by_id(uint32_t id) {
+    for (int i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] && g_windows.windows[i]->id == id) {
+            return g_windows.windows[i];
+        }
+    }
+    return NULL;
+}
+
+static uint32_t x11_get_window_id_from_xwindow(Window xwin) {
+    pal_window* window = x11_find_window_by_xwindow(xwin);
+    return window ? window->id : 0;
+}
+
 struct pal_sound {
     /* Core audio data */
     unsigned char* data; /* Raw PCM audio data (initial buffer) */
@@ -6470,7 +6494,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         case ClientMessage: {
             if ((Atom)xevent->xclient.data.l[0] == g_wm_delete) {
                 event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
-                event.window.window_id = (uint32_t)xevent->xclient.window;
+                event.window.window_id = x11_get_window_id_from_xwindow(xevent->xclient.window);
                 pal__eventq_push(&g_event_queue, event);
             }
             break;
@@ -6478,26 +6502,36 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case ConfigureNotify: {
             XConfigureEvent *ce = &xevent->xconfigure;
+            uint32_t window_id = x11_get_window_id_from_xwindow(ce->window);
 
             /* Window moved */
             event.window.type = PAL_EVENT_WINDOW_MOVED;
-            event.window.window_id = (uint32_t)ce->window;
+            event.window.window_id = window_id;
             event.window.x = ce->x;
             event.window.y = ce->y;
             pal__eventq_push(&g_event_queue, event);
 
             /* Window resized */
             event.window.type = PAL_EVENT_WINDOW_RESIZED;
-            event.window.window_id = (uint32_t)ce->window;
+            event.window.window_id = window_id;
             event.window.width = ce->width;
             event.window.height = ce->height;
             pal__eventq_push(&g_event_queue, event);
+            
+            /* Update window dimensions */
+            pal_window* window = x11_find_window_by_xwindow(ce->window);
+            if (window) {
+                window->width = (float)ce->width;
+                window->height = (float)ce->height;
+                window->x = (float)ce->x;
+                window->y = (float)ce->y;
+            }
             break;
         }
 
         case MapNotify: {
             event.window.type = PAL_EVENT_WINDOW_SHOWN;
-            event.window.window_id = (uint32_t)xevent->xmap.window;
+            event.window.window_id = x11_get_window_id_from_xwindow(xevent->xmap.window);
             event.window.visible = 1;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6505,7 +6539,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case UnmapNotify: {
             event.window.type = PAL_EVENT_WINDOW_HIDDEN;
-            event.window.window_id = (uint32_t)xevent->xunmap.window;
+            event.window.window_id = x11_get_window_id_from_xwindow(xevent->xunmap.window);
             event.window.visible = 0;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6514,7 +6548,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         case Expose: {
             if (xevent->xexpose.count == 0) { /* Only on last expose event */
                 event.window.type = PAL_EVENT_WINDOW_EXPOSED;
-                event.window.window_id = (uint32_t)xevent->xexpose.window;
+                event.window.window_id = x11_get_window_id_from_xwindow(xevent->xexpose.window);
                 pal__eventq_push(&g_event_queue, event);
             }
             break;
@@ -6522,7 +6556,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case FocusIn: {
             event.window.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
-            event.window.window_id = (uint32_t)xevent->xfocus.window;
+            event.window.window_id = x11_get_window_id_from_xwindow(xevent->xfocus.window);
             event.window.focused = 1;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6530,7 +6564,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case FocusOut: {
             event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
-            event.window.window_id = (uint32_t)xevent->xfocus.window;
+            event.window.window_id = x11_get_window_id_from_xwindow(xevent->xfocus.window);
             event.window.focused = 0;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6538,7 +6572,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case DestroyNotify: {
             event.window.type = PAL_EVENT_WINDOW_CLOSED;
-            event.window.window_id = (uint32_t)xevent->xdestroywindow.window;
+            event.window.window_id = x11_get_window_id_from_xwindow(xevent->xdestroywindow.window);
             pal__eventq_push(&g_event_queue, event);
             break;
         }
@@ -7568,7 +7602,15 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         XFreeColormap(g_display, colormap);
         free(window);
         return NULL;
+    }
+    
+    // Register window in global registry with unique ID
+    if (g_windows.count < MAX_WINDOWS) {
+        window->id = g_next_window_id++;
+        g_windows.windows[g_windows.count] = window;
+        g_windows.count++;
     } else {
+        fprintf(stderr, "ERROR: Maximum number of windows reached\n");
         window->id = g_next_window_id++;
     }
 
@@ -7624,6 +7666,8 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
 }
 
 PALAPI void pal_close_window(pal_window *window) {
+    if (!window) return;
+    
     if(window->graphics_context) {
         XFreeGC(g_display, window->graphics_context);
     }
@@ -7637,8 +7681,21 @@ PALAPI void pal_close_window(pal_window *window) {
     event.window.window_id = window->id;
     pal__eventq_push(&g_event_queue, event);
 
+    // Remove from window registry
+    for (int i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] == window) {
+            for (int j = i; j < g_windows.count - 1; j++) {
+                g_windows.windows[j] = g_windows.windows[j + 1];
+            }
+            g_windows.windows[g_windows.count - 1] = NULL;
+            g_windows.count--;
+            break;
+        }
+    }
+
     window->window = 0;
     window->id = 0;
+    free(window);
 }
 
 static void linux_x11_send_wm_state_message(Window win, long action, Atom property) {
@@ -8128,6 +8185,7 @@ typedef struct pal_window {
 // Global state
 static int g_wayland_fd = -1;
 static uint32_t g_wayland_current_id = 1;
+static uint32_t g_next_window_id = 1;
 static pal_window **g_windows = NULL;
 static size_t g_window_count = 0;
 static size_t g_window_capacity = 0;
@@ -8217,6 +8275,15 @@ static pal_window *find_window_by_object_id(uint32_t object_id) {
             w->xdg_wm_base == object_id || w->wl_registry == object_id ||
             w->wl_shm == object_id) {
             return w;
+        }
+    }
+    return NULL;
+}
+
+static pal_window *wayland_find_window_by_id(uint32_t id) {
+    for (size_t i = 0; i < g_window_count; i++) {
+        if (g_windows[i] && g_windows[i]->id == id) {
+            return g_windows[i];
         }
     }
     return NULL;
@@ -8691,7 +8758,6 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         return NULL;
     }
 
-    static uint32_t next_window_id = 1;
     window->id = g_next_window_id++;
     window->width = width;
     window->height = height;
