@@ -1,11 +1,13 @@
 Now:
-Make error codes more consistent. Some functions return 0 on success, others return 1.
+
+Give each window an ID so that the user of the library can tell them appart when they recieve window events.
+Don't include the headers directly, only use what you need.
 Add dark mode detection for windows and linux.
 Finish implementing all the events and window flags.
-Don't include the headers directly, only use what you need.
-Create a replacement for all cstdlib functions that we use.
 Integrate gamepad system into the window events.
-Give each window an ID so that the user of the library can tell them appart when they recieve window events.
+
+Create a replacement for all cstdlib functions that we use.
+Make error codes more consistent. Some functions return 0 on success, others return 1.
 
 Later:
 Fully integrate new gamepad system that supports all gamepads.

@@ -978,7 +978,7 @@ typedef struct pal_display_event {
 
 typedef struct pal_window_event {
     uint32_t type;
-    uint32_t windowid;
+    uint32_t window_id;
     int32_t event_code;
     int32_t x;
     int32_t y;
@@ -1002,6 +1002,7 @@ typedef struct pal_keyboard_event {
     uint8_t repeat;
     uint32_t modifiers;
     int32_t keyboard_id;
+    uint32_t window_id;
 } pal_keyboard_event;
 
 typedef struct pal_text_editing_event {
@@ -1009,18 +1010,21 @@ typedef struct pal_text_editing_event {
     char text[32];
     int32_t start;
     int32_t length;
+    uint32_t window_id;
 } pal_text_editing_event;
 
 typedef struct pal_text_editing_candidates_event {
     uint32_t type;
     char candidates[8][32];
     int32_t count;
+    uint32_t window_id;
 } pal_text_editing_candidates_event;
 
 typedef struct pal_text_input_event {
     uint32_t type;
     char text[8];
     int keyboard_id;
+    uint32_t window_id;
 } pal_text_input_event;
 
 typedef struct pal_mouse_device_event {
@@ -1037,6 +1041,7 @@ typedef struct pal_mouse_motion_event {
     int32_t delta_y;
     uint32_t buttons;
     int32_t mouse_id;
+    uint32_t window_id;
 } pal_mouse_motion_event;
 
 typedef struct pal_mouse_button_event {
@@ -1048,6 +1053,7 @@ typedef struct pal_mouse_button_event {
     uint8_t clicks;
     uint32_t modifiers;
     int32_t mouse_id;
+    uint32_t window_id;
 } pal_mouse_button_event;
 
 typedef struct pal_mouse_wheel_event {
@@ -1059,6 +1065,7 @@ typedef struct pal_mouse_wheel_event {
     uint32_t modifiers;
     int wheel_direction; /* some weird ahh mice have horizontal scroll wheels */
     int32_t mouse_id;
+    uint32_t window_id;
 } pal_mouse_wheel_event;
 
 typedef struct pal_joy_device_event {
@@ -1072,6 +1079,7 @@ typedef struct pal_joy_axis_event {
     int32_t device_id;
     uint8_t axis;
     float value;
+    uint32_t window_id;
 } pal_joy_axis_event;
 
 typedef struct pal_joy_ball_event {
@@ -1080,6 +1088,7 @@ typedef struct pal_joy_ball_event {
     uint8_t ball;
     int32_t delta_x;
     int32_t delta_y;
+    uint32_t window_id;
 } pal_joy_ball_event;
 
 typedef struct pal_joy_hat_event {
@@ -1087,6 +1096,7 @@ typedef struct pal_joy_hat_event {
     int32_t device_id;
     uint8_t hat;
     uint8_t value;
+    uint32_t window_id;
 } pal_joy_hat_event;
 
 typedef struct pal_joy_button_event {
@@ -1094,6 +1104,7 @@ typedef struct pal_joy_button_event {
     int32_t device_id;
     uint8_t button;
     uint8_t pressed;
+    uint32_t window_id;
 } pal_joy_button_event;
 
 typedef struct pal_joy_battery_event {
@@ -1564,6 +1575,15 @@ PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *
     return stbi_load(filename, x, y, comp, req_comp);
 }
 
+/* Window registry */
+#define MAX_WINDOWS 16
+
+typedef struct {
+    pal_window *windows[MAX_WINDOWS];
+    int count;
+}pal_windows;
+static pal_windows g_windows = {0};
+
 /*----------------------------------------*/
 /* Keyboard and mouse input system -------*/
 /*----------------------------------------*/
@@ -2024,12 +2044,26 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 // for file permissions.
 #include <aclapi.h>
 
+#include <dbt.h>      // For WM_DEVICECHANGE structures
+#include <hidclass.h> // For GUID_DEVINTERFACE_HID - you may need to define this
+
 // OpenGL
 #include <gl/gl.h>
 #include <GL/wglext.h>
 
 // C Standard Library
 #include <assert.h>
+
+// If GUID_DEVINTERFACE_HID isn't available, define it:
+#ifndef GUID_DEVINTERFACE_HID
+DEFINE_GUID(GUID_DEVINTERFACE_HID, 0x4D1E55B2L, 0xF16F, 0x11CF, 0x88, 0xCB, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30);
+#endif
+
+// Device notification handles
+static HDEVNOTIFY g_hDevNotify_HID = NULL;
+
+// Message-only window for raw input (receives input regardless of focus)
+static HWND g_input_window = NULL;
 
 // Global function pointers
 static DWORD(WINAPI* XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE* pState) = NULL;
@@ -2044,8 +2078,8 @@ static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = pal_false;
 
 static HDC s_fakeDC = {0};
-pal_window* g_current_window;
-
+pal_window* g_current_window = NULL;
+uint32_t g_next_window_id = 1;
 IXAudio2* g_xaudio2 = NULL;
 IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
@@ -2059,6 +2093,7 @@ struct pal_window {
     pal_bool confine_mouse;
     float width;
     float height;
+    uint32_t id;
 };
 
 struct pal_monitor {
@@ -2645,7 +2680,6 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     HDC hdc = GetDC(NULL);
     HBITMAP color_bitmap, mask_bitmap;
     ICONINFO ii = {0};
-    HICON hIcon;
 
     if (!file)
         return NULL;
@@ -3016,10 +3050,6 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
     pal_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-PALAPI pal_bool pal_close_window(pal_window* window) {
-    return (pal_bool)DestroyWindow(window->hwnd);
-}
-
 void win32_enumerate_keyboards(void) {
     UINT numDevices;
     GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
@@ -3087,7 +3117,53 @@ void win32_enumerate_mice(void) {
     free(deviceList);
 }
 
-static void update_modifier_state(USHORT vk, pal_bool is_key_released, int keyboard_index) {
+// Helper to find window by HWND
+static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
+    for (int i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] && g_windows.windows[i]->hwnd == hwnd) {
+            return g_windows.windows[i];
+        }
+    }
+    return NULL;
+}
+
+// Helper to find window by ID
+static pal_window* win32_find_window_by_id(uint32_t id) {
+    for (int i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] && g_windows.windows[i]->id == id) {
+            return g_windows.windows[i];
+        }
+    }
+    return NULL;
+}
+
+// Get the window that currently has keyboard focus
+static pal_window* win32_get_focused_window(void) {
+    HWND focused = GetFocus();
+    if (!focused) {
+        focused = GetForegroundWindow();
+    }
+    return win32_find_window_by_hwnd(focused);
+}
+
+// Get the window under the mouse cursor
+static pal_window* win32_get_window_under_cursor(void) {
+    POINT pt;
+    GetCursorPos(&pt);
+    HWND hwnd = WindowFromPoint(pt);
+    
+    // Walk up parent chain to find our window
+    while (hwnd) {
+        pal_window* window = win32_find_window_by_hwnd(hwnd);
+        if (window) {
+            return window;
+        }
+        hwnd = GetParent(hwnd);
+    }
+    return NULL;
+}
+
+static void update_modifier_state(USHORT vk, pal_bool is_key_released, int keyboard_index);
     int modifier_flag = 0;
 
     switch (vk) {
@@ -3173,7 +3249,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         key_is_down[kb_index][vk] = !is_key_released;
     }
 
-    update_modifier_state(vk, is_key_released, keyboard_index);
+    update_modifier_state(vk, is_key_released, kb_index);
 
     int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
     int pal_scancode = 0;
@@ -3184,46 +3260,46 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         if (makecode < 256) pal_scancode = win32_makecode_to_pal_scancode[makecode];
     }
 
+    // Determine which window should receive this keyboard event
+    pal_window* target_window = win32_get_focused_window();
+    uint32_t target_window_id = target_window ? target_window->id : 0;
+
     if (is_key_released) {
         event.key.type = PAL_EVENT_KEY_UP;
-        event.key.virtual_key = pal_key,
-        event.key.scancode = pal_scancode,
-        event.key.pressed = 0,
-        event.key.repeat = 0,
-        event.key.modifiers = g_keyboards.cached_modifiers[kb_index],
-        event.key.keyboard_id = kb_index
+        event.key.virtual_key = pal_key;
+        event.key.scancode = pal_scancode;
+        event.key.pressed = 0;
+        event.key.repeat = 0;
+        event.key.modifiers = g_keyboards.cached_modifiers[kb_index];
+        event.key.keyboard_id = kb_index;
+        event.key.window_id = target_window_id;
 
         g_keyboards.keys[kb_index][pal_scancode] = 0;
         g_keyboards.keys_toggled[kb_index][pal_scancode] = 0;
         pal__eventq_push(&g_event_queue, event);
     } else {
         event.key.type = PAL_EVENT_KEY_DOWN;
-        event.key.virtual_key = pal_key,
-        event.key.scancode = pal_scancode,
-        event.key.pressed = 1,
-        event.key.repeat = is_repeat,
-        event.key.modifiers = g_keyboards.cached_modifiers[kb_index],
-        event.key.keyboard_id = kb_index
+        event.key.virtual_key = pal_key;
+        event.key.scancode = pal_scancode;
+        event.key.pressed = 1;
+        event.key.repeat = is_repeat;
+        event.key.modifiers = g_keyboards.cached_modifiers[kb_index];
+        event.key.keyboard_id = kb_index;
+        event.key.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
 
-
-        WCHAR utf_16_char[4] = {0};
+        // Text input event
+        BYTE keyboard_state[256] = {0};
+        GetKeyboardState(keyboard_state);
+        
+        WCHAR utf16_buffer[4] = {0};
         UINT scan_code = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
         int result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
         
         if (result > 0) {
-            // Convert UTF-16 to UTF-8
             char utf8_buffer[8] = {0};
-            int utf8_len = WideCharToMultiByte(
-                CP_UTF8,
-                0,
-                utf16_buffer,
-                result,
-                utf8_buffer,
-                sizeof(utf8_buffer) - 1,
-                NULL,
-                NULL
-            );
+            int utf8_len = WideCharToMultiByte(CP_UTF8, 0, utf16_buffer, result,
+                                                utf8_buffer, sizeof(utf8_buffer) - 1, NULL, NULL);
             
             if (utf8_len > 0) {
                 utf8_buffer[utf8_len] = '\0';
@@ -3231,9 +3307,9 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
                 pal_strncpy(event.text.text, utf8_buffer, sizeof(event.text.text) - 1);
                 event.text.text[sizeof(event.text.text) - 1] = '\0';
                 event.text.keyboard_id = kb_index;
+                event.text.window_id = target_window_id;
                 pal__eventq_push(&g_event_queue, event);
             }
-
         }
 
         unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
@@ -3264,9 +3340,19 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     g_mice.dy[mouse_index] += dy;
 
     USHORT buttons = raw->data.mouse.usButtonFlags;
+    
+    // Determine which window the mouse is interacting with
+    pal_window* target_window = win32_get_window_under_cursor();
+    uint32_t target_window_id = target_window ? target_window->id : 0;
+    
+    // Get cursor position relative to the target window
     POINT point = {0};
     GetCursorPos(&point);
-    ScreenToClient(g_current_window->hwnd, &point);
+    if (target_window) {
+        ScreenToClient(target_window->hwnd, &point);
+    } else if (g_current_window) {
+        ScreenToClient(g_current_window->hwnd, &point);
+    }
 
     // Handle motion
     if (dx || dy) {
@@ -3277,6 +3363,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.motion.delta_y = dy;
         event.motion.buttons = g_cached_mouse_buttons;
         event.motion.mouse_id = mouse_index;
+        event.motion.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -3290,8 +3377,9 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.wheel.mouse_y = point.y;
         event.wheel.x = 0;
         event.wheel.y = (float)(wheel_delta / WHEEL_DELTA);
-        event.wheel.wheel_direction = (wheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL;
+        event.wheel.wheel_direction = PAL_MOUSEWHEEL_VERTICAL;
         event.wheel.mouse_id = mouse_index;
+        event.wheel.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -3304,8 +3392,9 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.wheel.mouse_y = point.y;
         event.wheel.x = (float)(hwheel_delta / WHEEL_DELTA);
         event.wheel.y = 0;
-        event.wheel.wheel_direction = (hwheel_delta > 0) ? PAL_MOUSEWHEEL_VERTICAL : PAL_MOUSEWHEEL_HORIZONTAL;
+        event.wheel.wheel_direction = PAL_MOUSEWHEEL_HORIZONTAL;
         event.wheel.mouse_id = mouse_index;
+        event.wheel.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
     }
 
@@ -3326,10 +3415,11 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             
             g_cached_mouse_buttons |= (1 << i);
 
-            int cached_modifers = 0;
-            for(int i =0; i < g_keyboards.count; i++) {
-                cached_modifiers |= g_keyboards.cached_modifiers[i];
+            int cached_modifiers = 0;
+            for (int k = 0; k < g_keyboards.count; k++) {
+                cached_modifiers |= g_keyboards.cached_modifiers[k];
             }
+            
             event.button.type = PAL_EVENT_MOUSE_BUTTON_DOWN;
             event.button.x = point.x;
             event.button.y = point.y;
@@ -3338,11 +3428,17 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             event.button.modifiers = cached_modifiers;
             event.button.button = pal_button;
             event.button.mouse_id = mouse_index;
+            event.button.window_id = target_window_id;
             pal__eventq_push(&g_event_queue, event);
         } else if (up) {
             g_mice.buttons[mouse_index][pal_button] = 0;
             g_mice.buttons_toggled[mouse_index][pal_button] = 0;
             g_cached_mouse_buttons &= ~(1 << i);
+
+            int cached_modifiers = 0;
+            for (int k = 0; k < g_keyboards.count; k++) {
+                cached_modifiers |= g_keyboards.cached_modifiers[k];
+            }
 
             event.button.type = PAL_EVENT_MOUSE_BUTTON_UP;
             event.button.x = point.x;
@@ -3352,13 +3448,133 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             event.button.modifiers = cached_modifiers;
             event.button.button = pal_button;
             event.button.mouse_id = mouse_index;
+            event.button.window_id = target_window_id;
             pal__eventq_push(&g_event_queue, event);
         }
     }
 }
 
+// Input window proc - handles device change notifications for the message-only window
+static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    switch (msg) {
+        case WM_INPUT: {
+            // Raw input is handled via GetRawInputBuffer() in poll,
+            // but we still receive WM_INPUT here
+        } break;
+
+        case WM_DEVICECHANGE: {
+            switch (wparam) {
+                case DBT_DEVICEARRIVAL:
+                case DBT_DEVICEREMOVECOMPLETE: {
+                    PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
+                    if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
+                        win32_enumerate_keyboards();
+                        win32_enumerate_mice();
+                    }
+                } break;
+            }
+            return TRUE;
+        } break;
+    }
+    return DefWindowProcA(hwnd, msg, wparam, lparam);
+}
+
+static pal_bool win32_create_input_window(void) {
+    WNDCLASSEXA wc = {0};
+    wc.cbSize = sizeof(WNDCLASSEXA);
+    wc.lpfnWndProc = win32_input_window_proc;
+    wc.hInstance = GetModuleHandleA(NULL);
+    wc.lpszClassName = "PAL_RawInputWindow";
+
+    if (!RegisterClassExA(&wc)) {
+        DWORD err = GetLastError();
+        if (err != ERROR_CLASS_ALREADY_EXISTS) {
+            printf("Failed to register input window class: %lu\n", err);
+            return pal_false;
+        }
+    }
+
+    // HWND_MESSAGE creates a message-only window (invisible, no taskbar entry)
+    g_input_window = CreateWindowExA(
+        0,
+        wc.lpszClassName,
+        "",
+        0,
+        0, 0, 0, 0,
+        HWND_MESSAGE,
+        NULL,
+        wc.hInstance,
+        NULL
+    );
+
+    if (!g_input_window) {
+        printf("Failed to create input window: %lu\n", GetLastError());
+        return pal_false;
+    }
+
+    // Register raw input devices targeting the message-only window
+    RAWINPUTDEVICE rid[3];
+
+    rid[0].usUsagePage = 0x01;
+    rid[0].usUsage = 0x06;  // Keyboard
+    rid[0].dwFlags = RIDEV_INPUTSINK;
+    rid[0].hwndTarget = g_input_window;
+
+    rid[1].usUsagePage = 0x01;
+    rid[1].usUsage = 0x02;  // Mouse
+    rid[1].dwFlags = RIDEV_INPUTSINK;
+    rid[1].hwndTarget = g_input_window;
+
+    rid[2].usUsagePage = 0x01;
+    rid[2].usUsage = 0x04;  // Joystick
+    rid[2].dwFlags = RIDEV_INPUTSINK;
+    rid[2].hwndTarget = g_input_window;
+
+    if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
+        printf("RegisterRawInputDevices failed: %lu\n", GetLastError());
+        DestroyWindow(g_input_window);
+        g_input_window = NULL;
+        return pal_false;
+    }
+
+    // Register for device hotplug notifications (XP-compatible)
+    DEV_BROADCAST_DEVICEINTERFACE filter = {0};
+    filter.dbcc_size = sizeof(filter);
+    filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
+    filter.dbcc_classguid = GUID_DEVINTERFACE_HID;
+
+    g_hDevNotify_HID = RegisterDeviceNotification(
+        g_input_window,
+        &filter,
+        DEVICE_NOTIFY_WINDOW_HANDLE
+    );
+
+    if (!g_hDevNotify_HID) {
+        printf("RegisterDeviceNotification failed: %lu\n", GetLastError());
+        // Non-fatal - continue without hotplug support
+    }
+
+    return pal_true;
+}
+
+static void win32_destroy_input_window(void) {
+    if (g_hDevNotify_HID) {
+        UnregisterDeviceNotification(g_hDevNotify_HID);
+        g_hDevNotify_HID = NULL;
+    }
+
+    if (g_input_window) {
+        DestroyWindow(g_input_window);
+        g_input_window = NULL;
+    }
+
+    UnregisterClassA("PAL_RawInputWindow", GetModuleHandleA(NULL));
+}
+
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    pal_window* window = g_current_window;
+    pal_window* window = win32_find_window_by_hwnd(hwnd);
+    if (!window) window = g_current_window; // fallback
+    uint32_t window_id = window ? window->id : 0;
     pal_event event = {0};
     WINDOWPOS* pos;
     HDROP hDrop;
@@ -3374,6 +3590,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
      switch (msg) {
         case WM_CLOSE:
             event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
+            event.window.window_id = window_id;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
             event.window.width = 0;
@@ -3383,6 +3600,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         case WM_DESTROY:
             event.window.type = PAL_EVENT_WINDOW_CLOSED;
+            event.window.window_id = window_id;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
             event.window.width = 0;
@@ -3396,6 +3614,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         case WM_MOVE:
             event.window.type = PAL_EVENT_WINDOW_MOVED;
+            event.window.window_id = window_id;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
             event.window.width = 0;
@@ -3405,6 +3624,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         case WM_SIZE:
             event.window.type = PAL_EVENT_WINDOW_RESIZED;
+            event.window.window_id = window_id;
             event.window.event_code = WM_SIZE;
             event.window.x = 0;
             event.window.y = 0;
@@ -3412,10 +3632,14 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.height = HIWORD(lparam);
             event.window.focused = 1;
             event.window.visible = 1;
+            if (window) {
+                window->width = (float)LOWORD(lparam);
+                window->height = (float)HIWORD(lparam);
+            }
             break;
 
         case WM_MOUSEMOVE: {
-            if (window->confine_mouse) {
+            if (window && window->confine_mouse) {
                 TRACKMOUSEEVENT tme = {
                     .cbSize = sizeof(tme),
                     .dwFlags = TME_LEAVE,
@@ -3423,8 +3647,10 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     .dwHoverTime = HOVER_DEFAULT};
                 TrackMouseEvent(&tme);
                 GetClientRect(window->hwnd, &rect);
-                tl = {rect.left, rect.top};
-                br = {rect.right, rect.bottom};
+                tl.x = rect.left;
+                tl.y = rect.top;
+                br.x = rect.right;
+                br.y = rect.bottom;
                 ClientToScreen(window->hwnd, &tl);
                 ClientToScreen(window->hwnd, &br);
                 rect.left = tl.x;
@@ -3433,11 +3659,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 rect.bottom = br.y;
                 ClipCursor(&rect);
             }
-            // Mouse just entered the window
             event.motion.type = PAL_EVENT_MOUSE_MOTION;
             event.motion.x = GET_X_LPARAM(lparam);
             event.motion.y = GET_Y_LPARAM(lparam);
-            event.motion.buttons = (uint32_t)wparam};
+            event.motion.buttons = (uint32_t)wparam;
+            event.motion.window_id = window_id;
         } break;
 
         case WM_MOUSELEAVE:
@@ -3448,6 +3674,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_WINDOWPOSCHANGING:
             pos = (WINDOWPOS*)lparam;
             event.window.type = PAL_EVENT_WINDOW_MOVED;
+            event.window.window_id = window_id;
             event.window.event_code = msg;
             event.window.x = pos->x;
             event.window.y = pos->y;
@@ -3486,6 +3713,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         }
 
         case WM_ACTIVATEAPP: {
+            event.window.window_id = window_id;
             event.window.event_code = WM_MOVE;
             event.window.x = LOWORD(lparam);
             event.window.y = HIWORD(lparam);
@@ -3502,15 +3730,35 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 printf("PAL: Gained Focus!\n");
             }
         }; break;
-
             // TODO: Make this return a pal_event of some kind.
-        case WM_INPUT_DEVICE_CHANGE: {
-            win32_enumerate_keyboards();
-            win32_enumerate_mice();
-            win32_handle_device_change((HANDLE)lparam, (DWORD)wparam);
-            printf("Device Changed!\n");
-        }; break;
+        case WM_DEVICECHANGE: {
+            switch (wparam) {
+                case DBT_DEVICEARRIVAL: {
+                    PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
+                    if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
+                        PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
+                        printf("Device Arrived: %s\n", pDi->dbcc_name);
+                        
+                        // Re-enumerate all input devices
+                        win32_enumerate_keyboards();
+                        win32_enumerate_mice();
+                    }
+                } break;
 
+                case DBT_DEVICEREMOVECOMPLETE: {
+                    PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
+                    if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
+                        PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
+                        printf("Device Removed: %s\n", pDi->dbcc_name);
+                        
+                        // Re-enumerate all input devices
+                        win32_enumerate_keyboards();
+                        win32_enumerate_mice();
+                    }
+                } break;
+            }
+            return TRUE;  // Return TRUE to indicate we handled the message
+        } break;
         default:
             event.type = PAL_EVENT_NONE;
             return DefWindowProcA(hwnd, msg, wparam, lparam);
@@ -3701,8 +3949,10 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
     if (window->hwnd == NULL) {
         return window;
+    } else {
+        window->id = g_next_window_id++; 
     }
-    
+
     if (window_flags & PAL_WINDOW_OPENGL) {
 		window->hdc = GetDC(window->hwnd);
 
@@ -3749,32 +3999,19 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     } else {
         final_window = window;
     }
-
-    RAWINPUTDEVICE rid[3];
-
-    // 1. Keyboard
-    rid[0].usUsagePage = 0x01;                          // Generic desktop controls
-    rid[0].usUsage = 0x06;                              // Keyboard
-    rid[0].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY; // Receive input even when not focused
-    rid[0].hwndTarget = final_window->hwnd;
-
-    // 2. Mouse
-    rid[1].usUsagePage = 0x01; // Generic desktop controls
-    rid[1].usUsage = 0x02;     // Mouse
-    rid[1].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-    rid[1].hwndTarget = final_window->hwnd;
-
-    // 3. Joystick/Gamepad (Note: Not all controllers appear as HIDs)
-    rid[2].usUsagePage = 0x01; // Generic desktop controls
-    rid[2].usUsage = 0x04;     // Joystick
-    rid[2].dwFlags = RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
-    rid[2].hwndTarget = final_window->hwnd;
-
-    if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
-        DWORD error = GetLastError();
-        printf("RegisterRawInputDevices failed. Error code: %lu\n", error);
+    
+    // Register window in global registry with unique ID
+    if (g_windows.count < MAX_WINDOWS) {
+        final_window->id = g_next_window_id++;
+        g_windows.windows[g_windows.count] = final_window;
+        g_windows.count++;
+    } else {
+        printf("ERROR: Maximum number of windows reached\n");
     }
-
+    
+    // Raw input and device notification registration is now done in pal_init()
+    // via the message-only input window, so we don't need to do it here.
+    
 	if (!(window_flags & PAL_WINDOW_HIDDEN)) {
 		if (window_flags & PAL_WINDOW_FULLSCREEN) {
 			ShowWindow(final_window->hwnd, SW_SHOW);
@@ -3814,23 +4051,38 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	return final_window;
 }
 
-PALAPI void pal_close_window(pal_window *window)
-{
+PALAPI void pal_close_window(pal_window *window) {
     pal_event event = {0};
     if (!window || !window->hwnd)
         return;
 
+    event.window.type = PAL_EVENT_WINDOW_CLOSED;
+    event.window.window_id = window->id;
+    pal__eventq_push(&g_event_queue, event);
+
+    // Remove from window registry
+    for (int i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] == window) {
+            // Shift remaining windows down
+            for (int j = i; j < g_windows.count - 1; j++) {
+                g_windows.windows[j] = g_windows.windows[j + 1];
+            }
+            g_windows.windows[g_windows.count - 1] = NULL;
+            g_windows.count--;
+            break;
+        }
+    }
+
     DestroyWindow(window->hwnd);
     window->hwnd = NULL;
-    event.window.type = PAL_EVENT_WINDOW_CLOSED;
-    pal__eventq_push(&g_event_queue, event);
+    window->id = 0;
+    free(window);
 }
 
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     RECT rect;
     HDC hdc;
     int dpi_x, dpi_y;
-    float scale_x, scale_y;
     GetClientRect(window->hwnd, &rect);
 
     hdc = GetDC(window->hwnd);
@@ -3892,7 +4144,27 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 
     if (!g_message_pump_drained) {
         pal__reset_mouse_deltas();
+        
+        // Reset toggle flags for all keyboards/mice
+        for (int i = 0; i < g_keyboards.count; i++) {
+            pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
+        }
+        for (int i = 0; i < g_mice.count; i++) {
+            pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+        }
+        
+        // Process raw input buffer
         win32_get_raw_input_buffer();
+        
+        // Pump messages for the input window (device change notifications)
+        if (g_input_window) {
+            while (PeekMessageA(&msg, g_input_window, 0, 0, PM_REMOVE)) {
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+            }
+        }
+        
+        // Pump messages for all application windows
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
@@ -5776,10 +6048,17 @@ PALAPI pal_bool pal_free_dynamic_library(void* dll) {
 
 PALAPI void pal_init(void) {
     pal__init_eventq();
-    win32_enumerate_keyboards();
-    win32_enumerate_mice();
     win32_init_timer();
     win32_init_sound();
+    
+    // Create message-only window for raw input (before enumerating devices)
+    if (!win32_create_input_window()) {
+        printf("ERROR: Failed to create input window\n");
+    }
+    
+    win32_enumerate_keyboards();
+    win32_enumerate_mice();
+    
     if (!win32_init_gamepads()) {
         printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
     }
@@ -5787,7 +6066,14 @@ PALAPI void pal_init(void) {
 
 PALAPI void pal_shutdown(void) {
     win32_shutdown_gamepads();
+    win32_destroy_input_window();
     pal__eventq_free(g_event_queue);
+    
+    // Clear window registry
+    for (int i = 0; i < g_windows.count; i++) {
+        g_windows.windows[i] = NULL;
+    }
+    g_windows.count = 0;
 }
 #endif // PLATFORM_WIN32_H
 
@@ -6105,7 +6391,9 @@ struct pal_window {
     float width;
     float height;
     float x,y;
+    uint32_t id;
 };
+uint32_t g_next_window_id = 1;
 
 struct pal_sound {
     /* Core audio data */
@@ -6182,7 +6470,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         case ClientMessage: {
             if ((Atom)xevent->xclient.data.l[0] == g_wm_delete) {
                 event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
-                event.window.windowid = (uint32_t)xevent->xclient.window;
+                event.window.window_id = (uint32_t)xevent->xclient.window;
                 pal__eventq_push(&g_event_queue, event);
             }
             break;
@@ -6193,14 +6481,14 @@ void linux_x11_translate_event(XEvent *xevent) {
 
             /* Window moved */
             event.window.type = PAL_EVENT_WINDOW_MOVED;
-            event.window.windowid = (uint32_t)ce->window;
+            event.window.window_id = (uint32_t)ce->window;
             event.window.x = ce->x;
             event.window.y = ce->y;
             pal__eventq_push(&g_event_queue, event);
 
             /* Window resized */
             event.window.type = PAL_EVENT_WINDOW_RESIZED;
-            event.window.windowid = (uint32_t)ce->window;
+            event.window.window_id = (uint32_t)ce->window;
             event.window.width = ce->width;
             event.window.height = ce->height;
             pal__eventq_push(&g_event_queue, event);
@@ -6209,7 +6497,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case MapNotify: {
             event.window.type = PAL_EVENT_WINDOW_SHOWN;
-            event.window.windowid = (uint32_t)xevent->xmap.window;
+            event.window.window_id = (uint32_t)xevent->xmap.window;
             event.window.visible = 1;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6217,7 +6505,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case UnmapNotify: {
             event.window.type = PAL_EVENT_WINDOW_HIDDEN;
-            event.window.windowid = (uint32_t)xevent->xunmap.window;
+            event.window.window_id = (uint32_t)xevent->xunmap.window;
             event.window.visible = 0;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6226,7 +6514,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         case Expose: {
             if (xevent->xexpose.count == 0) { /* Only on last expose event */
                 event.window.type = PAL_EVENT_WINDOW_EXPOSED;
-                event.window.windowid = (uint32_t)xevent->xexpose.window;
+                event.window.window_id = (uint32_t)xevent->xexpose.window;
                 pal__eventq_push(&g_event_queue, event);
             }
             break;
@@ -6234,7 +6522,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case FocusIn: {
             event.window.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
-            event.window.windowid = (uint32_t)xevent->xfocus.window;
+            event.window.window_id = (uint32_t)xevent->xfocus.window;
             event.window.focused = 1;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6242,7 +6530,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case FocusOut: {
             event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
-            event.window.windowid = (uint32_t)xevent->xfocus.window;
+            event.window.window_id = (uint32_t)xevent->xfocus.window;
             event.window.focused = 0;
             pal__eventq_push(&g_event_queue, event);
             break;
@@ -6250,7 +6538,7 @@ void linux_x11_translate_event(XEvent *xevent) {
 
         case DestroyNotify: {
             event.window.type = PAL_EVENT_WINDOW_CLOSED;
-            event.window.windowid = (uint32_t)xevent->xdestroywindow.window;
+            event.window.window_id = (uint32_t)xevent->xdestroywindow.window;
             pal__eventq_push(&g_event_queue, event);
             break;
         }
@@ -7280,6 +7568,8 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         XFreeColormap(g_display, colormap);
         free(window);
         return NULL;
+    } else {
+        window->id = g_next_window_id++;
     }
 
     XStoreName(g_display, window->window, window_title);
@@ -7337,13 +7627,18 @@ PALAPI void pal_close_window(pal_window *window) {
     if(window->graphics_context) {
         XFreeGC(g_display, window->graphics_context);
     }
+
     if(window->window) {
         XDestroyWindow(g_display, window->window);
     }
 
     pal_event event = {0};
     event.window.type = PAL_EVENT_WINDOW_CLOSED;
+    event.window.window_id = window->id;
     pal__eventq_push(&g_event_queue, event);
+
+    window->window = 0;
+    window->id = 0;
 }
 
 static void linux_x11_send_wm_state_message(Window win, long action, Atom property) {
@@ -7361,13 +7656,7 @@ static void linux_x11_send_wm_state_message(Window win, long action, Atom proper
     e.xclient.data.l[3] = 1;           /* source: application */
     e.xclient.data.l[4] = 0;
 
-    XSendEvent(
-        g_display,
-        DefaultRootWindow(g_display),
-        False,
-        SubstructureNotifyMask | SubstructureRedirectMask,
-        &e
-    );
+    XSendEvent(g_display, DefaultRootWindow(g_display), False, SubstructureNotifyMask | SubstructureRedirectMask, &e);
 }
 
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string) {
@@ -7390,10 +7679,7 @@ PALAPI pal_bool pal_make_window_fullscreen(pal_window *window) {
     return pal_true;
 }
 
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window,
-                                              int width,
-                                              int height,
-                                              int refresh_rate) {
+PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate) {
     if (!window) return pal_false;
 
     Window root = DefaultRootWindow(g_display);
@@ -7465,8 +7751,7 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window,
     return pal_true;
 }
 
-PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window)
-{
+PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window) {
     if (!window) return pal_false;
 
     Atom wmHints = XInternAtom(g_display, "_MOTIF_WM_HINTS", False);
@@ -7539,8 +7824,8 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window) {
     XFlush(g_display);
     return pal_true;
 }
-PALAPI pal_bool pal_maximize_window(pal_window *window)
-{
+
+PALAPI pal_bool pal_maximize_window(pal_window *window) {
     if (!window || !g_display)
         return pal_false;
 
@@ -7555,8 +7840,7 @@ PALAPI pal_bool pal_maximize_window(pal_window *window)
     return pal_true;
 }
 
-PALAPI pal_bool pal_minimize_window(pal_window *window)
-{
+PALAPI pal_bool pal_minimize_window(pal_window *window) {
     if (!window || !g_display)
         return pal_false;
 
@@ -7699,10 +7983,7 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
     }
 
     /* Apply the new mode */
-    Status status = XRRSetCrtcConfig(g_display, res, outInfo->crtc, CurrentTime,
-                                     crtcInfo->x, crtcInfo->y,
-                                     newMode, crtcInfo->rotation,
-                                     &output, 1);
+    Status status = XRRSetCrtcConfig(g_display, res, outInfo->crtc, CurrentTime, crtcInfo->x, crtcInfo->y, newMode, crtcInfo->rotation, &output, 1);
 
     XRRFreeCrtcInfo(crtcInfo);
     XRRFreeOutputInfo(outInfo);
@@ -8300,7 +8581,7 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
         if ((w > 0 && w != window->width) || (h > 0 && h != window->height)) {
             pal_event event = {0};
             event.window.type = PAL_EVENT_WINDOW_RESIZED;
-            event.window.windowid = window->id;
+            event.window.window_id = window->id;
             event.window.width = w > 0 ? w : window->width;
             event.window.height = h > 0 ? h : window->height;
             pal__eventq_push(&g_event_queue, event);
@@ -8315,7 +8596,7 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
         // Queue close event
         pal_event event = {0};
         event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
-        event.window.windowid = window->id;
+        event.window.window_id = window->id;
         pal__eventq_push(&g_event_queue, event);
     }
 }
@@ -8411,7 +8692,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
     }
 
     static uint32_t next_window_id = 1;
-    window->id = next_window_id++;
+    window->id = g_next_window_id++;
     window->width = width;
     window->height = height;
     window->stride = width * color_channels;
@@ -8499,7 +8780,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         // Queue window shown event
         pal_event event = {0};
         event.window.type = PAL_EVENT_WINDOW_SHOWN;
-        event.window.windowid = window->id;
+        event.window.window_id = window->id;
         event.window.width = window->width;
         event.window.height = window->height;
         pal__eventq_push(&g_event_queue, event);
@@ -8516,7 +8797,7 @@ PALAPI void pal_close_window(pal_window *window) {
     // Queue window closed event
     pal_event event = {0};
     event.window.type = PAL_EVENT_WINDOW_CLOSED;
-    event.window.windowid = window->id;
+    event.window.window_id = window->id;
     pal__eventq_push(&g_event_queue, event);
 
     unregister_window(window);
