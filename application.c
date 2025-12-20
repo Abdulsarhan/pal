@@ -2,7 +2,6 @@
 #include <assert.h>
 
 #include <glad/glad.h>
-#include "application.h"
 #define PAL_IMPLEMENTATION
 #include "pal_single_header.h"
 
