@@ -52,6 +52,18 @@ File Permissions.
 #define PAL_EXECUTE 0x04
 
 /*---------------------------------------------------------------------------------- */
+/* OpenGL Context Types */
+/*---------------------------------------------------------------------------------- */
+#define PAL_GL_OPENGL           0x1
+#define PAL_GL_OPENGL_ES        0x2
+
+/*---------------------------------------------------------------------------------- */
+/* OpenGL Context Profiles */
+/*---------------------------------------------------------------------------------- */
+#define PAL_GL_CORE_PROFILE          0x1
+#define PAL_GL_COMPATIBILITY_PROFILE 0x2
+
+/*---------------------------------------------------------------------------------- */
 /* Window Flags */
 /*---------------------------------------------------------------------------------- */
 
@@ -804,6 +816,8 @@ typedef uint8_t pal_bool;
 typedef void pal_file;
 typedef void pal_signal;
 typedef void pal_thread;
+typedef void* pal_gl_context;
+
 typedef void *(*pal_thread_func)(void *arg);
 typedef struct pal_window pal_window;
 typedef struct pal_monitor pal_monitor;
@@ -868,7 +882,7 @@ typedef struct {
             int id;                 /* Touch ID */
             float x, y;             /* Normalized coordinates (0-1) */
             pal_bool down;          /* Is touch active */
-        } touches[PAL_MAX_TOUCHES]; /* Two fingers on the touch pad at the same time. Kinky. commonly used for scrolling, zooming and rotating. */
+        } touches[PAL_MAX_TOUCHES]; /* Two fingers on the touch pad at the same time. */
     } touchpad;
 } pal_gamepad_state;
 
@@ -1337,6 +1351,7 @@ PALAPI void pal_shutdown(void);
 
 /* Video and Windowing subsystem. */
 PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t window_flags);
+PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
@@ -1366,7 +1381,7 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode);
 PALAPI pal_monitor *pal_get_primary_monitor(void);
 PALAPI void *pal_gl_get_proc_address(const char *proc);
 PALAPI pal_bool pal_poll_events(pal_event *event);
-PALAPI int pal_make_context_current(pal_window *window);
+PALAPI int pal_make_context_current(pal_window *window, pal_gl_context context);
 
 /* Rendering functions (implemented using GDI on windows and X11 on linux) */
 PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color);
@@ -3768,6 +3783,148 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 }
 
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
+static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
+static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
+static pal_bool g_wgl_extensions_loaded = pal_false;
+
+PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile) {
+    if (!window || !window->hwnd) {
+        return NULL;
+    }
+
+    /* Load WGL extensions if not already loaded */
+    if (!g_wgl_extensions_loaded) {
+        WNDCLASSEXA fakewc = {0};
+        fakewc.cbSize = sizeof(WNDCLASSEXA);
+        fakewc.lpfnWndProc = DefWindowProcA;
+        fakewc.hInstance = GetModuleHandleA(0);
+        fakewc.lpszClassName = "PAL_WGL_Loader";
+        RegisterClassExA(&fakewc);
+
+        HWND fake_hwnd = CreateWindowExA(
+            0, fakewc.lpszClassName, "", WS_OVERLAPPEDWINDOW,
+            CW_USEDEFAULT, CW_USEDEFAULT, 1, 1,
+            NULL, NULL, fakewc.hInstance, NULL);
+
+        if (!fake_hwnd) {
+            MessageBoxA(window->hwnd, "Failed to create dummy window for WGL.", "OpenGL Error", MB_ICONERROR);
+            return NULL;
+        }
+
+        HDC fake_dc = GetDC(fake_hwnd);
+
+        PIXELFORMATDESCRIPTOR fake_pfd = {0};
+        fake_pfd.nSize = sizeof(fake_pfd);
+        fake_pfd.nVersion = 1;
+        fake_pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+        fake_pfd.iPixelType = PFD_TYPE_RGBA;
+        fake_pfd.cColorBits = 32;
+        fake_pfd.cDepthBits = 24;
+
+        int fake_pf = ChoosePixelFormat(fake_dc, &fake_pfd);
+        if (!fake_pf || !SetPixelFormat(fake_dc, fake_pf, &fake_pfd)) {
+            ReleaseDC(fake_hwnd, fake_dc);
+            DestroyWindow(fake_hwnd);
+            UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
+            MessageBoxA(window->hwnd, "Failed to set pixel format on dummy window.", "OpenGL Error", MB_ICONERROR);
+            return NULL;
+        }
+
+        HGLRC fake_rc = wglCreateContext(fake_dc);
+        if (!fake_rc || !wglMakeCurrent(fake_dc, fake_rc)) {
+            ReleaseDC(fake_hwnd, fake_dc);
+            DestroyWindow(fake_hwnd);
+            UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
+            MessageBoxA(window->hwnd, "Failed to create dummy GL context.", "OpenGL Error", MB_ICONERROR);
+            return NULL;
+        }
+
+        wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)wglGetProcAddress("wglChoosePixelFormatARB");
+        wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
+        wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(fake_rc);
+        ReleaseDC(fake_hwnd, fake_dc);
+        DestroyWindow(fake_hwnd);
+        UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
+
+        if (!wglChoosePixelFormatARB || !wglCreateContextAttribsARB) {
+            MessageBoxA(window->hwnd, "Required WGL extensions not available.", "OpenGL Error", MB_ICONERROR);
+            return NULL;
+        }
+
+        g_wgl_extensions_loaded = pal_true;
+    }
+
+    window->hdc = GetDC(window->hwnd);
+    if (!window->hdc) {
+        MessageBoxA(window->hwnd, "Failed to get device context.", "OpenGL Error", MB_ICONERROR);
+        return NULL;
+    }
+
+    const int pixelAttribs[] = {
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+        WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+        WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
+        WGL_COLOR_BITS_ARB, 32,
+        WGL_ALPHA_BITS_ARB, 8,
+        WGL_DEPTH_BITS_ARB, 24,
+        WGL_STENCIL_BITS_ARB, 8,
+        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
+        WGL_SAMPLES_ARB, 4,
+        0
+    };
+
+    int pixelFormatID;
+    UINT numFormats;
+    if (!wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats) || numFormats == 0) {
+        MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "OpenGL Error", MB_ICONERROR);
+        return NULL;
+    }
+
+    PIXELFORMATDESCRIPTOR pfd = {0};
+    pfd.nSize = sizeof(pfd);
+    DescribePixelFormat(window->hdc, pixelFormatID, sizeof(pfd), &pfd);
+    if (!SetPixelFormat(window->hdc, pixelFormatID, &pfd)) {
+        MessageBoxA(window->hwnd, "SetPixelFormat() failed.", "OpenGL Error", MB_ICONERROR);
+        return NULL;
+    }
+
+    int wgl_profile;
+    if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
+        wgl_profile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+    } else {
+        wgl_profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+    }
+
+    int contextAttribs[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+        WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+        WGL_CONTEXT_PROFILE_MASK_ARB, wgl_profile,
+        0
+    };
+
+    window->hglrc = wglCreateContextAttribsARB(window->hdc, NULL, contextAttribs);
+    if (!window->hglrc) {
+        int fallbackAttribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+            WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+            0
+        };
+        window->hglrc = wglCreateContextAttribsARB(window->hdc, NULL, fallbackAttribs);
+    }
+
+    if (!window->hglrc) {
+        MessageBoxA(window->hwnd, "wglCreateContextAttribsARB() failed.", "OpenGL Error", MB_ICONERROR);
+        return NULL;
+    }
+
+    return (pal_gl_context)window->hglrc;
+}
+
 PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
@@ -3814,97 +3971,9 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         window_style = WS_POPUP;
     }
 
-    // these variables are only
-    // used when initializing opengl.
-    pal_window* fakewindow = NULL;
-    HGLRC fakeRC = 0;
-    PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
-    PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
     // we default to opengl.
     if (!(window_flags & PAL_WINDOW_OPENGL) || !(window_flags & PAL_WINDOW_VULKAN) || !(window_flags & PAL_WINDOW_METAL)) {
         window_flags |= PAL_WINDOW_OPENGL;
-    }
-
-    if (window_flags & PAL_WINDOW_OPENGL) {
-        fakewindow = (pal_window*)malloc(sizeof(pal_window));
-        WNDCLASSEXA fakewc = {0};
-        fakewc.cbSize = sizeof(WNDCLASSEXA);
-        fakewc.lpfnWndProc = win32_fake_window_proc;
-        fakewc.hInstance = GetModuleHandleA(0);
-        fakewc.lpszClassName = "Win32 Fake Window Class";
-        fakewc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-
-        RegisterClassExA(&fakewc);
-
-        fakewindow->hwnd = CreateWindowExA(
-            ext_window_style,     // Optional window styles.
-            fakewc.lpszClassName, // Window class
-            window_title,   // Window text
-            window_style,  // Window style
-
-            // Size and position
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-
-            NULL,             // Parent window
-            NULL,             // Menu
-            fakewc.hInstance, // Instance handle
-            NULL              // Additional application data
-        );
-
-        if (fakewindow->hwnd == NULL) {
-            return fakewindow;
-        }
-
-        s_fakeDC = GetDC(fakewindow->hwnd);
-
-        PIXELFORMATDESCRIPTOR fakePFD;
-        ZeroMemory(&fakePFD, sizeof(fakePFD));
-        fakePFD.nSize = sizeof(fakePFD);
-        fakePFD.nVersion = 1;
-        fakePFD.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-        fakePFD.iPixelType = PFD_TYPE_RGBA;
-        fakePFD.cColorBits = 32;
-        fakePFD.cAlphaBits = 8;
-        fakePFD.cDepthBits = 24;
-
-        int fakePFDID = ChoosePixelFormat(s_fakeDC, &fakePFD);
-
-        if (fakePFDID == 0) {
-            MessageBoxA(fakewindow->hwnd, "ChoosePixelFormat() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
-        if (SetPixelFormat(s_fakeDC, fakePFDID, &fakePFD) == 0) {
-            MessageBoxA(fakewindow->hwnd, "SetPixelFormat() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
-
-        fakeRC = wglCreateContext(s_fakeDC);
-        if (fakeRC == 0) {
-            MessageBoxA(fakewindow->hwnd, "wglCreateContext() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
-        if (wglMakeCurrent(s_fakeDC, fakeRC) == 0) {
-            MessageBoxA(fakewindow->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
-        wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)(wglGetProcAddress("wglChoosePixelFormatARB"));
-        if (wglChoosePixelFormatARB == NULL) {
-            MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
-        wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)(wglGetProcAddress("wglCreateContextAttribsARB"));
-        if (wglCreateContextAttribsARB == NULL) {
-            MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
-        wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
-        if (wglSwapIntervalEXT == NULL) {
-            MessageBoxA(fakewindow->hwnd, "wglGetProcAddress() failed.", "Try again later", MB_ICONERROR);
-            return fakewindow;
-        }
     }
 
     WNDCLASSEXA wc = {0};
@@ -3953,57 +4022,11 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         window->id = g_next_window_id++; 
     }
 
-    if (window_flags & PAL_WINDOW_OPENGL) {
-		window->hdc = GetDC(window->hwnd);
 
-		const int pixelAttribs[] = {
-			WGL_DRAW_TO_WINDOW_ARB, GL_TRUE, WGL_SUPPORT_OPENGL_ARB, GL_TRUE, WGL_DOUBLE_BUFFER_ARB, GL_TRUE, WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB, WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB, WGL_COLOR_BITS_ARB, 32, WGL_ALPHA_BITS_ARB, 8, WGL_DEPTH_BITS_ARB, 24, WGL_STENCIL_BITS_ARB, 8, WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, WGL_SAMPLES_ARB, 4, // NOTE: Maybe this is used for multisampling?
-			0                                                                                                                                                                                                                                                                                                                                              // null terminator for attrib list.
-		};
-
-		int pixelFormatID;
-		UINT numFormats;
-		uint8_t status = wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats);
-		if (status == 0 || numFormats == 0) {
-			MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "Try again later", MB_ICONERROR);
-			return window;
-		}
-
-		PIXELFORMATDESCRIPTOR PFD;
-		PFD.dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
-		DescribePixelFormat(window->hdc, pixelFormatID, sizeof(PFD), &PFD);
-		SetPixelFormat(window->hdc, pixelFormatID, &PFD);
-
-		int contextAttribs[] = {
-			WGL_CONTEXT_MAJOR_VERSION_ARB, 3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB, WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0};
-
-		window->hglrc = wglCreateContextAttribsARB(window->hdc, 0, contextAttribs);
-    }
-
-    pal_window *final_window = NULL;
-    if (window_flags & PAL_WINDOW_OPENGL) {
-		if (window->hglrc) {
-            final_window = window;
-			wglMakeCurrent(NULL, NULL);
-			wglDeleteContext(fakeRC);
-			ReleaseDC(fakewindow->hwnd, s_fakeDC);
-			DestroyWindow(fakewindow->hwnd);
-			free(fakewindow);
-		} else {
-			// This is supposed to be a fallback in case we can't create the context that we want.
-			// Ideally, this should never happen. - Abdelrahman june 13, 2024
-            final_window = fakewindow;
-            final_window->hglrc = fakeRC;
-            final_window->hdc = s_fakeDC;
-		}
-    } else {
-        final_window = window;
-    }
-    
     // Register window in global registry with unique ID
     if (g_windows.count < MAX_WINDOWS) {
-        final_window->id = g_next_window_id++;
-        g_windows.windows[g_windows.count] = final_window;
+        window->id = g_next_window_id++;
+        g_windows.windows[g_windows.count] = window;
         g_windows.count++;
     } else {
         printf("ERROR: Maximum number of windows reached\n");
@@ -4014,39 +4037,40 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     
 	if (!(window_flags & PAL_WINDOW_HIDDEN)) {
 		if (window_flags & PAL_WINDOW_FULLSCREEN) {
-			ShowWindow(final_window->hwnd, SW_SHOW);
+			ShowWindow(window->hwnd, SW_SHOW);
 		} else if (window_flags & PAL_WINDOW_MAXIMIZED) {
-			ShowWindow(final_window->hwnd, SW_SHOWMAXIMIZED);
+			ShowWindow(window->hwnd, SW_SHOWMAXIMIZED);
 		} else if (window_flags & PAL_WINDOW_MINIMIZED) {
-			ShowWindow(final_window->hwnd, SW_SHOWMINIMIZED);
+			ShowWindow(window->hwnd, SW_SHOWMINIMIZED);
 		} else {
-			ShowWindow(final_window->hwnd, SW_SHOWNORMAL);
+			ShowWindow(window->hwnd, SW_SHOWNORMAL);
 		}
 	} else {
-		ShowWindow(final_window->hwnd, SW_HIDE);
+		ShowWindow(window->hwnd, SW_HIDE);
 	}
 	if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
 		RECT rect;
-		GetClientRect(final_window->hwnd, &rect);
+		GetClientRect(window->hwnd, &rect);
 		POINT tl = {rect.left, rect.top};
 		POINT br = {rect.right, rect.bottom};
-		ClientToScreen(final_window->hwnd, &tl);
-		ClientToScreen(final_window->hwnd, &br);
+		ClientToScreen(window->hwnd, &tl);
+		ClientToScreen(window->hwnd, &br);
 		rect.left = tl.x;
 		rect.top = tl.y;
 		rect.right = br.x;
 		rect.bottom = br.y;
 		ClipCursor(&rect);
-		final_window->confine_mouse = pal_true;
+		window->confine_mouse = pal_true;
 	} else {
-		final_window->confine_mouse = pal_false;
+		window->confine_mouse = pal_false;
 	}
-	SetForegroundWindow(final_window->hwnd);
-	SetFocus(final_window->hwnd);
+	SetForegroundWindow(window->hwnd);
+	SetFocus(window->hwnd);
 	// save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen.
 	// The fullscreen function is supposed to save this state whenever the user calls it,
 	// but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes,
 	// so we have to save it here. - Abdelrahman june 13, 2024
+
 	final_window->windowedStyle = GetWindowLongA(final_window->hwnd, GWL_STYLE); // style of the final_window.
 	return final_window;
 }
@@ -4104,8 +4128,8 @@ PALAPI void *pal_get_window_handle(pal_window *window) {
     return (void*)window->hwnd;
 }
 
-PALAPI int pal_make_context_current(pal_window* window) {
-    if (!wglMakeCurrent(window->hdc, window->hglrc)) {
+PALAPI int pal_make_context_current(pal_window* window, pal_gl_context context) {
+    if (!wglMakeCurrent(window->hdc, context)) {
         MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
         return 1;
     }
@@ -7517,35 +7541,109 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
     return 0;
 }
 
-PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t flags) {
-    pal_window *window = (pal_window*)malloc(sizeof(pal_window));
-    if (!window) return NULL;
+PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile) {
+    if (!window || !window->window || !g_display) {
+        return NULL;
+    }
 
     int screen = DefaultScreen(g_display);
 
-    /* --- Default graphics API to OpenGL if none specified --- */
-    if (!(flags & (PAL_WINDOW_OPENGL | PAL_WINDOW_VULKAN | PAL_WINDOW_METAL))) {
-        flags |= PAL_WINDOW_OPENGL;
+    int fb_attribs[] = {
+        GLX_X_RENDERABLE, True,
+        GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+        GLX_RENDER_TYPE, GLX_RGBA_BIT,
+        GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
+        GLX_RED_SIZE, 8,
+        GLX_GREEN_SIZE, 8,
+        GLX_BLUE_SIZE, 8,
+        GLX_ALPHA_SIZE, 8,
+        GLX_DEPTH_SIZE, 24,
+        GLX_STENCIL_SIZE, 8,
+        GLX_DOUBLEBUFFER, True,
+        None
+    };
+
+    int fb_count = 0;
+    GLXFBConfig *fb_configs = glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
+    if (!fb_configs || fb_count == 0) {
+        fprintf(stderr, "GLX ERROR: No framebuffer configs found!\n");
+        if (fb_configs) XFree(fb_configs);
+        return NULL;
     }
 
-    GLXFBConfig fb = 0;
+    GLXFBConfig fb = fb_configs[0];
+    XFree(fb_configs);
+
+    /* Convert PAL profile to GLX profile */
+    int glx_profile;
+    if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
+        glx_profile = GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+    } else {
+        glx_profile = GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
+    }
+
+    PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB =
+        (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte*)"glXCreateContextAttribsARB");
+
+    if (glXCreateContextAttribsARB) {
+        int context_attribs[] = {
+            GLX_CONTEXT_MAJOR_VERSION_ARB, major,
+            GLX_CONTEXT_MINOR_VERSION_ARB, minor,
+            GLX_CONTEXT_PROFILE_MASK_ARB, glx_profile,
+            None
+        };
+
+        window->gl_context = glXCreateContextAttribsARB(g_display, fb, NULL, True, context_attribs);
+
+        /* If that failed, try without profile mask */
+        if (!window->gl_context) {
+            int fallback_attribs[] = {
+                GLX_CONTEXT_MAJOR_VERSION_ARB, major,
+                GLX_CONTEXT_MINOR_VERSION_ARB, minor,
+                None
+            };
+            window->gl_context = glXCreateContextAttribsARB(g_display, fb, NULL, True, fallback_attribs);
+        }
+    }
+
+    /* Fallback to legacy context creation if modern method unavailable or failed */
+    if (!window->gl_context) {
+        fprintf(stderr, "GLX WARNING: Failed to create GL %d.%d context, falling back to legacy\n", major, minor);
+        window->gl_context = glXCreateNewContext(g_display, fb, GLX_RGBA_TYPE, NULL, True);
+    }
+
+    if (!window->gl_context) {
+        fprintf(stderr, "GLX ERROR: Failed to create OpenGL context!\n");
+        return NULL;
+    }
+
+    return (pal_gl_context)window->gl_context;
+}
+
+PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t flags) {
+    pal_window *window = (pal_window*)malloc(sizeof(pal_window));
+    if (!window) return NULL;
+    
+    pal_memset(window, 0, sizeof(pal_window));
+
+    int screen = DefaultScreen(g_display);
     XVisualInfo visual_info;
     Colormap colormap = 0;
 
-    /* --- OpenGL path --- */
     if (flags & PAL_WINDOW_OPENGL) {
+        // For OpenGL windows, we need to choose a visual that's compatible with GLX
         int fb_attribs[] = {
             GLX_X_RENDERABLE, True,
             GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
-            GLX_RENDER_TYPE,   GLX_RGBA_BIT,
+            GLX_RENDER_TYPE, GLX_RGBA_BIT,
             GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
-            GLX_RED_SIZE,      8,
-            GLX_GREEN_SIZE,    8,
-            GLX_BLUE_SIZE,     8,
-            GLX_ALPHA_SIZE,    8,
-            GLX_DEPTH_SIZE,    24,
-            GLX_STENCIL_SIZE,  8,
-            GLX_DOUBLEBUFFER,  True,
+            GLX_RED_SIZE, 8,
+            GLX_GREEN_SIZE, 8,
+            GLX_BLUE_SIZE, 8,
+            GLX_ALPHA_SIZE, 8,
+            GLX_DEPTH_SIZE, 24,
+            GLX_STENCIL_SIZE, 8,
+            GLX_DOUBLEBUFFER, True,
             None
         };
 
@@ -7558,8 +7656,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
             return NULL;
         }
 
-        fb = fb_configs[0];
-        XVisualInfo *vi = glXGetVisualFromFBConfig(g_display, fb);
+        XVisualInfo *vi = glXGetVisualFromFBConfig(g_display, fb_configs[0]);
         if (!vi) {
             fprintf(stderr, "GLX ERROR: Failed to get XVisualInfo from FBConfig!\n");
             XFree(fb_configs);
@@ -7574,20 +7671,20 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         colormap = XCreateColormap(g_display, RootWindow(g_display, screen),
                                    visual_info.visual, AllocNone);
     } else {
-        /* Non-OpenGL graphics APIs (unimplemented) */
+        // Non-OpenGL window
         visual_info.visual = DefaultVisual(g_display, screen);
-        visual_info.depth  = DefaultDepth(g_display, screen);
+        visual_info.depth = DefaultDepth(g_display, screen);
         colormap = XCreateColormap(g_display, RootWindow(g_display, screen),
                                    visual_info.visual, AllocNone);
     }
 
-    /* --- Create the X11 window --- */
-    XSetWindowAttributes swa;
+    XSetWindowAttributes swa = {0};
     swa.colormap = colormap;
     swa.override_redirect = False;
     swa.background_pixel = WhitePixel(g_display, screen);
     swa.border_pixel = BlackPixel(g_display, screen);
-    swa.event_mask = ExposureMask | KeyPressMask | StructureNotifyMask;
+    swa.event_mask = ExposureMask | KeyPressMask | StructureNotifyMask | 
+                     FocusChangeMask | VisibilityChangeMask;
 
     unsigned long valuemask = CWColormap | CWBackPixel | CWBorderPixel | CWEventMask | CWOverrideRedirect;
 
@@ -7603,66 +7700,40 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         free(window);
         return NULL;
     }
-    
-    // Register window in global registry with unique ID
+
+    window->width = (float)width;
+    window->height = (float)height;
+    window->gl_context = NULL;  // Will be set by pal_create_gl_context
+
+    // Register window
     if (g_windows.count < MAX_WINDOWS) {
         window->id = g_next_window_id++;
         g_windows.windows[g_windows.count] = window;
         g_windows.count++;
-    } else {
-        fprintf(stderr, "ERROR: Maximum number of windows reached\n");
-        window->id = g_next_window_id++;
     }
 
     XStoreName(g_display, window->window, window_title);
 
-    /* --- Optional: set class hints, WM protocols, etc. --- */
     XClassHint *class_hint = XAllocClassHint();
     if (class_hint) {
-        class_hint->res_name = "my_app";
-        class_hint->res_class = "MyApp";
+        class_hint->res_name = "pal_app";
+        class_hint->res_class = "PalApp";
         XSetClassHint(g_display, window->window, class_hint);
         XFree(class_hint);
     }
+
     XSetWMProtocols(g_display, window->window, &g_wm_delete, 1);
 
-    /* --- Create OpenGL context if requested --- */
-    window->gl_context = NULL;
-    if (flags & PAL_WINDOW_OPENGL) {
-        PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB =
-            (void*)glXGetProcAddressARB((const GLubyte*)"glXCreateContextAttribsARB");
-
-        int context_attribs[] = {
-            GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-            GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-            GLX_CONTEXT_PROFILE_MASK_ARB,  GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
-            None
-        };
-
-        if (glXCreateContextAttribsARB) {
-            window->gl_context = glXCreateContextAttribsARB(g_display, fb, NULL, True, context_attribs);
-        }
-
-        if (!window->gl_context) {
-            window->gl_context = glXCreateNewContext(g_display, fb, GLX_RGBA_TYPE, NULL, True);
-        }
-
-        if (!window->gl_context) {
-            fprintf(stderr, "Failed to create OpenGL context!\n");
-            XDestroyWindow(g_display, window->window);
-            XFreeColormap(g_display, colormap);
-            free(window);
-            return NULL;
-        }
+    if (!(flags & PAL_WINDOW_HIDDEN)) {
+        XMapWindow(g_display, window->window);
     }
 
-    /* --- Map window --- */
-    XMapWindow(g_display, window->window);
-
-    /* --- Optional GC --- */
     window->graphics_context = XCreateGC(g_display, window->window, 0, NULL);
 
     return window;
+}
+PALAPI void *pal_get_window_handle(pal_window *window) {
+    return (void*)window->window;
 }
 
 PALAPI void pal_close_window(pal_window *window) {
@@ -7925,9 +7996,9 @@ PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int heigh
 }
 
 /* Helper to intern an atom */
-PALAPI int pal_make_context_current(pal_window *window) {
-    if (window && window->gl_context) {
-        if (!glXMakeCurrent(g_display, window->window, window->gl_context)) {
+PALAPI int pal_make_context_current(pal_window *window, pal_gl_context context) {
+    if (window && context) {
+        if (!glXMakeCurrent(g_display, window->window, context)) {
             fprintf(stderr, "GLX ERROR: glXMakeCurrent failed!\n");
             return -1;
         }

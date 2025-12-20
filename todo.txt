@@ -1,6 +1,7 @@
 Now:
 
-Give each window an ID so that the user of the library can tell them appart when they recieve window events.
+Load OpenGL functions dynamically so that the user does not have to explicitly link against 5 graphics apis just to complile this shit.
+
 Don't include the headers directly, only use what you need.
 Add dark mode detection for windows and linux.
 Finish implementing all the events and window flags.
