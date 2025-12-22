@@ -2048,8 +2048,36 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 #include <dbt.h>      // For WM_DEVICECHANGE structures
 
 // OpenGL
-#include <gl/gl.h>
-#include <GL/wglext.h>
+//#include <GL/wglext.h>
+
+typedef BOOL(WINAPI* PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int* piAttribIList, const FLOAT* pfAttribFList, UINT nMaxFormats, int* piFormats, UINT* nNumFormats);
+typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
+typedef BOOL(WINAPI* PFNWGLSWAPINTERVALEXTPROC) (int interval);
+
+#define WGL_DRAW_TO_WINDOW_ARB 0x2001
+#define WGL_SUPPORT_OPENGL_ARB 0x2010
+#define WGL_DOUBLE_BUFFER_ARB  0x2011
+#define WGL_DEPTH_BITS_ARB     0x2022
+#define WGL_STENCIL_BITS_ARB   0x2023
+#define WGL_TYPE_RGBA_ARB      0x202B
+#define WGL_FULL_ACCELERATION_ARB         0x2027
+#define WGL_SAMPLE_BUFFERS_ARB            0x2041
+#define WGL_CONTEXT_DEBUG_BIT_ARB         0x00000001
+#define WGL_CONTEXT_MAJOR_VERSION_ARB     0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB     0x2092
+#define WGL_CONTEXT_FLAGS_ARB             0x2094
+#define WGL_SAMPLES_ARB                   0x2042
+#define WGL_PIXEL_TYPE_ARB                0x2013
+
+#define WGL_ACCELERATION_ARB              0x2003
+
+#define WGL_COLOR_BITS_ARB                0x2014
+
+#define WGL_ALPHA_BITS_ARB                0x201B
+
+#define WGL_CONTEXT_PROFILE_MASK_ARB      0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB  0x00000001
+#define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
 
 /*
 * 
@@ -4129,7 +4157,7 @@ static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
 static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
 static pal_bool g_wgl_extensions_loaded = pal_false;
 
-PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile) {
+PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
     if (!window || !window->hwnd) {
         return NULL;
     }
@@ -4235,20 +4263,20 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
         return NULL;
     }
 
-    int wgl_profile;
-    if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
-        wgl_profile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-    } else {
-        wgl_profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
-    }
+	int wgl_profile;
+	if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
+		wgl_profile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+	} else {
+		wgl_profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+	}
 
-    int contextAttribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-        WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-        WGL_CONTEXT_PROFILE_MASK_ARB, wgl_profile,
-        0
-    };
-
+	int contextAttribs[] = {
+		WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+		WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+		WGL_CONTEXT_PROFILE_MASK_ARB, wgl_profile,
+		WGL_CONTEXT_FLAGS_ARB, debug_context ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
+		0
+	};
     window->hglrc = wglCreateContextAttribsARB(window->hdc, NULL, contextAttribs);
     if (!window->hglrc) {
         int fallbackAttribs[] = {
@@ -7237,7 +7265,7 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
     return 0;
 }
 
-PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile) {
+PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
     if (!window || !window->window || !g_display) {
         return NULL;
     }
@@ -7282,12 +7310,13 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
         (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte*)"glXCreateContextAttribsARB");
 
     if (glXCreateContextAttribsARB) {
-        int context_attribs[] = {
-            GLX_CONTEXT_MAJOR_VERSION_ARB, major,
-            GLX_CONTEXT_MINOR_VERSION_ARB, minor,
-            GLX_CONTEXT_PROFILE_MASK_ARB, glx_profile,
-            None
-        };
+		int context_attribs[] = {
+		GLX_CONTEXT_MAJOR_VERSION_ARB, major,
+		GLX_CONTEXT_MINOR_VERSION_ARB, minor,
+		GLX_CONTEXT_PROFILE_MASK_ARB, glx_profile,
+		GLX_CONTEXT_FLAGS_ARB, debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0,
+		None
+		};
 
         window->gl_context = glXCreateContextAttribsARB(g_display, fb, NULL, True, context_attribs);
 
