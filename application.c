@@ -49,9 +49,9 @@ int main() {
     pal_monitor* monitor = pal_get_primary_monitor();
     pal_video_mode* mode = pal_get_video_mode(monitor);
     pal_window* window = pal_create_window(1280, 720, "Window Title", PAL_WINDOW_RESIZABLE | PAL_WINDOW_OPENGL);
-    pal_gl_context context = pal_create_gl_context(window, 3, 3, PAL_GL_CORE_PROFILE);
+    pal_gl_context context = pal_create_gl_context(window, 3, 3, PAL_GL_CORE_PROFILE, 0);
 
-    pal_make_context_current(window, context);
+    pal_gl_make_context_current(window, context);
     if (!gladLoadGLLoader((GLADloadproc)pal_gl_get_proc_address)) {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
@@ -86,6 +86,9 @@ int main() {
                     break;
                 case PAL_EVENT_KEY_UP:
                     printf("Keyboard UP!\n");
+                    break;
+                case PAL_EVENT_WINDOW_CLOSE_REQUESTED:
+                    running = pal_false;
                     break;
                 case PAL_EVENT_QUIT:
                     printf("Window closed");

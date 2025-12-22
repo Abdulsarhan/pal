@@ -1350,7 +1350,7 @@ PALAPI void pal_shutdown(void);
 
 /* Video and Windowing subsystem. */
 PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t window_flags);
-PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile);
+PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
@@ -1380,7 +1380,7 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode);
 PALAPI pal_monitor *pal_get_primary_monitor(void);
 PALAPI void *pal_gl_get_proc_address(const char *proc);
 PALAPI pal_bool pal_poll_events(pal_event *event);
-PALAPI int pal_make_context_current(pal_window *window, pal_gl_context context);
+PALAPI int pal_gl_make_context_current(pal_window *window, pal_gl_context context);
 
 /* Rendering functions (implemented using GDI on windows and X11 on linux) */
 PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color);
@@ -2047,12 +2047,24 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 // for file permissions.
 #include <dbt.h>      // For WM_DEVICECHANGE structures
 
-// OpenGL
-//#include <GL/wglext.h>
+typedef PROC (WINAPI *PFN_wglGetProcAddress)(LPCSTR);
+typedef HGLRC (WINAPI *PFN_wglCreateContext)(HDC);
+typedef BOOL (WINAPI *PFN_wglMakeCurrent)(HDC, HGLRC);
+typedef BOOL (WINAPI *PFN_wglDeleteContext)(HGLRC);
+typedef BOOL(WINAPI *PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)(HDC, const int *, const FLOAT *, UINT, int *, UINT *);
+typedef HGLRC(WINAPI *PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)(HDC, HGLRC, const int *);
+typedef BOOL(WINAPI *PFN_WGL_SWAP_INTERVAL_EXT)(int);
 
-typedef BOOL(WINAPI* PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int* piAttribIList, const FLOAT* pfAttribFList, UINT nMaxFormats, int* piFormats, UINT* nNumFormats);
-typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
-typedef BOOL(WINAPI* PFNWGLSWAPINTERVALEXTPROC) (int interval);
+/* WGL function pointers */
+static HMODULE g_opengl32;
+static pal_bool g_wgl_loaded = pal_false;
+static PFN_wglGetProcAddress p_wglGetProcAddress;
+static PFN_wglCreateContext p_wglCreateContext;
+static PFN_wglMakeCurrent p_wglMakeCurrent;
+static PFN_wglDeleteContext p_wglDeleteContext;
+static PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB p_wglChoosePixelFormatARB;
+static PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB p_wglCreateContextAttribsARB;
+static PFN_WGL_SWAP_INTERVAL_EXT p_wglSwapIntervalEXT;
 
 #define WGL_DRAW_TO_WINDOW_ARB 0x2001
 #define WGL_SUPPORT_OPENGL_ARB 0x2010
@@ -2068,13 +2080,9 @@ typedef BOOL(WINAPI* PFNWGLSWAPINTERVALEXTPROC) (int interval);
 #define WGL_CONTEXT_FLAGS_ARB             0x2094
 #define WGL_SAMPLES_ARB                   0x2042
 #define WGL_PIXEL_TYPE_ARB                0x2013
-
 #define WGL_ACCELERATION_ARB              0x2003
-
 #define WGL_COLOR_BITS_ARB                0x2014
-
 #define WGL_ALPHA_BITS_ARB                0x201B
-
 #define WGL_CONTEXT_PROFILE_MASK_ARB      0x9126
 #define WGL_CONTEXT_CORE_PROFILE_BIT_ARB  0x00000001
 #define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
@@ -2696,8 +2704,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_SCROLLLOCK] = PAL_KEY_SCROLLLOCK,
     [PAL_SCAN_NUMCLEAR] = PAL_KEY_NUMLOCKCLEAR,
     
-    // *** MODIFIER KEYS - LEFT AND RIGHT DISTINGUISHED ***
-    // This is the key fix - scancodes preserve left/right distinction
+    // Modifier keys
     [PAL_SCAN_LSHIFT] = PAL_KEY_LSHIFT,
     [PAL_SCAN_RSHIFT] = PAL_KEY_RSHIFT,
     [PAL_SCAN_LCTRL] = PAL_KEY_LCTRL,
@@ -2785,7 +2792,6 @@ typedef struct {
     pal_bool inverted;
 } win32_gamepad_axis;
 
-
 #define XINPUT_GAMEPAD_DPAD_UP          0x0001
 #define XINPUT_GAMEPAD_DPAD_DOWN        0x0002
 #define XINPUT_GAMEPAD_DPAD_LEFT        0x0004
@@ -2862,8 +2868,6 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int
 }
 
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
-    int width = (int)window->width;
-    int height = (int)window->height;
     DEVMODEA dm = {0};
 
     window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
@@ -3235,9 +3239,6 @@ void win32_handle_raw_input(HRAWINPUT raw_input) {
     // we currently use GetRawInputBuffer(), because it's better for high-polling rate mice.
 }
 
-void win32_handle_device_change(HANDLE hDevice, DWORD dwChange) {
-}
-
 // --- pal_get_gamepad_count ---
 
 PALAPI int pal_get_gamepad_count(void) {
@@ -3388,7 +3389,7 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
     pal_strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
     out_state->name[sizeof(out_state->name) - 1] = '\0';
     out_state->vendor_id = 0x045E;                // Microsoft
-    out_state->product_id = (uint16_t)0xDEADBEEF; // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
+    out_state->product_id = (uint16_t)0xDEAD; // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
     out_state->connected = pal_true;
     out_state->is_xinput = pal_true;
 
@@ -4152,9 +4153,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     return 0;
 }
 
-static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
-static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
-static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
 static pal_bool g_wgl_extensions_loaded = pal_false;
 
 PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
@@ -4164,6 +4162,16 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
 
     /* Load WGL extensions if not already loaded */
     if (!g_wgl_extensions_loaded) {
+
+		g_opengl32 = LoadLibraryA("opengl32.dll");
+		if (!g_opengl32) return pal_false;
+
+		/* Get base WGL functions from opengl32.dll */
+		p_wglGetProcAddress = (PFN_wglGetProcAddress)GetProcAddress(g_opengl32, "wglGetProcAddress");
+		p_wglCreateContext = (PFN_wglCreateContext)GetProcAddress(g_opengl32, "wglCreateContext");
+		p_wglMakeCurrent = (PFN_wglMakeCurrent)GetProcAddress(g_opengl32, "wglMakeCurrent");
+		p_wglDeleteContext = (PFN_wglDeleteContext)GetProcAddress(g_opengl32, "wglDeleteContext");
+
         WNDCLASSEXA fakewc = {0};
         fakewc.cbSize = sizeof(WNDCLASSEXA);
         fakewc.lpfnWndProc = DefWindowProcA;
@@ -4209,9 +4217,9 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
             return NULL;
         }
 
-        wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)wglGetProcAddress("wglChoosePixelFormatARB");
-        wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
-        wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+		p_wglChoosePixelFormatARB = (PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)wglGetProcAddress("wglChoosePixelFormatARB");
+		p_wglCreateContextAttribsARB = (PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)wglGetProcAddress("wglCreateContextAttribsARB");
+		p_wglSwapIntervalEXT = (PFN_WGL_SWAP_INTERVAL_EXT)wglGetProcAddress("wglSwapIntervalEXT");
 
         wglMakeCurrent(NULL, NULL);
         wglDeleteContext(fake_rc);
@@ -4219,7 +4227,7 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
         DestroyWindow(fake_hwnd);
         UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
 
-        if (!wglChoosePixelFormatARB || !wglCreateContextAttribsARB) {
+        if (!p_wglChoosePixelFormatARB || !p_wglCreateContextAttribsARB) {
             MessageBoxA(window->hwnd, "Required WGL extensions not available.", "OpenGL Error", MB_ICONERROR);
             return NULL;
         }
@@ -4250,7 +4258,7 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
 
     int pixelFormatID;
     UINT numFormats;
-    if (!wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats) || numFormats == 0) {
+    if (!p_wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats) || numFormats == 0) {
         MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "OpenGL Error", MB_ICONERROR);
         return NULL;
     }
@@ -4277,14 +4285,14 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
 		WGL_CONTEXT_FLAGS_ARB, debug_context ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
 		0
 	};
-    window->hglrc = wglCreateContextAttribsARB(window->hdc, NULL, contextAttribs);
+    window->hglrc = p_wglCreateContextAttribsARB(window->hdc, NULL, contextAttribs);
     if (!window->hglrc) {
         int fallbackAttribs[] = {
             WGL_CONTEXT_MAJOR_VERSION_ARB, major,
             WGL_CONTEXT_MINOR_VERSION_ARB, minor,
             0
         };
-        window->hglrc = wglCreateContextAttribsARB(window->hdc, NULL, fallbackAttribs);
+        window->hglrc = p_wglCreateContextAttribsARB(window->hdc, NULL, fallbackAttribs);
     }
 
     if (!window->hglrc) {
@@ -4498,7 +4506,7 @@ PALAPI void *pal_get_window_handle(pal_window *window) {
     return (void*)window->hwnd;
 }
 
-PALAPI int pal_make_context_current(pal_window* window, pal_gl_context context) {
+PALAPI int pal_gl_make_context_current(pal_window* window, pal_gl_context context) {
     if (!wglMakeCurrent(window->hdc, context)) {
         MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
         return 1;
@@ -4507,14 +4515,16 @@ PALAPI int pal_make_context_current(pal_window* window, pal_gl_context context) 
 }
 
 PALAPI int pal_show_cursor(pal_window *window) {
+    (void)window;
     int result = -1;
     while (result < 0) {
-        result = ShowCursor(pal_true);
+        result = ShowCursor(TRUE);
     }
     return result;
 }
 
 PALAPI int pal_hide_cursor(pal_window *window) {
+    (void)window;
     int result = 1;
     while (result >= 0) {
         result = ShowCursor(FALSE);
@@ -4523,11 +4533,11 @@ PALAPI int pal_hide_cursor(pal_window *window) {
 }
 
 PALAPI pal_bool pal_maximize_window(pal_window* window) {
-    return ShowWindow(window->hwnd, SW_MAXIMIZE);
+    return (pal_bool)ShowWindow(window->hwnd, SW_MAXIMIZE);
 }
 
 PALAPI pal_bool pal_minimize_window(pal_window* window) {
-    return ShowWindow(window->hwnd, SW_MINIMIZE);
+    return (pal_bool)ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
 static int win32_get_raw_input_buffer(void);
@@ -4582,7 +4592,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 }
 
 PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
-    return SetWindowTextA(window->hwnd, string);
+    return (pal_bool)SetWindowTextA(window->hwnd, string);
 }
 
 PALAPI pal_monitor* pal_get_primary_monitor(void) {
@@ -4658,7 +4668,7 @@ PALAPI void pal_swap_buffers(pal_window* window) {
 }
 
 PALAPI void pal_swap_interval(int interval) {
-    wglSwapIntervalEXT(interval);
+    p_wglSwapIntervalEXT(interval);
 }
 
 // Handler function signatures
@@ -4813,9 +4823,6 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     HANDLE hToken = NULL;
     GENERIC_MAPPING mapping = {0};
 
-    PRIVILEGE_SET privileges = {0};
-    DWORD privSize = sizeof(privileges);
-    BOOL accessStatus = FALSE;
     ACCESS_MASK accessRights = 0;
 
     if (!file_path) {
@@ -5792,7 +5799,7 @@ PALAPI void* pal_load_dynamic_function(void* dll, char* func_name) {
 }
 
 PALAPI pal_bool pal_free_dynamic_library(void* dll) {
-    pal_bool free_result = FreeLibrary(dll);
+    pal_bool free_result = (pal_bool)FreeLibrary(dll);
     if(free_result) return (pal_bool)free_result;
     return 0;
 }
@@ -7720,8 +7727,7 @@ PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int heigh
     XFillRectangle(g_display, window->window, window->graphics_context, x, y, width, height);
 }
 
-/* Helper to intern an atom */
-PALAPI int pal_make_context_current(pal_window *window, pal_gl_context context) {
+PALAPI int pal_gl_make_context_current(pal_window *window, pal_gl_context context) {
     if (window && context) {
         if (!glXMakeCurrent(g_display, window->window, context)) {
             fprintf(stderr, "GLX ERROR: glXMakeCurrent failed!\n");
