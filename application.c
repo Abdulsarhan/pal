@@ -1,7 +1,10 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <stdio.h>
 #include <assert.h>
 
 #include <glad/glad.h>
+
 #define PAL_IMPLEMENTATION
 #include "pal_single_header.h"
 
@@ -55,8 +58,6 @@ int main() {
 
     // OpenglInfo openglInfo = get_opengl_info();
 #ifdef _WIN32
-    pal_sound* music = pal_load_music("sine_wave.wav");
-    pal_play_music(music, 0.1f);
     // pal_set_window_icon_legacy(window, "icon.ico");
     // pal_set_taskbar_icon(window, "png.png");
 #endif

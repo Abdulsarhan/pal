@@ -821,7 +821,6 @@ typedef void* pal_gl_context;
 typedef void *(*pal_thread_func)(void *arg);
 typedef struct pal_window pal_window;
 typedef struct pal_monitor pal_monitor;
-typedef struct pal_sound pal_sound;
 typedef struct pal_music pal_music;
 typedef struct pal_mutex pal_mutex;
 
@@ -1415,17 +1414,6 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id);
 PALAPI void pal_swap_buffers(pal_window *window);
 PALAPI void pal_swap_interval(int interval);
 
-/* Sound */
-PALAPI pal_sound *pal_load_sound(const char *filename);
-PALAPI int pal_play_sound(pal_sound *sound, float volume);
-PALAPI int pal_stop_sound(pal_sound *sound);
-PALAPI void pal_free_sound(pal_sound *sound);
-
-PALAPI pal_sound *pal_load_music(const char *filename);
-PALAPI int pal_play_music(pal_sound *sound, float volume);
-PALAPI int pal_stop_music(pal_sound *sound); /* unimplemented */
-PALAPI void pal_free_music(pal_sound *sound);
-
 /* File I/O */
 PALAPI pal_bool pal_does_file_exist(const char *file_path);
 PALAPI size_t pal_get_last_write_time(const char *file);
@@ -1533,8 +1521,6 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll);
 /*-------------------------------------*/
 /* Cross-platform code ----------------*/
 /*-------------------------------------*/
-#define STB_VORBIS_IMPLEMENTATION
-#include "stb_vorbis.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
@@ -1610,7 +1596,7 @@ static pal_windows g_windows = {0};
 
 typedef struct {
 #ifdef _WIN32
-    HANDLE handles[MAX_KEYBOARDS];
+    void* handles[MAX_KEYBOARDS];
 #else
     int handles[MAX_KEYBOARDS];
 #endif
@@ -1623,7 +1609,7 @@ typedef struct {
 
 typedef struct {
 #ifdef _WIN32
-    HANDLE handles[MAX_MICE];
+    void* handles[MAX_MICE];
 #else
     int handles[MAX_MICE];
 #endif
@@ -2051,39 +2037,343 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 
 // Windows system headers
 #include <Windows.h>
-#include <windowsx.h> // Useful macros (e.g., GET_X_LPARAM)
-#include <xaudio2.h>  // For Sound.
-#include <Xinput.h> // For gamepad input.
-#include <hidsdi.h> // Link with hid.lib
+
+#define GET_WPARAM(wp, lp)                      (wp)
+#define GET_LPARAM(wp, lp)                      (lp)
+
+#define GET_X_LPARAM(lp)                        ((int)(short)LOWORD(lp))
+#define GET_Y_LPARAM(lp)                        ((int)(short)HIWORD(lp))
 
 // for file permissions.
-#include <aclapi.h>
-
 #include <dbt.h>      // For WM_DEVICECHANGE structures
-#include <hidclass.h> // For GUID_DEVINTERFACE_HID - you may need to define this
 
 // OpenGL
 #include <gl/gl.h>
 #include <GL/wglext.h>
 
-// C Standard Library
-#include <assert.h>
+/*
+* 
+* WINAPI, HANDLES, TYPES BEGIN
+*
+*/
 
-// If GUID_DEVINTERFACE_HID isn't available, define it:
-#ifndef GUID_DEVINTERFACE_HID
-DEFINE_GUID(GUID_DEVINTERFACE_HID, 0x4D1E55B2L, 0xF16F, 0x11CF, 0x88, 0xCB, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30);
+#ifdef STRICT
+typedef void *HANDLE;
+#if 0 && (_MSC_VER > 1000)
+#define DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
+#else
+#define DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
 #endif
+#else
+typedef PVOID HANDLE;
+#define DECLARE_HANDLE(name) typedef HANDLE name
+#endif
+typedef HANDLE *PHANDLE;
+typedef HANDLE HDEVNOTIFY;
 
-// Device notification handles
+static const GUID GUID_DEVINTERFACE_HID = { 0x4D1E55B2, 0xF16F, 0x11CF, { 0x88, 0xCB, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30 } };
+
+/* Device notification handles */
 static HDEVNOTIFY g_hDevNotify_HID = NULL;
 
-// Message-only window for raw input (receives input regardless of focus)
+/* Message-only window for raw input (receives input regardless of focus) */
 static HWND g_input_window = NULL;
 
+/*
+* 
+* WINAPI, HANDLES, TYPES END
+*
+*/
+
+/*
+*
+* GAMPAD SHIT BEGIN
+*
+*/
+typedef struct _XINPUT_VIBRATION
+{
+    WORD                                wLeftMotorSpeed;
+    WORD                                wRightMotorSpeed;
+} XINPUT_VIBRATION, *PXINPUT_VIBRATION;
+
+typedef struct _XINPUT_GAMEPAD
+{
+    WORD                                wButtons;
+    BYTE                                bLeftTrigger;
+    BYTE                                bRightTrigger;
+    SHORT                               sThumbLX;
+    SHORT                               sThumbLY;
+    SHORT                               sThumbRX;
+    SHORT                               sThumbRY;
+} XINPUT_GAMEPAD, *PXINPUT_GAMEPAD;
+
+typedef struct _XINPUT_STATE
+{
+    DWORD                               dwPacketNumber;
+    XINPUT_GAMEPAD                      Gamepad;
+} XINPUT_STATE, *PXINPUT_STATE;
+
+/*
+*
+* GAMPAD SHIT END
+*
+*/
+
+/*
+*
+* FILE SHIT BEGIN
+*
+*/
+typedef enum _ACCESS_MODE
+{
+    NOT_USED_ACCESS = 0,
+    GRANT_ACCESS,
+    SET_ACCESS,
+    DENY_ACCESS,
+    REVOKE_ACCESS,
+    SET_AUDIT_SUCCESS,
+    SET_AUDIT_FAILURE
+} ACCESS_MODE;
+
+typedef enum _TRUSTEE_FORM
+{
+    TRUSTEE_IS_SID,
+    TRUSTEE_IS_NAME,
+    TRUSTEE_BAD_FORM,
+    TRUSTEE_IS_OBJECTS_AND_SID,
+    TRUSTEE_IS_OBJECTS_AND_NAME
+} TRUSTEE_FORM;
+
+typedef enum _TRUSTEE_TYPE
+{
+    TRUSTEE_IS_UNKNOWN,
+    TRUSTEE_IS_USER,
+    TRUSTEE_IS_GROUP,
+    TRUSTEE_IS_DOMAIN,
+    TRUSTEE_IS_ALIAS,
+    TRUSTEE_IS_WELL_KNOWN_GROUP,
+    TRUSTEE_IS_DELETED,
+    TRUSTEE_IS_INVALID,
+    TRUSTEE_IS_COMPUTER
+} TRUSTEE_TYPE;
+
+typedef enum _MULTIPLE_TRUSTEE_OPERATION
+{
+    NO_MULTIPLE_TRUSTEE,
+    TRUSTEE_IS_IMPERSONATE,
+} MULTIPLE_TRUSTEE_OPERATION;
+
+typedef enum _SE_OBJECT_TYPE {
+  SE_UNKNOWN_OBJECT_TYPE,
+  SE_FILE_OBJECT,
+  SE_SERVICE,
+  SE_PRINTER,
+  SE_REGISTRY_KEY,
+  SE_LMSHARE,
+  SE_KERNEL_OBJECT,
+  SE_WINDOW_OBJECT,
+  SE_DS_OBJECT,
+  SE_DS_OBJECT_ALL,
+  SE_PROVIDER_DEFINED_OBJECT,
+  SE_WMIGUID_OBJECT,
+  SE_REGISTRY_WOW64_32KEY,
+  SE_REGISTRY_WOW64_64KEY
+} SE_OBJECT_TYPE;
+#define NO_INHERITANCE 0x0
+
+typedef struct _TRUSTEE_A
+{
+    struct _TRUSTEE_A          *pMultipleTrustee;
+    MULTIPLE_TRUSTEE_OPERATION  MultipleTrusteeOperation;
+    TRUSTEE_FORM                TrusteeForm;
+    TRUSTEE_TYPE                TrusteeType;
+#ifdef __midl
+    [switch_is(TrusteeForm)]
+    union
+    {
+    [case(TRUSTEE_IS_NAME)]
+        LPSTR                   ptstrName;
+    [case(TRUSTEE_IS_SID)]
+        SID                    *pSid;
+    [case(TRUSTEE_IS_OBJECTS_AND_SID)]
+        OBJECTS_AND_SID        *pObjectsAndSid;
+    [case(TRUSTEE_IS_OBJECTS_AND_NAME)]
+        OBJECTS_AND_NAME_A     *pObjectsAndName;
+    };
+#else
+    // This member is not null-terminated as it may be used to hold strings, which are null-terminated or 
+    // SIDs, which are not null-terminated.
+    LPCH                        ptstrName;
+#endif
+} TRUSTEE_A, *PTRUSTEE_A, TRUSTEEA, *PTRUSTEEA;
+typedef struct _TRUSTEE_W
+{
+    struct _TRUSTEE_W          *pMultipleTrustee;
+    MULTIPLE_TRUSTEE_OPERATION  MultipleTrusteeOperation;
+    TRUSTEE_FORM                TrusteeForm;
+    TRUSTEE_TYPE                TrusteeType;
+#ifdef __midl
+    [switch_is(TrusteeForm)]
+    union
+    {
+    [case(TRUSTEE_IS_NAME)]
+        LPWSTR                  ptstrName;
+    [case(TRUSTEE_IS_SID)]
+        SID                    *pSid;
+    [case(TRUSTEE_IS_OBJECTS_AND_SID)]
+        OBJECTS_AND_SID        *pObjectsAndSid;
+    [case(TRUSTEE_IS_OBJECTS_AND_NAME)]
+        OBJECTS_AND_NAME_W     *pObjectsAndName;
+    };
+#else
+    // This member is not null-terminated as it may be used to hold strings, which are null-terminated or 
+    // SID, which are not null-terminated.
+    LPWCH                       ptstrName;
+#endif
+} TRUSTEE_W, *PTRUSTEE_W, TRUSTEEW, *PTRUSTEEW;
+#ifdef UNICODE
+typedef TRUSTEE_W TRUSTEE_;
+typedef PTRUSTEE_W PTRUSTEE_;
+typedef TRUSTEEW TRUSTEE;
+typedef PTRUSTEEW PTRUSTEE;
+#else
+typedef TRUSTEE_A TRUSTEE_;
+typedef PTRUSTEE_A PTRUSTEE_;
+typedef TRUSTEEA TRUSTEE;
+typedef PTRUSTEEA PTRUSTEE;
+#endif // UNICODE
+
+typedef struct _EXPLICIT_ACCESS_A
+{
+    DWORD        grfAccessPermissions;
+    ACCESS_MODE  grfAccessMode;
+    DWORD        grfInheritance;
+    TRUSTEE_A    Trustee;
+} EXPLICIT_ACCESS_A, *PEXPLICIT_ACCESS_A, EXPLICIT_ACCESSA, *PEXPLICIT_ACCESSA;
+typedef struct _EXPLICIT_ACCESS_W
+{
+    DWORD        grfAccessPermissions;
+    ACCESS_MODE  grfAccessMode;
+    DWORD        grfInheritance;
+    TRUSTEE_W    Trustee;
+} EXPLICIT_ACCESS_W, *PEXPLICIT_ACCESS_W, EXPLICIT_ACCESSW, *PEXPLICIT_ACCESSW;
+#ifdef UNICODE
+typedef EXPLICIT_ACCESS_W EXPLICIT_ACCESS_;
+typedef PEXPLICIT_ACCESS_W PEXPLICIT_ACCESS_;
+typedef EXPLICIT_ACCESSW EXPLICIT_ACCESS;
+typedef PEXPLICIT_ACCESSW PEXPLICIT_ACCESS;
+#else
+typedef EXPLICIT_ACCESS_A EXPLICIT_ACCESS_;
+typedef PEXPLICIT_ACCESS_A PEXPLICIT_ACCESS_;
+typedef EXPLICIT_ACCESSA EXPLICIT_ACCESS;
+typedef PEXPLICIT_ACCESSA PEXPLICIT_ACCESS;
+#endif // UNICODE
+
+WINADVAPI DWORD WINAPI GetSecurityInfo(
+    _In_  HANDLE                 handle,
+    _In_  SE_OBJECT_TYPE         ObjectType,
+    _In_  SECURITY_INFORMATION   SecurityInfo,
+    _Out_opt_ PSID                 * ppsidOwner,
+    _Out_opt_ PSID                 * ppsidGroup,
+    _Out_opt_ PACL                 * ppDacl,
+    _Out_opt_ PACL                 * ppSacl,
+    _Out_opt_ PSECURITY_DESCRIPTOR * ppSecurityDescriptor
+    );
+
+WINADVAPI DWORD WINAPI SetNamedSecurityInfoA(
+    _In_ LPSTR               pObjectName,
+    _In_ SE_OBJECT_TYPE        ObjectType,
+    _In_ SECURITY_INFORMATION  SecurityInfo,
+    _In_opt_ PSID              psidOwner,
+    _In_opt_ PSID              psidGroup,
+    _In_opt_ PACL              pDacl,
+    _In_opt_ PACL              pSacl
+    );
+WINADVAPI DWORD WINAPI SetNamedSecurityInfoW(
+    _In_ LPWSTR               pObjectName,
+    _In_ SE_OBJECT_TYPE        ObjectType,
+    _In_ SECURITY_INFORMATION  SecurityInfo,
+    _In_opt_ PSID              psidOwner,
+    _In_opt_ PSID              psidGroup,
+    _In_opt_ PACL              pDacl,
+    _In_opt_ PACL              pSacl
+    );
+#ifdef UNICODE
+#define SetNamedSecurityInfo  SetNamedSecurityInfoW
+#else
+#define SetNamedSecurityInfo  SetNamedSecurityInfoA
+#endif // !UNICODE
+
+WINADVAPI DWORD WINAPI GetNamedSecurityInfoA(
+    _In_  LPCSTR               pObjectName,
+    _In_  SE_OBJECT_TYPE         ObjectType,
+    _In_  SECURITY_INFORMATION   SecurityInfo,
+    _Out_opt_       PSID         * ppsidOwner,
+    _Out_opt_       PSID         * ppsidGroup,
+    _Out_opt_       PACL         * ppDacl,
+    _Out_opt_       PACL         * ppSacl,
+    _Out_ PSECURITY_DESCRIPTOR   * ppSecurityDescriptor
+    );
+WINADVAPI DWORD WINAPI GetNamedSecurityInfoW(
+    _In_  LPCWSTR               pObjectName,
+    _In_  SE_OBJECT_TYPE         ObjectType,
+    _In_  SECURITY_INFORMATION   SecurityInfo,
+    _Out_opt_       PSID         * ppsidOwner,
+    _Out_opt_       PSID         * ppsidGroup,
+    _Out_opt_       PACL         * ppDacl,
+    _Out_opt_       PACL         * ppSacl,
+    _Out_ PSECURITY_DESCRIPTOR   * ppSecurityDescriptor
+    );
+#ifdef UNICODE
+#define GetNamedSecurityInfo  GetNamedSecurityInfoW
+#else
+#define GetNamedSecurityInfo  GetNamedSecurityInfoA
+#endif // !UNICODE
+
+WINADVAPI DWORD WINAPI SetEntriesInAclA(
+    _In_ ULONG               cCountOfExplicitEntries,
+    _In_reads_opt_(cCountOfExplicitEntries)  PEXPLICIT_ACCESS_A  pListOfExplicitEntries,
+    _In_opt_  PACL           OldAcl,
+    _Out_ PACL              * NewAcl
+    );
+WINADVAPI DWORD WINAPI SetEntriesInAclW(
+    _In_ ULONG               cCountOfExplicitEntries,
+    _In_reads_opt_(cCountOfExplicitEntries)  PEXPLICIT_ACCESS_W  pListOfExplicitEntries,
+    _In_opt_  PACL           OldAcl,
+    _Out_ PACL              * NewAcl
+    );
+#ifdef UNICODE
+#define SetEntriesInAcl  SetEntriesInAclW
+#else
+#define SetEntriesInAcl  SetEntriesInAclA
+#endif // !UNICODE
+
+WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclA(
+    _In_  PACL          pacl,
+    _In_  PTRUSTEE_A    pTrustee,
+    _Out_ PACCESS_MASK  pAccessRights
+    );
+WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(
+    _In_  PACL          pacl,
+    _In_  PTRUSTEE_W    pTrustee,
+    _Out_ PACCESS_MASK  pAccessRights
+    );
+#ifdef UNICODE
+#define GetEffectiveRightsFromAcl  GetEffectiveRightsFromAclW
+#else
+#define GetEffectiveRightsFromAcl  GetEffectiveRightsFromAclA
+#endif // !UNICODE
+
+/*
+*
+* FILE SHIT END
+*
+*/
+
 // Global function pointers
-static DWORD(WINAPI* XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE* pState) = NULL;
-static DWORD(WINAPI* XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration) = NULL;
-static DWORD(WINAPI* XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL;
+static DWORD(WINAPI* XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE *pState) = NULL;
+static DWORD(WINAPI* XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration) = NULL;
+//static DWORD(WINAPI* XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL;
 static void(WINAPI* XInputEnable_fn)(BOOL enable) = NULL;
 
 typedef unsigned __int64 QWORD;
@@ -2095,8 +2385,6 @@ static pal_bool g_has_trigger_motors = pal_false;
 static HDC s_fakeDC = {0};
 pal_window* g_current_window = NULL;
 uint32_t g_next_window_id = 1;
-IXAudio2* g_xaudio2 = NULL;
-IXAudio2MasteringVoice* g_mastering_voice = NULL;
 
 /* On windows, a message pump is specific to the gui thread (a thread that creates windows). */
 pal_bool g_message_pump_drained = pal_false; /* initiallly false because windows sends messages as soon as you call Create_WindowExA() */
@@ -2115,34 +2403,6 @@ struct pal_monitor {
     HMONITOR handle;
 };
 
-struct pal_sound {
-    // Core audio data
-    unsigned char* data; // Raw PCM audio data (initial buffer)
-    size_t data_size;    // Size in bytes of initial buffer
-    int sample_rate;     // Samples per second (e.g., 44100)
-    int channels;        // Number of audio channels (e.g., 2 for stereo)
-    int bits_per_sample; // Usually 16 or 32
-    int is_float;        // 0 = PCM, 1 = IEEE float
-
-    // XAudio2
-    IXAudio2SourceVoice* source_voice;
-    IXAudio2VoiceCallback* voice_callback;
-
-    // Streaming - OGG
-    void* decoder;  // stb_vorbis* (using void* to avoid header dependency)
-    char* filename; // Filename for reopening OGG decoder
-
-    // Streaming - WAV
-    FILE* source_file;
-    size_t total_data_size; // Total size of audio data in file
-    size_t bytes_streamed;  // How many bytes we've read so far
-    size_t data_offset;     // Offset in file where audio data starts
-
-    // Streaming control
-    float preload_seconds; // How many seconds were preloaded
-    int is_streaming;      // 1 if this is a streaming sound
-    int stream_finished;   // 1 when streaming is complete
-};
 
 struct pal_mutex {
     CRITICAL_SECTION cs;
@@ -2162,92 +2422,6 @@ static const uint8_t win32_button_to_pal_button[] = {
     [4] = PAL_MOUSE_5,
 };
 
-// clang-format off
-static const uint16_t win32_key_to_pal_key[] = {
-    // unassigned.
-    [0x00] = 0x00, [0x01] = 0x00, [0x02] = 0x00, [0x03] = 0x00, [0x04] = 0x00,
-    [0x05] = 0x00, [0x06] = 0x00, [0x07] = 0x00,
-
-    [0x08] = PAL_KEY_BACKSPACE, // Backspace
-    [0x09] = PAL_KEY_TAB, // Tab
-    [0x0A] = 0x00, [0x0B] = 0x00, // unassigned.
-    [0x0C] = 0x0C, // Clear
-    [0x0D] = PAL_KEY_ENTER, // Return
-    [0x0E] = 0x00, [0x0F] = 0x00, // unassigned.
-    [0x10] = PAL_KEY_SHIFT, // Shift
-    [0x11] = PAL_KEY_CONTROL, // Control
-    [0x12] = PAL_KEY_ALT, // Menu (Alt)
-    [0x13] = 0x13, // Pause
-    [0x14] = PAL_KEY_CAPSLOCK, // Caps Lock
-    [0x15] = 0x15, [0x16] = 0x16, [0x17] = 0x17,
-    [0x18] = 0x18, [0x19] = 0x19, [0x1A] = 0x1A, // Japanese keys (?)
-    [0x1B] = 0x1B, [0x1C] = 0x1C, [0x1D] = 0x1D,
-    [0x1E] = 0x1E, [0x1F] = 0x1F,
-    [0x20] = 0x20, [0x21] = 0x21, [0x22] = 0x22,
-    [0x23] = 0x23, [0x24] = 0x24, [0x25] = 0x25,
-    [0x26] = 0x26, [0x27] = 0x27, [0x28] = 0x28,
-    [0x29] = 0x29, [0x2A] = 0x2A, [0x2B] = 0x2B,
-    [0x2C] = 0x2C, [0x2D] = 0x2D, [0x2E] = 0x2E,
-    [0x2F] = 0x2F,
-
-    // 0 - 9
-    [0x30] = PAL_KEY_0, [0x31] = PAL_KEY_1, [0x32] = PAL_KEY_2, [0x33] = PAL_KEY_3,
-    [0x34] = PAL_KEY_4, [0x35] = PAL_KEY_5, [0x36] = PAL_KEY_6, [0x37] = PAL_KEY_7,
-    [0x38] = PAL_KEY_8, [0x39] = PAL_KEY_9,
-    // Unassigned.
-    [0x3A] = 0x3A, [0x3B] = 0x3B, [0x3C] = 0x3C, [0x3D] = 0x3D,
-    [0x3E] = 0x3E, [0x3F] = 0x3F, [0x40] = 0x40,
-
-    // A - Z
-    [0x41] = PAL_KEY_A, [0x42] = PAL_KEY_B, [0x43] = PAL_KEY_C, [0x44] = PAL_KEY_D,
-    [0x45] = PAL_KEY_E, [0x46] = PAL_KEY_F, [0x47] = PAL_KEY_G, [0x48] = PAL_KEY_H,
-    [0x49] = PAL_KEY_I, [0x4A] = PAL_KEY_J, [0x4B] = PAL_KEY_K, [0x4C] = PAL_KEY_L,
-    [0x4D] = PAL_KEY_M, [0x4E] = PAL_KEY_N, [0x4F] = PAL_KEY_O, [0x50] = PAL_KEY_P,
-    [0x51] = PAL_KEY_Q, [0x52] = PAL_KEY_R, [0x53] = PAL_KEY_S, [0x54] = PAL_KEY_T,
-    [0x55] = PAL_KEY_U, [0x56] = PAL_KEY_V, [0x57] = PAL_KEY_W, [0x58] = PAL_KEY_X,
-    [0x59] = PAL_KEY_Y, [0x5A] = PAL_KEY_Z,
-
-    // LWin, RWin, Apps (The Apps key is supposed to open up a context menu. Most keyboards don't have this.)
-    [0x5B] = PAL_KEY_LWIN, [0x5C] = PAL_KEY_RWIN, [0x5D] = PAL_KEY_APPS,
-
-    [0x5E] = 0x5E, // Unassigned
-
-    [0x5F] = 0x5F, // Sleep
-
-    // Numpad 0 - 9
-    [0x60] = PAL_KEY_NUMPAD_0, [0x61] = PAL_KEY_NUMPAD_1, [0x62] = PAL_KEY_NUMPAD_2,
-    [0x63] = PAL_KEY_NUMPAD_3, [0x64] = PAL_KEY_NUMPAD_4, [0x65] = PAL_KEY_NUMPAD_5,
-    [0x66] = PAL_KEY_NUMPAD_6, [0x67] = PAL_KEY_NUMPAD_7, [0x68] = PAL_KEY_NUMPAD_8,
-    [0x69] = PAL_KEY_NUMPAD_9, 
-
-    // numpad operands
-    [0x6A] = PAL_KEY_MULTIPLY, [0x6B] = PAL_KEY_ADD, [0x6C] = PAL_KEY_SEPARATOR,
-    [0x6D] = PAL_KEY_SUBTRACT, [0x6E] = PAL_KEY_DECIMAL, [0x6F] = PAL_KEY_DIVIDE, 
-
-    // F1 - F24.
-    [0x70] = PAL_KEY_F1, [0x71] = PAL_KEY_F2, [0x72] = PAL_KEY_F3,
-    [0x73] = PAL_KEY_F4, [0x74] = PAL_KEY_F5, [0x75] = PAL_KEY_F6,
-    [0x76] = PAL_KEY_F7, [0x77] = PAL_KEY_F8, [0x78] = PAL_KEY_F9,
-    [0x79] = PAL_KEY_F10, [0x7A] = PAL_KEY_F11, [0x7B] = PAL_KEY_F12,
-    [0x7C] = PAL_KEY_F13, [0x7D] = PAL_KEY_F14, [0x7E] = PAL_KEY_F15,
-    [0x7F] = PAL_KEY_F16, [0x80] = PAL_KEY_F17, [0x81] = PAL_KEY_F18,
-    [0x82] = PAL_KEY_F19, [0x83] = PAL_KEY_F20, [0x84] = PAL_KEY_F21,
-    [0x85] = PAL_KEY_F22, [0x86] = PAL_KEY_F23, [0x87] = PAL_KEY_F24,
-
-    // Reserved
-    [0x88] = 0x88, [0x89] = 0x89, [0x8A] = 0x8A, [0x8B] = 0x8B,
-    [0x8C] = 0x8C, [0x8D] = 0x8D, [0x8E] = 0x8E, [0x8F] = 0x8F,
-
-    [0x90] = PAL_KEY_NUMLOCK, [0x91] = PAL_KEY_SCROLLOCK, // NumLock, ScrollLock
-    [0xBA] = PAL_KEY_SEMICOLON,  [0xBB] = PAL_KEY_EQUAL,
-    [0xBC] = PAL_KEY_COMMA,      [0xBD] = PAL_KEY_MINUS,
-    [0xBE] = PAL_KEY_PERIOD,     [0xBF] = PAL_KEY_FORWARD_SLASH,
-    [0xC0] = PAL_KEY_BACKTICK,   [0xDB] = PAL_KEY_LEFTBRACE,
-    [0xDC] = PAL_KEY_BACKSLASH,  [0xDD] = PAL_KEY_RIGHTBRACE,
-    [0xDE] = PAL_KEY_APOSTROPHE, [0xE2] = PAL_KEY_BACKSLASH,
-};
-
-// clang-format on
 static int win32_makecode_to_pal_scancode[256] = {
     [0x00] = 0,                       // Invalid
     [0x01] = PAL_SCAN_ESCAPE,         // Escape
@@ -2390,6 +2564,187 @@ static int win32_extended_makecode_to_pal_scancode[256] = {
     [0x6D] = PAL_SCAN_MEDIA_SELECT, // Media Select
 };
 
+static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
+    [PAL_SCAN_NONE] = PAL_KEY_NONE,
+    
+    // Letters
+    [PAL_SCAN_A] = PAL_KEY_A,
+    [PAL_SCAN_B] = PAL_KEY_B,
+    [PAL_SCAN_C] = PAL_KEY_C,
+    [PAL_SCAN_D] = PAL_KEY_D,
+    [PAL_SCAN_E] = PAL_KEY_E,
+    [PAL_SCAN_F] = PAL_KEY_F,
+    [PAL_SCAN_G] = PAL_KEY_G,
+    [PAL_SCAN_H] = PAL_KEY_H,
+    [PAL_SCAN_I] = PAL_KEY_I,
+    [PAL_SCAN_J] = PAL_KEY_J,
+    [PAL_SCAN_K] = PAL_KEY_K,
+    [PAL_SCAN_L] = PAL_KEY_L,
+    [PAL_SCAN_M] = PAL_KEY_M,
+    [PAL_SCAN_N] = PAL_KEY_N,
+    [PAL_SCAN_O] = PAL_KEY_O,
+    [PAL_SCAN_P] = PAL_KEY_P,
+    [PAL_SCAN_Q] = PAL_KEY_Q,
+    [PAL_SCAN_R] = PAL_KEY_R,
+    [PAL_SCAN_S] = PAL_KEY_S,
+    [PAL_SCAN_T] = PAL_KEY_T,
+    [PAL_SCAN_U] = PAL_KEY_U,
+    [PAL_SCAN_V] = PAL_KEY_V,
+    [PAL_SCAN_W] = PAL_KEY_W,
+    [PAL_SCAN_X] = PAL_KEY_X,
+    [PAL_SCAN_Y] = PAL_KEY_Y,
+    [PAL_SCAN_Z] = PAL_KEY_Z,
+    
+    // Numbers
+    [PAL_SCAN_1] = PAL_KEY_1,
+    [PAL_SCAN_2] = PAL_KEY_2,
+    [PAL_SCAN_3] = PAL_KEY_3,
+    [PAL_SCAN_4] = PAL_KEY_4,
+    [PAL_SCAN_5] = PAL_KEY_5,
+    [PAL_SCAN_6] = PAL_KEY_6,
+    [PAL_SCAN_7] = PAL_KEY_7,
+    [PAL_SCAN_8] = PAL_KEY_8,
+    [PAL_SCAN_9] = PAL_KEY_9,
+    [PAL_SCAN_0] = PAL_KEY_0,
+    
+    // Function keys
+    [PAL_SCAN_F1] = PAL_KEY_F1,
+    [PAL_SCAN_F2] = PAL_KEY_F2,
+    [PAL_SCAN_F3] = PAL_KEY_F3,
+    [PAL_SCAN_F4] = PAL_KEY_F4,
+    [PAL_SCAN_F5] = PAL_KEY_F5,
+    [PAL_SCAN_F6] = PAL_KEY_F6,
+    [PAL_SCAN_F7] = PAL_KEY_F7,
+    [PAL_SCAN_F8] = PAL_KEY_F8,
+    [PAL_SCAN_F9] = PAL_KEY_F9,
+    [PAL_SCAN_F10] = PAL_KEY_F10,
+    [PAL_SCAN_F11] = PAL_KEY_F11,
+    [PAL_SCAN_F12] = PAL_KEY_F12,
+    [PAL_SCAN_F13] = PAL_KEY_F13,
+    [PAL_SCAN_F14] = PAL_KEY_F14,
+    [PAL_SCAN_F15] = PAL_KEY_F15,
+    [PAL_SCAN_F16] = PAL_KEY_F16,
+    [PAL_SCAN_F17] = PAL_KEY_F17,
+    [PAL_SCAN_F18] = PAL_KEY_F18,
+    [PAL_SCAN_F19] = PAL_KEY_F19,
+    [PAL_SCAN_F20] = PAL_KEY_F20,
+    [PAL_SCAN_F21] = PAL_KEY_F21,
+    [PAL_SCAN_F22] = PAL_KEY_F22,
+    [PAL_SCAN_F23] = PAL_KEY_F23,
+    [PAL_SCAN_F24] = PAL_KEY_F24,
+    
+    // Special keys
+    [PAL_SCAN_ESCAPE] = PAL_KEY_ESCAPE,
+    [PAL_SCAN_RETURN] = PAL_KEY_RETURN,
+    [PAL_SCAN_TAB] = PAL_KEY_TAB,
+    [PAL_SCAN_BACKSPACE] = PAL_KEY_BACKSPACE,
+    [PAL_SCAN_SPACE] = PAL_KEY_SPACE,
+    [PAL_SCAN_DELETE] = PAL_KEY_DELETE,
+    [PAL_SCAN_INSERT] = PAL_KEY_INSERT,
+    [PAL_SCAN_HOME] = PAL_KEY_HOME,
+    [PAL_SCAN_END] = PAL_KEY_END,
+    [PAL_SCAN_PAGEUP] = PAL_KEY_PAGEUP,
+    [PAL_SCAN_PAGEDOWN] = PAL_KEY_PAGEDOWN,
+    [PAL_SCAN_UP] = PAL_KEY_UP,
+    [PAL_SCAN_DOWN] = PAL_KEY_DOWN,
+    [PAL_SCAN_LEFT] = PAL_KEY_LEFT,
+    [PAL_SCAN_RIGHT] = PAL_KEY_RIGHT,
+    
+    // Punctuation
+    [PAL_SCAN_MINUS] = PAL_KEY_MINUS,
+    [PAL_SCAN_EQUALS] = PAL_KEY_EQUALS,
+    [PAL_SCAN_LEFTBRACKET] = PAL_KEY_LEFTBRACKET,
+    [PAL_SCAN_RIGHTBRACKET] = PAL_KEY_RIGHTBRACKET,
+    [PAL_SCAN_BACKSLASH] = PAL_KEY_BACKSLASH,
+    [PAL_SCAN_SEMICOLON] = PAL_KEY_SEMICOLON,
+    [PAL_SCAN_APOSTROPHE] = PAL_KEY_APOSTROPHE,
+    [PAL_SCAN_GRAVE] = PAL_KEY_GRAVE,
+    [PAL_SCAN_COMMA] = PAL_KEY_COMMA,
+    [PAL_SCAN_PERIOD] = PAL_KEY_PERIOD,
+    [PAL_SCAN_SLASH] = PAL_KEY_SLASH,
+    
+    // Lock keys
+    [PAL_SCAN_CAPSLOCK] = PAL_KEY_CAPSLOCK,
+    [PAL_SCAN_SCROLLLOCK] = PAL_KEY_SCROLLLOCK,
+    [PAL_SCAN_NUMCLEAR] = PAL_KEY_NUMLOCKCLEAR,
+    
+    // *** MODIFIER KEYS - LEFT AND RIGHT DISTINGUISHED ***
+    // This is the key fix - scancodes preserve left/right distinction
+    [PAL_SCAN_LSHIFT] = PAL_KEY_LSHIFT,
+    [PAL_SCAN_RSHIFT] = PAL_KEY_RSHIFT,
+    [PAL_SCAN_LCTRL] = PAL_KEY_LCTRL,
+    [PAL_SCAN_RCTRL] = PAL_KEY_RCTRL,
+    [PAL_SCAN_LALT] = PAL_KEY_LALT,
+    [PAL_SCAN_RALT] = PAL_KEY_RALT,
+    [PAL_SCAN_LGUI] = PAL_KEY_LGUI,
+    [PAL_SCAN_RGUI] = PAL_KEY_RGUI,
+    
+    // Numpad
+    [PAL_SCAN_KP_0] = PAL_KEY_NUMPAD_0,
+    [PAL_SCAN_KP_1] = PAL_KEY_NUMPAD_1,
+    [PAL_SCAN_KP_2] = PAL_KEY_NUMPAD_2,
+    [PAL_SCAN_KP_3] = PAL_KEY_NUMPAD_3,
+    [PAL_SCAN_KP_4] = PAL_KEY_NUMPAD_4,
+    [PAL_SCAN_KP_5] = PAL_KEY_NUMPAD_5,
+    [PAL_SCAN_KP_6] = PAL_KEY_NUMPAD_6,
+    [PAL_SCAN_KP_7] = PAL_KEY_NUMPAD_7,
+    [PAL_SCAN_KP_8] = PAL_KEY_NUMPAD_8,
+    [PAL_SCAN_KP_9] = PAL_KEY_NUMPAD_9,
+    [PAL_SCAN_KP_PERIOD] = PAL_KEY_NUMPAD_PERIOD,
+    [PAL_SCAN_KP_DIVIDE] = PAL_KEY_NUMPAD_DIVIDE,
+    [PAL_SCAN_KP_MULTIPLY] = PAL_KEY_NUMPAD_MULTIPLY,
+    [PAL_SCAN_KP_MINUS] = PAL_KEY_NUMPAD_MINUS,
+    [PAL_SCAN_KP_PLUS] = PAL_KEY_NUMPAD_PLUS,
+    [PAL_SCAN_KP_ENTER] = PAL_KEY_NUMPAD_ENTER,
+    [PAL_SCAN_KP_EQUALS] = PAL_KEY_NUMPAD_EQUALS,
+    [PAL_SCAN_KP_COMMA] = PAL_KEY_NUMPAD_COMMA,
+    
+    // Media keys
+    [PAL_SCAN_MUTE] = PAL_KEY_MUTE,
+    [PAL_SCAN_VOLUMEUP] = PAL_KEY_VOLUMEUP,
+    [PAL_SCAN_VOLUMEDOWN] = PAL_KEY_VOLUMEDOWN,
+    [PAL_SCAN_MEDIA_PLAY] = PAL_KEY_MEDIA_PLAY,
+    [PAL_SCAN_MEDIA_PAUSE] = PAL_KEY_MEDIA_PAUSE,
+    [PAL_SCAN_MEDIA_STOP] = PAL_KEY_MEDIA_STOP,
+    [PAL_SCAN_MEDIA_NEXT_TRACK] = PAL_KEY_MEDIA_NEXT_TRACK,
+    [PAL_SCAN_MEDIA_PREVIOUS_TRACK] = PAL_KEY_MEDIA_PREVIOUS_TRACK,
+    [PAL_SCAN_MEDIA_PLAY_PAUSE] = PAL_KEY_MEDIA_PLAY_PAUSE,
+    [PAL_SCAN_MEDIA_EJECT] = PAL_KEY_MEDIA_EJECT,
+    [PAL_SCAN_MEDIA_SELECT] = PAL_KEY_MEDIA_SELECT,
+    
+    // Misc
+    [PAL_SCAN_PRINTSCREEN] = PAL_KEY_PRINTSCREEN,
+    [PAL_SCAN_PAUSE] = PAL_KEY_PAUSE,
+    [PAL_SCAN_APPLICATION] = PAL_KEY_APPLICATION,
+    [PAL_SCAN_POWER] = PAL_KEY_POWER,
+    [PAL_SCAN_SLEEP] = PAL_KEY_SLEEP,
+    [PAL_SCAN_WAKE] = PAL_KEY_WAKE,
+    [PAL_SCAN_EXECUTE] = PAL_KEY_EXECUTE,
+    [PAL_SCAN_HELP] = PAL_KEY_HELP,
+    [PAL_SCAN_MENU] = PAL_KEY_MENU,
+    [PAL_SCAN_SELECT] = PAL_KEY_SELECT,
+    [PAL_SCAN_STOP] = PAL_KEY_STOP,
+    [PAL_SCAN_AGAIN] = PAL_KEY_AGAIN,
+    [PAL_SCAN_UNDO] = PAL_KEY_UNDO,
+    [PAL_SCAN_CUT] = PAL_KEY_CUT,
+    [PAL_SCAN_COPY] = PAL_KEY_COPY,
+    [PAL_SCAN_PASTE] = PAL_KEY_PASTE,
+    [PAL_SCAN_FIND] = PAL_KEY_FIND,
+    
+    // Non-US keys
+    [PAL_SCAN_NONUSBACKSLASH] = PAL_KEY_BACKSLASH,
+    [PAL_SCAN_NONUSHASH] = PAL_KEY_BACKSLASH,
+    
+    // Browser/App control keys
+    [PAL_SCAN_AC_SEARCH] = PAL_KEY_AC_SEARCH,
+    [PAL_SCAN_AC_HOME] = PAL_KEY_AC_HOME,
+    [PAL_SCAN_AC_BACK] = PAL_KEY_AC_BACK,
+    [PAL_SCAN_AC_FORWARD] = PAL_KEY_AC_FORWARD,
+    [PAL_SCAN_AC_STOP] = PAL_KEY_AC_STOP,
+    [PAL_SCAN_AC_REFRESH] = PAL_KEY_AC_REFRESH,
+    [PAL_SCAN_AC_BOOKMARKS] = PAL_KEY_AC_BOOKMARKS,
+};
+
 typedef struct {
     uint8_t usage;
     float value;
@@ -2402,37 +2757,28 @@ typedef struct {
     pal_bool inverted;
 } win32_gamepad_axis;
 
-typedef struct {
-    uint16_t vendor_id;
-    uint16_t product_id;
-    char name[128];
-    uint8_t button_map[15];
-    struct {
-        uint8_t usage;
-        pal_bool inverted;
-    } axis_map[6];
-} win32_gamepad_mapping;
 
-typedef struct {
-    uint8_t report[64];
-    uint8_t report_size;
-    pal_bool has_report;
-    OVERLAPPED overlapped;
-} win32_dualsense_state;
+#define XINPUT_GAMEPAD_DPAD_UP          0x0001
+#define XINPUT_GAMEPAD_DPAD_DOWN        0x0002
+#define XINPUT_GAMEPAD_DPAD_LEFT        0x0004
+#define XINPUT_GAMEPAD_DPAD_RIGHT       0x0008
+#define XINPUT_GAMEPAD_START            0x0010
+#define XINPUT_GAMEPAD_BACK             0x0020
+#define XINPUT_GAMEPAD_LEFT_THUMB       0x0040
+#define XINPUT_GAMEPAD_RIGHT_THUMB      0x0080
+#define XINPUT_GAMEPAD_LEFT_SHOULDER    0x0100
+#define XINPUT_GAMEPAD_RIGHT_SHOULDER   0x0200
+#define XINPUT_GAMEPAD_A                0x1000
+#define XINPUT_GAMEPAD_B                0x2000
+#define XINPUT_GAMEPAD_X                0x4000
+#define XINPUT_GAMEPAD_Y                0x8000
 
-// Global State
-typedef struct hid_device {
-    HANDLE handle;
-    PHIDP_PREPARSED_DATA pp_data;
-    uint16_t vendor_id;
-    uint16_t product_id;
-    char name[128];
-    win32_gamepad_button buttons[PAL_MAX_BUTTONS];
-    uint8_t button_count;
-    win32_gamepad_axis axes[PAL_MAX_AXES];
-    uint8_t axis_count;
-    pal_bool connected;
-} hid_device;
+//
+// Gamepad thresholds
+//
+#define XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE  7849
+#define XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE 8689
+#define XINPUT_GAMEPAD_TRIGGER_THRESHOLD    30
 
 typedef struct win32_gamepad_context {
     uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
@@ -2440,17 +2786,6 @@ typedef struct win32_gamepad_context {
 
     uint8_t raw_input_buffer[1024]; // <-- THIS IS THE BUFFER
 
-    struct hid_device hid_devices[PAL_MAX_GAMEPADS];
-    struct { // DualSense/DS4
-        HANDLE handle;
-        win32_dualsense_state state;
-        uint16_t vendor_id;
-        uint16_t product_id;
-        char name[128];
-        pal_bool connected;
-    } ds_devices[PAL_MAX_GAMEPADS];
-
-    win32_gamepad_mapping mappings[PAL_MAX_MAPPINGS];
     int mapping_count;
     pal_bool initialized;
     HWND hwnd;
@@ -2924,7 +3259,7 @@ int win32_init_gamepads() {
     // Load function pointers
     XinputGetstate_fn = (DWORD(WINAPI*)(DWORD, XINPUT_STATE*))GetProcAddress(g_xinput_dll, "XInputGetState");
     XInputSetState_fn = (DWORD(WINAPI*)(DWORD, XINPUT_VIBRATION*))GetProcAddress(g_xinput_dll, "XInputSetState");
-    XInputGetCapabilities_fn = (DWORD(WINAPI*)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities");
+    //XInputGetCapabilities_fn = (DWORD(WINAPI*)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities");
     XInputEnable_fn = (void(WINAPI*)(BOOL))GetProcAddress(g_xinput_dll, "XInputEnable");
 
     // Check if we got the essential functions
@@ -2945,7 +3280,7 @@ void win32_shutdown_gamepads(void) {
 
     XinputGetstate_fn = NULL;
     XInputSetState_fn = NULL;
-    XInputGetCapabilities_fn = NULL;
+    //XInputGetCapabilities_fn = NULL;
     XInputEnable_fn = NULL;
     g_has_trigger_motors = pal_false;
 }
@@ -3178,50 +3513,54 @@ static pal_window* win32_get_window_under_cursor(void) {
     return NULL;
 }
 
-static void update_modifier_state(USHORT vk, pal_bool is_key_released, int keyboard_index);
+static void update_modifier_state(int pal_scancode, pal_bool is_key_released, int keyboard_index) {
     int modifier_flag = 0;
 
-    switch (vk) {
-        case VK_LSHIFT:
+    switch (pal_scancode) {
+        case PAL_SCAN_LSHIFT:
             modifier_flag = PAL_MOD_LSHIFT;
             break;
-        case VK_RSHIFT:
+        case PAL_SCAN_RSHIFT:
             modifier_flag = PAL_MOD_RSHIFT;
             break;
-        case VK_LCONTROL:
+        case PAL_SCAN_LCTRL:
             modifier_flag = PAL_MOD_LCTRL;
             break;
-        case VK_RCONTROL:
+        case PAL_SCAN_RCTRL:
             modifier_flag = PAL_MOD_RCTRL;
             break;
-        case VK_LMENU:
+        case PAL_SCAN_LALT:
             modifier_flag = PAL_MOD_LALT;
             break;
-        case VK_RMENU:
+        case PAL_SCAN_RALT:
             modifier_flag = PAL_MOD_RALT;
+            // AltGr is typically Right Alt
             if (is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] &= ~PAL_MOD_ALTGR;
             } else {
                 g_keyboards.cached_modifiers[keyboard_index] |= PAL_MOD_ALTGR;
             }
             break;
-        case VK_LWIN:
+        case PAL_SCAN_LGUI:
             modifier_flag = PAL_MOD_LSUPER;
             break;
-        case VK_RWIN:
+        case PAL_SCAN_RGUI:
             modifier_flag = PAL_MOD_RSUPER;
             break;
-        case VK_CAPITAL:
+        case PAL_SCAN_CAPSLOCK:
+            // Toggle on key press only
             if (!is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_CAPS;
             }
             return;
-        case VK_NUMLOCK:
+        case PAL_SCAN_NUMCLEAR:
+            // Toggle on key press only
             if (!is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_NUM;
             }
             return;
-        case VK_SCROLL:
+        case PAL_SCAN_SCROLLLOCK:
+            // Toggle on key press only
             if (!is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_SCROLL;
             }
@@ -3236,7 +3575,6 @@ static void update_modifier_state(USHORT vk, pal_bool is_key_released, int keybo
         g_keyboards.cached_modifiers[keyboard_index] |= modifier_flag;
     }
 }
-
 void win32_handle_keyboard(const RAWINPUT* raw) {
     // Find keyboard index
     int kb_index = 0;
@@ -3255,25 +3593,29 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
     pal_bool is_extended = (flags & RI_KEY_E0) != 0;
 
-    static uint8_t key_is_down[MAX_KEYBOARDS][256] = {0};
-    pal_bool is_repeat = 0;
-    if (vk < 256) {
-        if (!is_key_released && key_is_down[kb_index][vk]) {
-            is_repeat = 1;
-        }
-        key_is_down[kb_index][vk] = !is_key_released;
-    }
-
-    update_modifier_state(vk, is_key_released, kb_index);
-
-    int pal_key = (vk < 256) ? win32_key_to_pal_key[vk] : 0;
+    // *** COMPUTE pal_scancode FIRST (from makecode) ***
     int pal_scancode = 0;
-
     if (is_extended) {
         if (makecode < 256) pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
     } else {
         if (makecode < 256) pal_scancode = win32_makecode_to_pal_scancode[makecode];
     }
+
+    // *** DERIVE pal_key FROM pal_scancode (preserves left/right modifier distinction) ***
+    int pal_key = (pal_scancode < PAL_SCAN_COUNT) ? pal_scancode_to_keycode[pal_scancode] : 0;
+
+    // Track key repeat state using scancode (not vk)
+    static uint8_t key_is_down[MAX_KEYBOARDS][PAL_SCAN_COUNT] = {0};
+    pal_bool is_repeat = pal_false;
+    if (pal_scancode > 0 && pal_scancode < PAL_SCAN_COUNT) {
+        if (!is_key_released && key_is_down[kb_index][pal_scancode]) {
+            is_repeat = pal_true;
+        }
+        key_is_down[kb_index][pal_scancode] = !is_key_released;
+    }
+
+    // *** UPDATE MODIFIER STATE USING SCANCODE (after pal_scancode is computed) ***
+    update_modifier_state(pal_scancode, is_key_released, kb_index);
 
     // Determine which window should receive this keyboard event
     pal_window* target_window = win32_get_focused_window();
@@ -3752,7 +4094,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-                        printf("Device Arrived: %s\n", pDi->dbcc_name);
+                        printf("Device Arrived: %ls\n", pDi->dbcc_name);
                         
                         // Re-enumerate all input devices
                         win32_enumerate_keyboards();
@@ -3764,7 +4106,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-                        printf("Device Removed: %s\n", pDi->dbcc_name);
+                        printf("Device Removed: %ls\n", pDi->dbcc_name);
                         
                         // Re-enumerate all input devices
                         win32_enumerate_keyboards();
@@ -4071,8 +4413,8 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	// but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes,
 	// so we have to save it here. - Abdelrahman june 13, 2024
 
-	final_window->windowedStyle = GetWindowLongA(final_window->hwnd, GWL_STYLE); // style of the final_window.
-	return final_window;
+	window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the final_window.
+	return window;
 }
 
 PALAPI void pal_close_window(pal_window *window) {
@@ -4136,7 +4478,7 @@ PALAPI int pal_make_context_current(pal_window* window, pal_gl_context context) 
     return 0;
 }
 
-PALAPI int pal_show_cursor(void) {
+PALAPI int pal_show_cursor(pal_window *window) {
     int result = -1;
     while (result < 0) {
         result = ShowCursor(pal_true);
@@ -4144,7 +4486,7 @@ PALAPI int pal_show_cursor(void) {
     return result;
 }
 
-PALAPI int pal_hide_cursor(void) {
+PALAPI int pal_hide_cursor(pal_window *window) {
     int result = 1;
     while (result >= 0) {
         result = ShowCursor(FALSE);
@@ -4301,8 +4643,8 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
     GetCursorPos(&cursor_pos);
 
     ScreenToClient(window->hwnd, &cursor_pos); // Convert to client-area coordinates
-    returned_pos.x = cursor_pos.x;
-    returned_pos.x = cursor_pos.y;
+    returned_pos.x = (float)cursor_pos.x;
+    returned_pos.x = (float)cursor_pos.y;
     return returned_pos;
 }
 
@@ -4857,658 +5199,6 @@ PALAPI uint32_t pal_rand(uint64_t* state) {
 }
 
 //----------------------------------------------------------------------------------
-// Sound Functions.
-//----------------------------------------------------------------------------------
-int win32_init_sound(void) {
-    int hr;
-
-    // Initialize COM (needed for XAudio2)
-    hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    if (FAILED(hr)) {
-        return hr;
-    }
-
-    // Initialize XAudio2 engine
-    hr = XAudio2Create(&g_xaudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-    if (FAILED(hr)) {
-        return hr;
-    }
-
-    // Create mastering voice
-    hr = g_xaudio2->lpVtbl->CreateMasteringVoice(g_xaudio2, &g_mastering_voice, XAUDIO2_DEFAULT_CHANNELS, XAUDIO2_DEFAULT_SAMPLERATE, 0, NULL, NULL, AudioCategory_GameEffects);
-
-    return hr;
-}
-
-// XAudio2 callback for streaming
-typedef struct {
-    IXAudio2VoiceCallbackVtbl* lpVtbl;
-    pal_sound* sound;
-} StreamingVoiceCallback;
-
-static size_t calculate_buffer_size_for_seconds(pal_sound* sound, float seconds) {
-    // bytes_per_second = sample_rate * channels * (bits_per_sample / 8)
-    size_t bytes_per_second = sound->sample_rate * sound->channels * (sound->bits_per_sample / 8);
-    return (size_t)(bytes_per_second * seconds);
-}
-
-static size_t load_next_chunk(pal_sound* sound, unsigned char* buffer, size_t buffer_size) {
-    size_t bytes_read = 0;
-    size_t remaining = 0;
-    size_t to_read = 0;
-    size_t seek_pos = 0;
-
-    if (sound->source_file) {
-        remaining = sound->total_data_size - sound->bytes_streamed;
-
-        if (remaining == 0) {
-            printf("WAV: No remaining data\n");
-            return 0;
-        }
-
-        if (!sound->source_file) {
-            printf("ERROR: WAV file handle is NULL!\n");
-            return 0;
-        }
-
-        to_read = (buffer_size < remaining) ? buffer_size : remaining;
-        seek_pos = sound->data_offset + sound->bytes_streamed;
-
-        printf("WAV: Seeking to %zu (data_offset=%zu + bytes_streamed=%zu), reading %zu bytes\n",
-               seek_pos,
-               sound->data_offset,
-               sound->bytes_streamed,
-               to_read);
-
-        if (fseek(sound->source_file, (long)seek_pos, SEEK_SET) != 0) {
-            printf("WAV: Seek failed to position %zu\n", seek_pos);
-            return 0;
-        }
-
-        bytes_read = fread(buffer, 1, to_read, sound->source_file);
-
-        if (bytes_read != to_read) {
-            printf("WAV: Read %zu bytes but expected %zu, feof=%d, ferror=%d\n",
-                   bytes_read,
-                   to_read,
-                   feof(sound->source_file),
-                   ferror(sound->source_file));
-        }
-
-        sound->bytes_streamed += bytes_read;
-        printf("WAV: Read %zu bytes, new bytes_streamed=%zu\n", bytes_read, sound->bytes_streamed);
-
-    } else if (sound->decoder) {
-        stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
-
-        // Calculate how many sample frames we can fit in the buffer
-        size_t bytes_per_sample_frame = sound->channels * sizeof(short);
-        size_t max_sample_frames = buffer_size / bytes_per_sample_frame;
-
-        if (max_sample_frames <= 0) {
-            printf("OGG: Buffer too small for samples\n");
-            return 0;
-        }
-
-        // Calculate how many sample frames we should skip
-        size_t sample_frames_streamed = sound->bytes_streamed / bytes_per_sample_frame;
-        int current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
-
-        printf("OGG: Loading chunk - streamed %zu sample frames, decoder at %d\n",
-               sample_frames_streamed,
-               current_decoder_pos);
-
-        // If decoder is behind our streaming position, seek forward
-        if (current_decoder_pos < (int)sample_frames_streamed) {
-            printf("OGG: Seeking decoder from %d to %zu\n", current_decoder_pos, sample_frames_streamed);
-            if (stb_vorbis_seek(vorbis, (unsigned int)sample_frames_streamed)) {
-                current_decoder_pos = stb_vorbis_get_sample_offset(vorbis);
-                printf("OGG: Seek successful, decoder now at %u\n", current_decoder_pos);
-            } else {
-                printf("OGG: Seek failed!\n");
-                return 0;
-            }
-        }
-
-        // Allocate temporary float buffers for non-interleaved data
-        float** channel_buffers = (float**)malloc(sound->channels * sizeof(float*));
-        for (int i = 0; i < sound->channels; i++) {
-            channel_buffers[i] = (float*)malloc(max_sample_frames * sizeof(float));
-        }
-
-        // Read using non-interleaved API
-        int total_sample_frames_read = stb_vorbis_get_samples_float(
-            vorbis, sound->channels, channel_buffers, (int)max_sample_frames);
-
-        if (total_sample_frames_read > 0) {
-            // Convert float samples to interleaved 16-bit shorts
-            short* output_ptr = (short*)buffer;
-
-            for (int sample = 0; sample < total_sample_frames_read; sample++) {
-                for (int ch = 0; ch < sound->channels; ch++) {
-                    float f_sample = channel_buffers[ch][sample];
-                    // Clamp and convert to 16-bit
-                    if (f_sample > 1.0f)
-                        f_sample = 1.0f;
-                    if (f_sample < -1.0f)
-                        f_sample = -1.0f;
-                    short s_sample = (short)(f_sample * 32767.0f);
-                    output_ptr[sample * sound->channels + ch] = s_sample;
-                }
-            }
-        }
-
-        // Clean up temporary buffers
-        for (int i = 0; i < sound->channels; i++) {
-            free(channel_buffers[i]);
-        }
-        free(channel_buffers);
-
-        bytes_read = total_sample_frames_read * bytes_per_sample_frame;
-
-        // Update bytes_streamed to track total bytes processed
-        sound->bytes_streamed += bytes_read;
-
-        int after_sample = stb_vorbis_get_sample_offset(vorbis);
-
-        printf("OGG: Read %d sample frames (%zu bytes)\n", total_sample_frames_read, bytes_read);
-        printf("OGG: Decoder position: %d -> %u (advanced %d samples)\n",
-               current_decoder_pos,
-               after_sample,
-               after_sample - current_decoder_pos);
-        printf("OGG: Total bytes streamed: %zu\n", sound->bytes_streamed);
-
-        // Check if we're at the end
-        if (total_sample_frames_read == 0) {
-            unsigned int total_samples = stb_vorbis_stream_length_in_samples(vorbis);
-            printf("OGG: End of stream - position %d of %u total samples\n", after_sample, total_samples);
-        }
-    }
-
-    return bytes_read;
-}
-
-static void STDMETHODCALLTYPE OnBufferEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
-    static int buffer_end_count = 0;
-    XAUDIO2_VOICE_STATE state;
-
-    printf("OnBufferEnd %d: buffer=%p\n", buffer_end_count++, pBufferContext);
-
-    // Free the buffer that just finished playing
-    // pBufferContext contains the buffer pointer we set in buffer.pContext
-    if (pBufferContext) {
-        free(pBufferContext);
-    }
-
-    if (!sound->is_streaming || sound->stream_finished) {
-        return;
-    }
-
-    // Check how many buffers are queued
-    sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
-
-    // If we have fewer than 2 buffers queued, queue another one
-    if (state.BuffersQueued < 2) {
-        float chunk_seconds = sound->preload_seconds;
-        size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
-
-        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
-
-        if (chunk_buffer) {
-            size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
-
-            if (bytes_read > 0) {
-                XAUDIO2_BUFFER buffer = {0};
-                buffer.AudioBytes = (UINT32)bytes_read;
-                buffer.pAudioData = chunk_buffer;
-                buffer.pContext = chunk_buffer; // For OnBufferEnd to free
-
-                HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(
-                    sound->source_voice, &buffer, NULL);
-
-                if (FAILED(hr)) {
-                    printf("ERROR: Failed to submit buffer in OnBufferEnd: 0x%08X\n", hr);
-                    free(chunk_buffer);
-                } else {
-                    printf("Queued next buffer: %u bytes\n", buffer.AudioBytes);
-                }
-            } else {
-                // End of stream reached
-                free(chunk_buffer);
-                sound->stream_finished = 1;
-                printf("Stream finished - no more data\n");
-            }
-        }
-    }
-}
-
-static void STDMETHODCALLTYPE OnVoiceProcessingPassEnd(IXAudio2VoiceCallback* callback) {
-    // OnBufferEnd now handles buffer queuing, so this can be much simpler
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
-    XAUDIO2_VOICE_STATE state;
-    static int callback_count = 0;
-
-    if (!sound->is_streaming || sound->stream_finished) {
-        return;
-    }
-
-    // Just log state for debugging
-    sound->source_voice->lpVtbl->GetState(sound->source_voice, &state, 0);
-
-    if (callback_count % 100 == 0) { // Log less frequently
-        printf("ProcessingPass %d: BuffersQueued=%u, SamplesPlayed=%llu\n",
-               callback_count,
-               state.BuffersQueued,
-               state.SamplesPlayed);
-    }
-    callback_count++;
-}
-
-static void STDMETHODCALLTYPE OnBufferStart(IXAudio2VoiceCallback* callback, void* pBufferContext) {
-    // Called when XAudio2 starts processing a buffer
-    // pBufferContext contains the buffer we passed in SubmitSourceBuffer
-    // For streaming, we don't need to do anything special here
-}
-
-static void STDMETHODCALLTYPE OnLoopEnd(IXAudio2VoiceCallback* callback, void* pBufferContext) {
-    // Called when a buffer with XAUDIO2_LOOP_INFINITE completes a loop
-    // We don't use looping buffers in streaming, so this stays empty
-}
-
-static void STDMETHODCALLTYPE OnVoiceError(IXAudio2VoiceCallback* callback, void* pBufferContext, HRESULT error) {
-    // Called when XAudio2 encounters an error
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
-
-    printf("XAudio2 Voice Error: 0x%08X\n", error);
-
-    // Stop streaming on error
-    sound->stream_finished = 1;
-}
-
-static void STDMETHODCALLTYPE OnVoiceProcessingPassStart(IXAudio2VoiceCallback* callback, UINT32 BytesRequired) {
-    // Called when XAudio2 starts processing audio for this voice
-    // BytesRequired tells us how much data XAudio2 needs
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
-
-    // We can use BytesRequired to be more intelligent about buffer management
-    // For now, we'll handle this in OnBufferEnd instead
-}
-
-static void STDMETHODCALLTYPE OnStreamEnd(IXAudio2VoiceCallback* callback) {
-    // Called when the last buffer with XAUDIO2_END_OF_STREAM finishes playing
-    StreamingVoiceCallback* cb = (StreamingVoiceCallback*)callback;
-    pal_sound* sound = cb->sound;
-
-    printf("Audio stream ended\n");
-
-    // Mark stream as finished
-    sound->stream_finished = 1;
-
-    // You could trigger a callback here to notify your game that the music finished
-    // or automatically start the next track in a playlist
-}
-
-static IXAudio2VoiceCallbackVtbl StreamingCallbackVtbl = {
-    OnVoiceProcessingPassStart,
-    OnVoiceProcessingPassEnd,
-    OnStreamEnd,
-    OnBufferStart,
-    OnBufferEnd,
-    OnLoopEnd,
-    OnVoiceError,
-};
-
-PALAPI int pal_play_music(pal_sound* sound, float volume) {
-    XAUDIO2_BUFFER buffer = {0};
-
-    if (!g_xaudio2 || !g_mastering_voice) {
-        printf("ERROR: XAudio2 not initialized\n");
-        return E_FAIL;
-    }
-
-    printf("Playing sound: streaming=%s, voice_callback=%p\n",
-           sound->is_streaming ? "YES" : "NO",
-           sound->voice_callback);
-
-    // Set volume
-    sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
-
-    // Submit initial buffer (the preloaded data)
-    buffer.AudioBytes = (UINT32)sound->data_size;
-    buffer.pAudioData = sound->data;
-    buffer.pContext = NULL; // Don't free this buffer - it's owned by the sound object
-
-    // For non-streaming sounds, set end of stream flag
-    // For streaming sounds, let the callback handle subsequent buffers
-    buffer.Flags = sound->is_streaming ? 0 : XAUDIO2_END_OF_STREAM;
-
-    float initial_seconds = (float)sound->data_size /
-                            (sound->sample_rate * sound->channels * (sound->bits_per_sample / 8));
-
-    printf("Submitting initial buffer: %u bytes (%.3f seconds), flags=0x%x\n",
-           buffer.AudioBytes,
-           initial_seconds,
-           buffer.Flags);
-
-    HRESULT hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
-    if (FAILED(hr)) {
-        printf("ERROR: Failed to submit source buffer: 0x%08X\n", hr);
-        return hr;
-    }
-
-    // IMPROVEMENT: For streaming sounds, queue an additional buffer immediately
-    if (sound->is_streaming && !sound->stream_finished) {
-        float chunk_seconds = sound->preload_seconds;
-        size_t buffer_chunk_size = calculate_buffer_size_for_seconds(sound, chunk_seconds);
-
-        unsigned char* chunk_buffer = (unsigned char*)malloc(buffer_chunk_size);
-        if (chunk_buffer) {
-            size_t bytes_read = load_next_chunk(sound, chunk_buffer, buffer_chunk_size);
-
-            if (bytes_read > 0) {
-                XAUDIO2_BUFFER next_buffer = {0};
-                next_buffer.AudioBytes = (UINT32)bytes_read;
-                next_buffer.pAudioData = chunk_buffer;
-                next_buffer.pContext = chunk_buffer; // For OnBufferEnd to free
-
-                hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &next_buffer, NULL);
-                if (FAILED(hr)) {
-                    printf("ERROR: Failed to submit second buffer: 0x%08X\n", hr);
-                    free(chunk_buffer);
-                } else {
-                    printf("Queued second buffer: %u bytes\n", next_buffer.AudioBytes);
-                }
-            } else {
-                free(chunk_buffer);
-                // If we can't load more data immediately, that's fine for short files
-            }
-        }
-    }
-
-    // Start playback
-    hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
-    if (FAILED(hr)) {
-        printf("ERROR: Failed to start voice: 0x%08X\n", hr);
-        return hr;
-    }
-
-    printf("Playback started successfully\n");
-    return S_OK;
-}
-
-static int pal__load_wav(const char* filename, pal_sound* out, float seconds);
-static int pal__load_ogg(const char* filename, pal_sound* out, float seconds);
-
-pal_sound* win32_load_sound(const char* filename, float seconds);
-PALAPI pal_sound* pal_load_music(const char* filename) {
-    // every loaded buffer will be this long.
-    const float buffer_length_in_seconds = 2.0f;
-    return win32_load_sound(filename, buffer_length_in_seconds);
-}
-
-PALAPI pal_sound* pal_load_sound(const char* filename) {
-    return win32_load_sound(filename, 0.0f);
-}
-
-pal_sound* win32_load_sound(const char* filename, float seconds) {
-    FILE* file = fopen(filename, "rb");
-    char header[12];
-    int result = 0;
-
-    static const GUID KSDATAFORMAT_SUBTYPE_PCM = {
-        0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
-
-    static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
-        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
-
-    WAVEFORMATEXTENSIBLE wfex = {0};
-
-    if (!file)
-        return NULL;
-
-    if (fread(header, 1, sizeof(header), file) < 12) {
-        fclose(file);
-        return NULL;
-    }
-
-    pal_sound* sound = (pal_sound*)malloc(sizeof(pal_sound));
-    if (!sound) {
-        fclose(file);
-        printf("ERROR: %s(): Failed to allocate memory for sound!\n", __func__);
-        return NULL;
-    }
-    *sound = (pal_sound){0};
-
-    if (pal_memcmp(header, "RIFF", 4) == 0 && pal_memcmp(header + 8, "WAVE", 4) == 0) {
-        fclose(file);
-        result = pal__load_wav(filename, sound, seconds);
-    } else if (pal_memcmp(header, "OggS", 4) == 0) {
-        fclose(file);
-        result = pal__load_ogg(filename, sound, seconds);
-    } else {
-        fclose(file);
-        free(sound);
-        return NULL; // unsupported format
-    }
-
-    // we expect pal__load_wav and pal__load_ogg to return 1 for success.
-    if (result != 1) {
-        free(sound);
-        return NULL;
-    }
-
-    wfex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-    wfex.Format.nChannels = sound->channels;
-    wfex.Format.nSamplesPerSec = sound->sample_rate;
-    wfex.Format.wBitsPerSample = sound->bits_per_sample;
-    wfex.Format.nBlockAlign = (wfex.Format.nChannels * wfex.Format.wBitsPerSample) / 8;
-    wfex.Format.nAvgBytesPerSec = wfex.Format.nSamplesPerSec * wfex.Format.nBlockAlign;
-    wfex.Format.cbSize = 22;
-    wfex.Samples.wValidBitsPerSample = (uint16_t)sound->bits_per_sample;
-
-    wfex.SubFormat = (sound->is_float)
-                         ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-                         : KSDATAFORMAT_SUBTYPE_PCM;
-
-    switch (sound->channels) {
-        case 1:
-            wfex.dwChannelMask = SPEAKER_FRONT_CENTER;
-            break;
-        case 2:
-            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-            break;
-        case 4:
-            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                 SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
-            break;
-        case 6:
-            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                 SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
-                                 SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
-            break;
-        case 8:
-            wfex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT |
-                                 SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
-                                 SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT |
-                                 SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT;
-            break;
-        default:
-            wfex.dwChannelMask = 0;
-            break;
-    }
-
-    sound->source_voice = NULL;
-
-    // Create streaming callback if this is a streaming sound
-    if (seconds > 0.0f) {
-        StreamingVoiceCallback* callback = (StreamingVoiceCallback*)malloc(sizeof(StreamingVoiceCallback));
-        if (callback) {
-            callback->lpVtbl = &StreamingCallbackVtbl;
-            callback->sound = sound;
-            sound->voice_callback = (IXAudio2VoiceCallback*)callback;
-        }
-        sound->preload_seconds = seconds;
-        sound->is_streaming = 1;
-
-        if (sound->source_file) {
-            // WAV streaming setup
-            long current_pos = ftell(sound->source_file);
-            fseek(sound->source_file, 0, SEEK_END);
-            long file_end = ftell(sound->source_file);
-            fseek(sound->source_file, current_pos, SEEK_SET);
-
-            sound->total_data_size = file_end - sound->data_offset;
-            sound->bytes_streamed = sound->data_size;
-
-            printf("WAV streaming setup: total_size=%zu bytes, preloaded=%zu bytes\n",
-                   sound->total_data_size,
-                   sound->data_size);
-
-        } else if (sound->decoder) {
-            stb_vorbis* vorbis = (stb_vorbis*)sound->decoder;
-
-            unsigned int total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
-            size_t bytes_per_sample_frame = sound->channels * sizeof(short);
-
-            printf("OGG streaming setup - CONTINUOUS APPROACH:\n");
-            printf("  - Total sample frames: %u\n", total_sample_frames);
-            printf("  - Preloaded data size: %zu bytes\n", sound->data_size);
-
-            sound->total_data_size = total_sample_frames * bytes_per_sample_frame;
-
-            // Set bytes_streamed to match what we've already preloaded
-            sound->bytes_streamed = sound->data_size;
-
-            printf("  - Total estimated size: %zu bytes\n", sound->total_data_size);
-            printf("  - Bytes already streamed (preloaded): %zu\n", sound->bytes_streamed);
-
-            // Store filename for reopening decoder if needed
-            size_t filename_len = pal_strlen(filename);
-            sound->filename = (char*)malloc(filename_len + 1);
-            pal_strcpy(sound->filename, filename);
-        }
-    } else {
-        sound->preload_seconds = 0;
-        sound->is_streaming = 0;
-        sound->bytes_streamed = 0;
-        sound->total_data_size = 0;
-    }
-
-    HRESULT hr = g_xaudio2->lpVtbl->CreateSourceVoice(
-        g_xaudio2, &sound->source_voice, (const WAVEFORMATEX*)&wfex, 0, XAUDIO2_DEFAULT_FREQ_RATIO, sound->voice_callback, NULL, NULL);
-
-    if (FAILED(hr)) {
-        if (sound->voice_callback)
-            free(sound->voice_callback);
-        free(sound);
-        return NULL;
-    }
-
-    return sound;
-}
-
-PALAPI void pal_free_music(pal_sound* sound) {
-    if (sound->is_streaming) {
-        sound->stream_finished = 1;
-    }
-
-    if (sound->source_file) {
-        fclose(sound->source_file);
-    }
-
-    if (sound->decoder) {
-        stb_vorbis_close((stb_vorbis*)sound->decoder);
-    }
-
-    if (sound->source_voice) {
-        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-    }
-
-    if (sound->voice_callback) {
-        free(sound->voice_callback);
-    }
-
-    if (sound->filename) {
-        free(sound->filename);
-    }
-    free(sound->data);
-    free(sound);
-}
-
-PALAPI int pal_play_sound(pal_sound* sound, float volume) {
-    if (!g_xaudio2 || !g_mastering_voice) {
-        return E_FAIL;
-    }
-    
-    if (sound == NULL) return S_FALSE;
-
-    // Set the volume
-    sound->source_voice->lpVtbl->SetVolume(sound->source_voice, volume, 0);
-
-    XAUDIO2_BUFFER buffer = {
-        .AudioBytes = (UINT32)sound->data_size,
-        .pAudioData = sound->data,
-        .Flags = XAUDIO2_END_OF_STREAM};
-
-    HRESULT hr;
-
-    hr = sound->source_voice->lpVtbl->SubmitSourceBuffer(sound->source_voice, &buffer, NULL);
-    if (FAILED(hr)) {
-        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-        return hr;
-    }
-
-    hr = sound->source_voice->lpVtbl->Start(sound->source_voice, 0, 0);
-    if (FAILED(hr)) {
-        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-        return hr;
-    }
-
-    return S_OK;
-}
-
-PALAPI void pal_free_sound(pal_sound* sound) {
-    if (sound) {
-        if (sound->source_voice) {
-            sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-            printf("ERROR: %s(): Source voice was not initialized. Was the sound played before? If not, you have to play it before destroying!\n", __func__);
-        }
-        if (sound->data) {
-            free(sound->data);
-            sound->data = NULL;
-        } else {
-            printf("ERROR: %s(): Pointer to data in pal_sound was null. Not going to free. Was the sound loaded?\n", __func__);
-        }
-        free(sound);
-    } else {
-        printf("ERROR: %s(): Pointer to pal_sound was null. Not going to free. Was it allocated to begin with?\n", __func__);
-    }
-}
-
-PALAPI int pal_stop_sound(pal_sound* sound) {
-    HRESULT hr = 0;
-    hr = sound->source_voice->lpVtbl->Stop(sound->source_voice, 0, XAUDIO2_COMMIT_NOW);
-
-    if (FAILED(hr)) {
-        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-        return hr;
-    }
-
-    hr = sound->source_voice->lpVtbl->FlushSourceBuffers(sound->source_voice);
-
-    if (FAILED(hr)) {
-        sound->source_voice->lpVtbl->DestroyVoice(sound->source_voice);
-        return hr;
-    }
-    return hr;
-}
-
-//----------------------------------------------------------------------------------
 // Time Functions.
 //----------------------------------------------------------------------------------
 typedef struct _KSYSTEM_TIME {
@@ -5518,22 +5208,21 @@ typedef struct _KSYSTEM_TIME {
 } KSYSTEM_TIME, *PKSYSTEM_TIME;
 
 typedef struct _KUSER_SHARED_DATA {
-    ULONG TickCountLowDeprecated;
-    ULONG TickCountMultiplier;
-    KSYSTEM_TIME InterruptTime;
-    KSYSTEM_TIME SystemTime;
-    KSYSTEM_TIME TimeZoneBias;
-    // padding to get to right offsets.
-    UCHAR Padding0[0x300 - 0x20];
-    LONGLONG QpcFrequency; // Performance Counter Frequency at offset 0x300
-    // padding to get to TickCount
-    UCHAR Padding1[0x320 - 0x308];
-    union {
+    ULONG TickCountLowDeprecated;                   // 0x000
+    ULONG TickCountMultiplier;                      // 0x004
+    KSYSTEM_TIME InterruptTime;                     // 0x008
+    KSYSTEM_TIME SystemTime;                        // 0x014
+    KSYSTEM_TIME TimeZoneBias;                      // 0x020
+    UCHAR Padding0[0x300 - 0x02C];                  // padding to 0x300
+    LONGLONG QpcFrequency;                          // 0x300
+    UCHAR Padding1[0x320 - 0x308];                  // padding to 0x320
+    union {                                         // 0x320
         KSYSTEM_TIME TickCount;
         UINT64 TickCountQuad;
     };
 } KUSER_SHARED_DATA, *PKUSER_SHARED_DATA;
 #define KUSER_SHARED_DATA_ADDRESS 0x7FFE0000
+
 static uint64_t g_app_start_time = 0;
 
 PALAPI pal_time pal_get_date_and_time_utc(void) {
@@ -5715,26 +5404,25 @@ PALAPI pal_time pal_get_time_since_boot(void) {
 }
 
 void win32_init_timer(void) {
-    volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
-
-    g_app_start_time = kuser->QpcData.QpcPerformanceCounter;
-    assert(g_app_start_time != 0);
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    g_app_start_time = counter.QuadPart;
 }
 
 PALAPI double pal_get_time_since_pal_init(void) {
     volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
-
-    uint64_t current = kuser->QpcData.QpcPerformanceCounter;
-    uint64_t elapsed_ticks = current - g_app_start_time;
-    uint64_t frequency = kuser->QpcFrequency;
-
-    // we divide kernel ticks by frequency in order to get that time in seconds.
-    return (double)elapsed_ticks / (double)frequency;
+    
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    uint64_t elapsed_ticks = counter.QuadPart - g_app_start_time;
+    
+    return (double)elapsed_ticks / (double)kuser->QpcFrequency;
 }
 
 PALAPI uint64_t pal_get_ticks(void) {
-    volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
-    return kuser->QpcData.QpcPerformanceCounter;
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return counter.QuadPart;
 }
 
 // Gets the frequency of the raw timer that is used by pal, not including any time the computer
@@ -5863,20 +5551,31 @@ static PalRequester* win32_get_requester(void* id) {
 }
 
 static void win32_build_filter_string(char** types, uint32_t type_count, char* out, size_t out_size) {
-    const char* ext = types[i];
-    int written = 0;
-
-    // Builds Windows filter string like: "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0"
+    if (out_size == 0) return;
+    
     out[0] = '\0';
     size_t pos = 0;
+    
     for (uint32_t i = 0; i < type_count; i++) {
-        written = snprintf(out + pos, out_size - pos, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
-        pos += written;
-        if (pos >= out_size)
+        const char* ext = types[i];
+        size_t remaining = out_size - pos;
+        if (remaining <= 1) break;  // Need room for final null
+        
+        int written = snprintf(out + pos, remaining, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
+        
+        if (written < 0) break;  // snprintf error
+        if ((size_t)written >= remaining) {
+            // Truncation occurred, stop here
+            pos = out_size - 1;
             break;
+        }
+        pos += written;
     }
-    // Add final double null terminator
-    out[pos++] = '\0';
+    
+    // Add final double-null terminator
+    if (pos < out_size) {
+        out[pos] = '\0';
+    }
 }
 
 void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
@@ -5899,7 +5598,7 @@ void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
     ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
 
     if (GetSaveFileNameA(&ofn)) {
-        pal_strcpy(req->path, MAX_PATH, path);
+        pal_strcpy(req->path, path);
     } else {
         req->path[0] = '\0';
     }
@@ -5925,7 +5624,7 @@ void pal_create_load_dialog(char** types, uint32_t type_count, void* id) {
     ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
 
     if (GetOpenFileNameA(&ofn)) {
-        pal_strcpy(req->path, MAX_PATH, path);
+        pal_strcpy(req->path, path);
     } else {
         req->path[0] = '\0';
     }
@@ -6054,26 +5753,25 @@ PALAPI void pal_destroy_thread(pal_thread *thread) {
 //----------------------------------------------------------------------------------
 PALAPI void* pal_load_dynamic_library(const char* dll) {
     HMODULE result = LoadLibraryA(dll);
-    assert(result);
-    return (void*)result;
+    if (result) return (void*)result;
+    return NULL;
 }
 
 PALAPI void* pal_load_dynamic_function(void* dll, char* func_name) {
     FARPROC proc = GetProcAddress(dll, func_name);
-    assert(proc);
-    return (void*)proc;
+    if (proc) return (void*)proc;
+    return NULL;
 }
 
 PALAPI pal_bool pal_free_dynamic_library(void* dll) {
     pal_bool free_result = FreeLibrary(dll);
-    assert(free_result);
-    return (pal_bool)free_result;
+    if(free_result) return (pal_bool)free_result;
+    return 0;
 }
 
 PALAPI void pal_init(void) {
     pal__init_eventq();
     win32_init_timer();
-    win32_init_sound();
     
     // Create message-only window for raw input (before enumerating devices)
     if (!win32_create_input_window()) {
@@ -6496,8 +6194,6 @@ PALAPI void pal_init(void) {
     linux_x11_init_raw_input();
     g_wm_delete = XInternAtom(g_display, "WM_DELETE_WINDOW", False);
 }
-
-
 
 void linux_x11_cleanup_raw_input();
 PALAPI void pal_shutdown() {
@@ -8977,250 +8673,5 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
 
 #endif // Platform selection defines
 
-// TODO: @fix This loads uncompressed .wav files only!
-static int pal__load_wav(const char* filename, pal_sound* out, float seconds) {
-    FILE* file = fopen(filename, "rb");
-    static const int WAV_FMT_PCM = 0x0001, WAV_FMT_IEEE_FLOAT = 0x0003, WAV_FMT_EXTENSIBLE = 0xFFFE;
-    static const uint8_t SUBFORMAT_PCM[16] = {
-        0x01, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71, 0x00, 0x00};
-    static const uint8_t SUBFORMAT_IEEE_FLOAT[16] = {
-        0x03, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71, 0x00, 0x00};
-    char riffHeader[4];
-    uint32_t riffSize;
-    char waveID[4];
-    if (fread(riffHeader, 1, 4, file) != 4 ||
-        fread(&riffSize, 4, 1, file) != 1 ||
-        fread(waveID, 1, 4, file) != 4) {
-        return -1;
-    }
-    if (pal_memcmp(riffHeader, "RIFF", 4) != 0 || pal_memcmp(waveID, "WAVE", 4) != 0) {
-        return -1;
-    }
-    int audioFormat = 0;
-    int numChannels = 0;
-    int sample_rate = 0;
-    int bits_per_sample = 0;
-    int is_float = 0;
-    uint32_t data_size = 0;
-    uint32_t data_offset = 0;
-    while (!feof(file)) {
-        char chunkID[4];
-        uint32_t chunkSize;
-        if (fread(chunkID, 1, 4, file) != 4)
-            break;
-        if (fread(&chunkSize, 4, 1, file) != 1)
-            break;
-        if (pal_memcmp(chunkID, "fmt ", 4) == 0) {
-            uint16_t formatTag;
-            if (fread(&formatTag, 2, 1, file) != 1)
-                return -1;
-            if (fread(&numChannels, 2, 1, file) != 1)
-                return -1;
-            if (fread(&sample_rate, 4, 1, file) != 1)
-                return -1;
-            if (fseek(file, 6, SEEK_CUR) != 0)
-                return -1;
-            if (fread(&bits_per_sample, 2, 1, file) != 1)
-                return -1;
-            if (formatTag == WAV_FMT_EXTENSIBLE && chunkSize >= 40) {
-                uint16_t cbSize;
-                if (fread(&cbSize, sizeof(cbSize), 1, file) != 1)
-                    return -1;
-                if (cbSize < 22)
-                    return -1;
-                if (fseek(file, 6, SEEK_CUR) != 0)
-                    return -1;
-                uint8_t subFormat[16];
-                if (fread(subFormat, 1, 16, file) != 16)
-                    return -1;
-                if (pal_memcmp(subFormat, SUBFORMAT_PCM, 16) == 0) {
-                    audioFormat = WAV_FMT_PCM;
-                    is_float = 0;
-                } else if (pal_memcmp(subFormat, SUBFORMAT_IEEE_FLOAT, 16) == 0) {
-                    audioFormat = WAV_FMT_IEEE_FLOAT;
-                    is_float = 1;
-                } else {
-                    return -1;
-                }
-            } else {
-                audioFormat = formatTag;
-                is_float = (audioFormat == WAV_FMT_IEEE_FLOAT) ? 1 : 0;
-                if (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)
-                    return -1;
-                if (chunkSize > 16) {
-                    if (fseek(file, chunkSize - 16, SEEK_CUR) != 0)
-                        return -1;
-                }
-            }
-        } else if (pal_memcmp(chunkID, "data", 4) == 0) {
-            data_size = chunkSize;
-            data_offset = (uint32_t)ftell(file);
-            uint32_t bytes_per_sample = (bits_per_sample / 8) * numChannels;
-            uint32_t preload_bytes;
-            if (seconds == 0.0f) {
-                preload_bytes = chunkSize;
-            } else {
-                preload_bytes = (uint32_t)(seconds * sample_rate * bytes_per_sample);
-                if (preload_bytes > chunkSize) {
-                    preload_bytes = chunkSize;
-                }
-            }
-            void* audioData = malloc(preload_bytes);
-            if (!audioData)
-                return -1;
-            if (fread(audioData, 1, preload_bytes, file) != preload_bytes) {
-                free(audioData);
-                return -1;
-            }
-            out->data = audioData;
-            out->data_size = preload_bytes;
 
-            // Debug: Show first 8 bytes of initial buffer
-            if (preload_bytes >= 8) {
-                unsigned char* debug_data = (unsigned char*)audioData;
-                printf("Initial buffer first 8 bytes: %02X %02X %02X %02X %02X %02X %02X %02X\n",
-                       debug_data[0],
-                       debug_data[1],
-                       debug_data[2],
-                       debug_data[3],
-                       debug_data[4],
-                       debug_data[5],
-                       debug_data[6],
-                       debug_data[7]);
-            }
-        } else {
-            if (fseek(file, (chunkSize + 1) & ~1, SEEK_CUR) != 0)
-                return -1;
-        }
-    }
-    if (out->data == NULL || data_size == 0 ||
-        (audioFormat != WAV_FMT_PCM && audioFormat != WAV_FMT_IEEE_FLOAT)) {
-        free(out->data);
-        return -1;
-    }
-    out->sample_rate = sample_rate;
-    out->channels = numChannels;
-    out->bits_per_sample = bits_per_sample;
-    out->is_float = is_float;
-    out->data_offset = data_offset;
-
-    // Debug: Show the audio format information
-    printf("WAV format: audioFormat=%d, channels=%d, sample_rate=%d, bits_per_sample=%d, is_float=%d\n",
-           audioFormat,
-           numChannels,
-           sample_rate,
-           bits_per_sample,
-           is_float);
-
-    if (seconds > 0.0f) { // Streaming mode - keep file open and set up streaming metadata
-        out->source_file = file;
-        out->total_data_size = data_size;     // Total size of audio data in file
-        out->bytes_streamed = out->data_size; // How many bytes already loaded into initial buffer
-
-        printf("WAV streaming setup: total=%zu bytes, preloaded=%zu bytes, data_offset=%zu\n",
-               out->total_data_size,
-               out->data_size,
-               out->data_offset);
-    } else { // Non-streaming mode - close file
-        fclose(file);
-        out->source_file = NULL;
-        out->total_data_size = 0;
-        out->bytes_streamed = 0;
-    }
-    return 1;
-}
-
-static int pal__load_ogg(const char* filename, pal_sound* out, float seconds) {
-    int channels, sample_rate;
-    int error;
-    stb_vorbis* vorbis = stb_vorbis_open_filename(filename, &error, NULL);
-    if (!vorbis) {
-        printf("Failed to open Ogg file (error code %d).\n", error);
-        return -1;
-    }
-
-    stb_vorbis_info info = stb_vorbis_get_info(vorbis);
-    channels = info.channels;
-    sample_rate = info.sample_rate;
-
-    // Calculate how many sample frames to preload based on seconds
-    size_t total_sample_frames = stb_vorbis_stream_length_in_samples(vorbis);
-    size_t target_sample_frames = (size_t)(sample_rate * (seconds));
-
-    if (seconds <= 0.0f || target_sample_frames > total_sample_frames) {
-        target_sample_frames = total_sample_frames;
-    }
-
-    printf("OGG Load: Requesting %zu sample frames (%.3f seconds) from %zu total\n",
-           target_sample_frames,
-           (float)target_sample_frames / sample_rate,
-           total_sample_frames);
-
-    // Allocate buffer for preload samples (16-bit signed shorts, interleaved)
-    short* pcm_data = (short*)malloc((size_t)(target_sample_frames * channels * sizeof(short)));
-    if (!pcm_data) {
-        stb_vorbis_close(vorbis);
-        return -1;
-    }
-
-    // Use the non-interleaved API which is more predictable
-    float** channel_buffers = (float**)malloc(channels * sizeof(float*));
-    for (int i = 0; i < channels; i++) {
-        channel_buffers[i] = (float*)malloc(target_sample_frames * sizeof(float));
-    }
-
-    size_t total_decoded = 0;
-
-    while (total_decoded < target_sample_frames) {
-        int samples_to_read = (int)(target_sample_frames - total_decoded);
-
-        // Use non-interleaved API
-        int samples_read = stb_vorbis_get_samples_float(
-            vorbis, channels, channel_buffers, samples_to_read);
-
-        if (samples_read <= 0) {
-            printf("OGG Load: Decoder returned %d sample frames, stopping\n", samples_read);
-            break;
-        }
-
-        // Convert float samples to interleaved 16-bit shorts
-        for (int sample = 0; sample < samples_read; sample++) {
-            for (int ch = 0; ch < channels; ch++) {
-                float f_sample = channel_buffers[ch][sample];
-                // Clamp and convert to 16-bit
-                if (f_sample > 1.0f)
-                    f_sample = 1.0f;
-                if (f_sample < -1.0f)
-                    f_sample = -1.0f;
-                short s_sample = (short)(f_sample * 32767.0f);
-                pcm_data[(total_decoded + sample) * channels + ch] = s_sample;
-            }
-        }
-
-        total_decoded += samples_read;
-    }
-
-    // Clean up temporary buffers
-    for (int i = 0; i < channels; i++) {
-        free(channel_buffers[i]);
-    }
-
-    free(channel_buffers);
-
-    out->data = (unsigned char*)pcm_data;
-    out->data_size = (size_t)(total_decoded * channels * sizeof(short));
-    out->channels = channels;
-    out->sample_rate = sample_rate;
-    out->bits_per_sample = 16;
-    out->is_float = 0;
-
-    // Store decoder for streaming later
-    out->decoder = vorbis;
-
-    printf("OGG Load: Final data_size = %zu bytes (%zu sample frames)\n",
-           out->data_size,
-           total_decoded);
-
-    return 1;
-}
 #endif /* PAL_IMPLEMENTATION */
