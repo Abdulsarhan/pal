@@ -2066,6 +2066,8 @@ static PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB p_wglChoosePixelFormatARB;
 static PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB p_wglCreateContextAttribsARB;
 static PFN_WGL_SWAP_INTERVAL_EXT p_wglSwapIntervalEXT;
 
+typedef HRESULT (WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD);
+
 #ifndef GL_TRUE
 #define GL_TRUE 1
 #endif
@@ -4408,7 +4410,34 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         window->id = g_next_window_id++; 
     }
 
+    HKEY key;
+    DWORD is_light_mode = 1;  // Default to light mode
+    DWORD size = sizeof(is_light_mode);
+    
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &key) == ERROR_SUCCESS) {
+        RegQueryValueExA(key, "AppsUseLightTheme", NULL, NULL, (LPBYTE)&is_light_mode, &size);
+        RegCloseKey(key);
+    }
 
+    HMODULE dwmapi = LoadLibraryA("dwmapi.dll");
+    if (!dwmapi) {
+        return NULL;  // Windows XP or dwmapi not available
+    }
+    
+    PFN_DwmSetWindowAttribute DwmSetWindowAttributePtr = 
+        (PFN_DwmSetWindowAttribute)GetProcAddress(dwmapi, "DwmSetWindowAttribute");
+    
+    if (DwmSetWindowAttributePtr) {
+        BOOL dark_mode = TRUE;
+        HRESULT hr = DwmSetWindowAttributePtr(window->hwnd, 20, &dark_mode, sizeof(dark_mode));
+        
+        // Fallback for older Windows 10 builds
+        if (FAILED(hr)) {
+            DwmSetWindowAttributePtr(window->hwnd, 19, &dark_mode, sizeof(dark_mode));
+        }
+    }
+    
+    FreeLibrary(dwmapi);
     // Register window in global registry with unique ID
     if (g_windows.count < MAX_WINDOWS) {
         window->id = g_next_window_id++;
@@ -7527,6 +7556,67 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
  * WINDOW CREATION (using dynamic GLX loading)
  * ============================================================================ */
 
+static pal_bool pal_is_linux_dark_mode(void) {
+    FILE *fp;
+    char buffer[256];
+    
+    /* Check GNOME/GTK color-scheme setting (most common) */
+    fp = popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null", "r");
+    if (fp) {
+        if (fgets(buffer, sizeof(buffer), fp)) {
+            pclose(fp);
+            if (strstr(buffer, "dark")) {
+                return pal_true;
+            }
+        } else {
+            pclose(fp);
+        }
+    }
+    
+    /* Fallback: check if GTK theme name contains "dark" */
+    fp = popen("gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null", "r");
+    if (fp) {
+        if (fgets(buffer, sizeof(buffer), fp)) {
+            pclose(fp);
+            /* Case-insensitive search for "dark" */
+            for (char *p = buffer; *p; p++) *p = tolower(*p);
+            if (strstr(buffer, "dark")) {
+                return pal_true;
+            }
+        } else {
+            pclose(fp);
+        }
+    }
+    
+    /* Check GTK_THEME environment variable */
+    const char *gtk_theme = getenv("GTK_THEME");
+    if (gtk_theme) {
+        char theme_lower[256];
+        strncpy(theme_lower, gtk_theme, sizeof(theme_lower) - 1);
+        theme_lower[sizeof(theme_lower) - 1] = '\0';
+        for (char *p = theme_lower; *p; p++) *p = tolower(*p);
+        if (strstr(theme_lower, "dark")) {
+            return pal_true;
+        }
+    }
+    
+    return pal_false;
+}
+
+static void pal_apply_dark_mode_hint(Display *display, Window window) {
+    if (!pal_is_linux_dark_mode()) {
+        return;
+    }
+    
+    Atom gtk_theme_variant = XInternAtom(display, "_GTK_THEME_VARIANT", False);
+    Atom utf8_string = XInternAtom(display, "UTF8_STRING", False);
+    
+    XChangeProperty(display, window,
+                    gtk_theme_variant, utf8_string, 8,
+                    PropModeReplace,
+                    (unsigned char *)"dark", 4);
+}
+
 PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t flags) {
     pal_window *window = (pal_window*)malloc(sizeof(pal_window));
     if (!window) return NULL;
@@ -7617,6 +7707,8 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
     window->width = (float)width;
     window->height = (float)height;
     window->gl_context = NULL;
+
+	pal_apply_dark_mode_hint(g_display, window->window);
 
     /* Register window */
     if (g_windows.count < MAX_WINDOWS) {
