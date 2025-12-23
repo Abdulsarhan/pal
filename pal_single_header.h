@@ -2429,7 +2429,6 @@ static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = pal_false;
 
 static HDC s_fakeDC = {0};
-pal_window* g_current_window = NULL;
 uint32_t g_next_window_id = 1;
 
 /* On windows, a message pump is specific to the gui thread (a thread that creates windows). */
@@ -3746,8 +3745,6 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     GetCursorPos(&point);
     if (target_window) {
         ScreenToClient(target_window->hwnd, &point);
-    } else if (g_current_window) {
-        ScreenToClient(g_current_window->hwnd, &point);
     }
 
     // Handle motion
@@ -3969,7 +3966,6 @@ static void win32_destroy_input_window(void) {
 
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     pal_window* window = win32_find_window_by_hwnd(hwnd);
-    if (!window) window = g_current_window; // fallback
     uint32_t window_id = window ? window->id : 0;
     pal_event event = {0};
     WINDOWPOS* pos;
@@ -4377,15 +4373,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     pal_window* window = (pal_window*)malloc(sizeof(pal_window));
     window->width = (float)width;
     window->height = (float)height;
-    // -- CREATING EVENT QUEUE --
-    // It's very important to set g_current_window to the pal_window
-    // before we call CreateWindowExA() on window->hwnd, because if we don't,
-    // windows will call win32_window_proc() as soon as the window is created,
-    // and in that function, we rely on g_current_window for some things like
-    // getting the event queue that belongs to the window, and if it's not set,
-    // we will just crash. - Abdelrahman July 29, 2025
-    g_current_window = window;
-    // -- CREATING WINDOW --
     window->hwnd = CreateWindowExA(
         ext_window_style, // Optional window styles.
         wc.lpszClassName, // Window class
@@ -4708,9 +4695,6 @@ PALAPI void pal_swap_interval(int interval) {
     p_wglSwapIntervalEXT(interval);
 }
 
-// Handler function signatures
-typedef void (*RawInputHandler)(const RAWINPUT*);
-
 PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
     POINT cursor_pos = {0};
     pal_vec2 returned_pos = {0};
@@ -4728,6 +4712,9 @@ void win32_handle_hid(const RAWINPUT* raw) {
     printf("%d", raw->data.hid.dwCount);
 }
 
+// Handler function signatures
+typedef void (*RawInputHandler)(const RAWINPUT*);
+
 RawInputHandler Win32InputHandlers[3] = {
     win32_handle_mouse,
     win32_handle_keyboard,
@@ -4736,15 +4723,15 @@ RawInputHandler Win32InputHandlers[3] = {
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
-static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
 
 static int win32_get_raw_input_buffer(void) {
-    UINT bufferSize = RAW_INPUT_BUFFER_CAPACITY;
-    UINT inputEventCount = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &bufferSize, sizeof(RAWINPUTHEADER));
+	static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
+    UINT buffer_size = RAW_INPUT_BUFFER_CAPACITY;
+    UINT input_event_count = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
     PRAWINPUT raw = (PRAWINPUT)g_raw_input_buffer;
     UINT type = 0;
 
-    for (UINT i = 0; i < inputEventCount; ++i) {
+    for (UINT i = 0; i < input_event_count; ++i) {
         type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
             win32_handle_mouse(raw);
