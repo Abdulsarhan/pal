@@ -1350,7 +1350,7 @@ PALAPI void pal_shutdown(void);
 
 /* Video and Windowing subsystem. */
 PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t window_flags);
-PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context);
+PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
@@ -2065,6 +2065,14 @@ static PFN_wglDeleteContext p_wglDeleteContext;
 static PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB p_wglChoosePixelFormatARB;
 static PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB p_wglCreateContextAttribsARB;
 static PFN_WGL_SWAP_INTERVAL_EXT p_wglSwapIntervalEXT;
+
+#ifndef GL_TRUE
+#define GL_TRUE 1
+#endif
+
+#ifndef GL_FALSE
+#define GL_FALSE 0
+#endif
 
 #define WGL_DRAW_TO_WINDOW_ARB 0x2001
 #define WGL_SUPPORT_OPENGL_ARB 0x2010
@@ -4155,7 +4163,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
 static pal_bool g_wgl_extensions_loaded = pal_false;
 
-PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
+PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
     if (!window || !window->hwnd) {
         return NULL;
     }
@@ -6126,20 +6134,210 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll) {
 #include <assert.h>
 #include <string.h>
 
-/* X11 window shit */
+/* X11 window headers */
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xfixes.h>
 #include <X11/extensions/Xrandr.h>
 
-/*x11 keyboards shit */
+/* X11 keyboard headers */
 #include <X11/XKBlib.h>
 
-/* Opengl */
-#include <GL/gl.h>
-#include <GL/glx.h>
+/* Basic GL types */
+typedef unsigned int GLenum;
+typedef unsigned char GLboolean;
+typedef unsigned int GLbitfield;
+typedef void GLvoid;
+typedef signed char GLbyte;
+typedef short GLshort;
+typedef int GLint;
+typedef unsigned char GLubyte;
+typedef unsigned short GLushort;
+typedef unsigned int GLuint;
+typedef int GLsizei;
+typedef float GLfloat;
+typedef float GLclampf;
+typedef double GLdouble;
+typedef double GLclampd;
 
+#ifndef GL_TRUE
+#define GL_TRUE 1
+#endif
+
+#ifndef GL_FALSE
+#define GL_FALSE 0
+#endif
+
+/* GLX types */
+typedef struct __GLXcontextRec *GLXContext;
+typedef struct __GLXFBConfigRec *GLXFBConfig;
+typedef XID GLXDrawable;
+typedef XID GLXWindow;
+typedef XID GLXPixmap;
+typedef XID GLXPbuffer;
+typedef void (*__GLXextFuncPtr)(void);
+
+/* ============================================================================
+ * GLX CONSTANTS
+ * ============================================================================ */
+
+/* GLX 1.3+ */
+#define GLX_X_RENDERABLE        0x8012
+#define GLX_DRAWABLE_TYPE       0x8010
+#define GLX_RENDER_TYPE         0x8011
+#define GLX_X_VISUAL_TYPE       0x22
+#define GLX_TRUE_COLOR          0x8002
+#define GLX_WINDOW_BIT          0x00000001
+#define GLX_RGBA_BIT            0x00000001
+#define GLX_RGBA_TYPE           0x8014
+#define GLX_RED_SIZE            8
+#define GLX_GREEN_SIZE          9
+#define GLX_BLUE_SIZE           10
+#define GLX_ALPHA_SIZE          11
+#define GLX_DEPTH_SIZE          12
+#define GLX_STENCIL_SIZE        13
+#define GLX_DOUBLEBUFFER        5
+
+/* GLX_ARB_create_context */
+#define GLX_CONTEXT_MAJOR_VERSION_ARB       0x2091
+#define GLX_CONTEXT_MINOR_VERSION_ARB       0x2092
+#define GLX_CONTEXT_FLAGS_ARB               0x2094
+#define GLX_CONTEXT_PROFILE_MASK_ARB        0x9126
+#define GLX_CONTEXT_DEBUG_BIT_ARB           0x00000001
+#define GLX_CONTEXT_CORE_PROFILE_BIT_ARB    0x00000001
+#define GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
+
+/* ============================================================================
+ * GLX FUNCTION POINTER TYPES
+ * ============================================================================ */
+
+/* Core GLX functions */
+typedef GLXFBConfig* (*PFN_glXChooseFBConfig)(Display *dpy, int screen, const int *attrib_list, int *nelements);
+typedef XVisualInfo* (*PFN_glXGetVisualFromFBConfig)(Display *dpy, GLXFBConfig config);
+typedef GLXContext (*PFN_glXCreateNewContext)(Display *dpy, GLXFBConfig config, int render_type, GLXContext share_list, Bool direct);
+typedef Bool (*PFN_glXMakeCurrent)(Display *dpy, GLXDrawable drawable, GLXContext ctx);
+typedef void (*PFN_glXSwapBuffers)(Display *dpy, GLXDrawable drawable);
+typedef void (*PFN_glXDestroyContext)(Display *dpy, GLXContext ctx);
+typedef __GLXextFuncPtr (*PFN_glXGetProcAddress)(const GLubyte *procName);
+typedef __GLXextFuncPtr (*PFN_glXGetProcAddressARB)(const GLubyte *procName);
+
+/* Extension functions (loaded via glXGetProcAddress) */
+typedef GLXContext (*PFN_glXCreateContextAttribsARB)(Display *dpy, GLXFBConfig config, GLXContext share_context, Bool direct, const int *attrib_list);
+typedef void (*PFN_glXSwapIntervalEXT)(Display *dpy, GLXDrawable drawable, int interval);
+typedef int (*PFN_glXSwapIntervalMESA)(unsigned int interval);
+typedef int (*PFN_glXSwapIntervalSGI)(int interval);
+
+/* ============================================================================
+ * GLOBAL FUNCTION POINTERS
+ * ============================================================================ */
+
+static void *g_libgl = NULL;
+static pal_bool g_glx_loaded = pal_false;
+
+/* Core GLX functions */
+static PFN_glXChooseFBConfig p_glXChooseFBConfig = NULL;
+static PFN_glXGetVisualFromFBConfig p_glXGetVisualFromFBConfig = NULL;
+static PFN_glXCreateNewContext p_glXCreateNewContext = NULL;
+static PFN_glXMakeCurrent p_glXMakeCurrent = NULL;
+static PFN_glXSwapBuffers p_glXSwapBuffers = NULL;
+static PFN_glXDestroyContext p_glXDestroyContext = NULL;
+static PFN_glXGetProcAddress p_glXGetProcAddress = NULL;
+static PFN_glXGetProcAddressARB p_glXGetProcAddressARB = NULL;
+
+/* Extension functions */
+static PFN_glXCreateContextAttribsARB p_glXCreateContextAttribsARB = NULL;
+static PFN_glXSwapIntervalEXT p_glXSwapIntervalEXT = NULL;
+static PFN_glXSwapIntervalMESA p_glXSwapIntervalMESA = NULL;
+static PFN_glXSwapIntervalSGI p_glXSwapIntervalSGI = NULL;
+
+/* ============================================================================
+ * GLX LOADING FUNCTIONS
+ * ============================================================================ */
+
+static pal_bool linux_x11_load_glx(void) {
+    if (g_glx_loaded) {
+        return pal_true;
+    }
+
+    /* Try to load libGL.so.1 first, then fall back to libGL.so */
+    g_libgl = dlopen("libGL.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!g_libgl) {
+        g_libgl = dlopen("libGL.so", RTLD_NOW | RTLD_LOCAL);
+    }
+    if (!g_libgl) {
+        fprintf(stderr, "GLX ERROR: Failed to load libGL.so: %s\n", dlerror());
+        return pal_false;
+    }
+
+    /* Load core GLX functions */
+    p_glXChooseFBConfig = (PFN_glXChooseFBConfig)dlsym(g_libgl, "glXChooseFBConfig");
+    p_glXGetVisualFromFBConfig = (PFN_glXGetVisualFromFBConfig)dlsym(g_libgl, "glXGetVisualFromFBConfig");
+    p_glXCreateNewContext = (PFN_glXCreateNewContext)dlsym(g_libgl, "glXCreateNewContext");
+    p_glXMakeCurrent = (PFN_glXMakeCurrent)dlsym(g_libgl, "glXMakeCurrent");
+    p_glXSwapBuffers = (PFN_glXSwapBuffers)dlsym(g_libgl, "glXSwapBuffers");
+    p_glXDestroyContext = (PFN_glXDestroyContext)dlsym(g_libgl, "glXDestroyContext");
+    
+    /* Load glXGetProcAddress - try both versions */
+    p_glXGetProcAddress = (PFN_glXGetProcAddress)dlsym(g_libgl, "glXGetProcAddress");
+    p_glXGetProcAddressARB = (PFN_glXGetProcAddressARB)dlsym(g_libgl, "glXGetProcAddressARB");
+    
+    /* Use ARB version as fallback if regular version not found */
+    if (!p_glXGetProcAddress && p_glXGetProcAddressARB) {
+        p_glXGetProcAddress = (PFN_glXGetProcAddress)p_glXGetProcAddressARB;
+    }
+
+    /* Verify essential functions loaded */
+    if (!p_glXChooseFBConfig || !p_glXGetVisualFromFBConfig || 
+        !p_glXCreateNewContext || !p_glXMakeCurrent || !p_glXSwapBuffers) {
+        fprintf(stderr, "GLX ERROR: Failed to load essential GLX functions\n");
+        dlclose(g_libgl);
+        g_libgl = NULL;
+        return pal_false;
+    }
+
+    /* Load extension functions via glXGetProcAddress */
+    if (p_glXGetProcAddress) {
+        p_glXCreateContextAttribsARB = (PFN_glXCreateContextAttribsARB)
+            p_glXGetProcAddress((const GLubyte *)"glXCreateContextAttribsARB");
+        p_glXSwapIntervalEXT = (PFN_glXSwapIntervalEXT)
+            p_glXGetProcAddress((const GLubyte *)"glXSwapIntervalEXT");
+        p_glXSwapIntervalMESA = (PFN_glXSwapIntervalMESA)
+            p_glXGetProcAddress((const GLubyte *)"glXSwapIntervalMESA");
+        p_glXSwapIntervalSGI = (PFN_glXSwapIntervalSGI)
+            p_glXGetProcAddress((const GLubyte *)"glXSwapIntervalSGI");
+    }
+
+    g_glx_loaded = pal_true;
+    return pal_true;
+}
+
+static void linux_x11_unload_glx(void) {
+    if (g_libgl) {
+        dlclose(g_libgl);
+        g_libgl = NULL;
+    }
+
+    /* Clear all function pointers */
+    p_glXChooseFBConfig = NULL;
+    p_glXGetVisualFromFBConfig = NULL;
+    p_glXCreateNewContext = NULL;
+    p_glXMakeCurrent = NULL;
+    p_glXSwapBuffers = NULL;
+    p_glXDestroyContext = NULL;
+    p_glXGetProcAddress = NULL;
+    p_glXGetProcAddressARB = NULL;
+    p_glXCreateContextAttribsARB = NULL;
+    p_glXSwapIntervalEXT = NULL;
+    p_glXSwapIntervalMESA = NULL;
+    p_glXSwapIntervalSGI = NULL;
+
+    g_glx_loaded = pal_false;
+}
+
+/* ============================================================================
+ * WINDOW STRUCTURES AND GLOBALS
+ * ============================================================================ */
 
 struct pal_window {
     Window window;
@@ -6152,7 +6350,7 @@ struct pal_window {
 };
 uint32_t g_next_window_id = 1;
 
-// X11 window registry (uses same g_windows from cross-platform section)
+/* X11 window registry (uses same g_windows from cross-platform section) */
 static pal_window* x11_find_window_by_xwindow(Window xwin) {
     for (int i = 0; i < g_windows.count; i++) {
         if (g_windows.windows[i] && g_windows.windows[i]->window == xwin) {
@@ -6178,29 +6376,27 @@ static uint32_t x11_get_window_id_from_xwindow(Window xwin) {
 
 struct pal_sound {
     /* Core audio data */
-    unsigned char* data; /* Raw PCM audio data (initial buffer) */
-    size_t data_size;    /* Size in bytes of initial buffer */
-    int sample_rate;     /* Samples per second (e.g., 44100) */
-    int channels;        /* Number of audio channels (e.g., 2 for stereo) */
-    int bits_per_sample; /* Usually 16 or 32 */
-    int is_float;        /* 0 = PCM, 1 = IEEE float */
-
-    /* pulseaudio */
+    unsigned char* data;
+    size_t data_size;
+    int sample_rate;
+    int channels;
+    int bits_per_sample;
+    int is_float;
 
     /* Streaming - OGG */
-    void* decoder;  /* stb_vorbis* (using void* to avoid header dependency) */
-    char* filename; /* Filename for reopening OGG decoder */
+    void* decoder;
+    char* filename;
 
     /* Streaming - WAV */
     FILE* source_file;
-    size_t total_data_size; /* Total size of audio data in file */
-    size_t bytes_streamed;  /* How many bytes we've read so far */
-    size_t data_offset;     /* Offset in file where audio data starts */
+    size_t total_data_size;
+    size_t bytes_streamed;
+    size_t data_offset;
 
     /* Streaming control */
-    float preload_seconds; /* How many seconds were preloaded */
-    int is_streaming;      /* 1 if this is a streaming sound */
-    int stream_finished;   /* 1 when streaming is complete */
+    float preload_seconds;
+    int is_streaming;
+    int stream_finished;
 };
 
 typedef struct pal_monitor {
@@ -6211,7 +6407,7 @@ typedef struct pal_monitor {
 Display *g_display = NULL;
 Atom g_wm_delete = 0;
 
-/* XKB keyboard translation support (uses existing g_display) */
+/* XKB keyboard translation support */
 static XkbDescPtr g_xkb = NULL;
 static XIM g_xim = NULL;
 static XIC g_xic = NULL;
@@ -6231,12 +6427,16 @@ PALAPI void pal_init(void) {
 }
 
 void linux_x11_cleanup_raw_input();
+
 PALAPI void pal_shutdown() {
     if(g_display) {
         linux_x11_cleanup_raw_input();
         XCloseDisplay(g_display);
         g_display = NULL;
     }
+    
+    /* Unload GLX */
+    linux_x11_unload_glx();
 }
 
 pal_bool g_message_pump_drained = pal_false;
@@ -6259,21 +6459,18 @@ void linux_x11_translate_event(XEvent *xevent) {
             XConfigureEvent *ce = &xevent->xconfigure;
             uint32_t window_id = x11_get_window_id_from_xwindow(ce->window);
 
-            /* Window moved */
             event.window.type = PAL_EVENT_WINDOW_MOVED;
             event.window.window_id = window_id;
             event.window.x = ce->x;
             event.window.y = ce->y;
             pal__eventq_push(&g_event_queue, event);
 
-            /* Window resized */
             event.window.type = PAL_EVENT_WINDOW_RESIZED;
             event.window.window_id = window_id;
             event.window.width = ce->width;
             event.window.height = ce->height;
             pal__eventq_push(&g_event_queue, event);
             
-            /* Update window dimensions */
             pal_window* window = x11_find_window_by_xwindow(ce->window);
             if (window) {
                 window->width = (float)ce->width;
@@ -6301,7 +6498,7 @@ void linux_x11_translate_event(XEvent *xevent) {
         }
 
         case Expose: {
-            if (xevent->xexpose.count == 0) { /* Only on last expose event */
+            if (xevent->xexpose.count == 0) {
                 event.window.type = PAL_EVENT_WINDOW_EXPOSED;
                 event.window.window_id = x11_get_window_id_from_xwindow(xevent->xexpose.window);
                 pal__eventq_push(&g_event_queue, event);
@@ -6353,9 +6550,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
     }
 
     if (queue->size) {
-        /* peek */
         *event = queue->events[queue->front];
-        /* dequeue */
         queue->front = (queue->front + 1) % queue->capacity;
         queue->size--;
         return 1;
@@ -6378,7 +6573,6 @@ int is_keyboard(int fd) {
     int has_rel = (evbits[EV_REL/8] & (1 << (EV_REL % 8))) != 0;
     int has_abs = (evbits[EV_ABS/8] & (1 << (EV_ABS % 8))) != 0;
     
-    /* It's a keyboard if it has keys but NOT mouse/touchpad properties */
     return has_key && !has_rel && !has_abs;
 }
 
@@ -6389,11 +6583,8 @@ int is_mouse(int fd) {
     int has_rel = (evbits[EV_REL/8] & (1 << (EV_REL % 8))) != 0;
     int has_abs = (evbits[EV_ABS/8] & (1 << (EV_ABS % 8))) != 0;
     
-    /* It's a mouse/touchpad if it has relative motion OR absolute positioning */
     return has_rel || has_abs;
 }
-
-/* -------- Initialization -------- */
 
 Window g_dummy_window;
 
@@ -6420,7 +6611,6 @@ void linux_x11_init_raw_input() {
             fprintf(stderr, "Warning: Failed to get XKB map\n");
         }
 
-        /* Set up input method for IME support (Chinese, Japanese, Korean, etc.) */
         g_xim = XOpenIM(g_display, NULL, NULL, NULL);
         if (g_xim) {
             linux_x11_create_dummy_window();
@@ -6466,7 +6656,6 @@ void linux_x11_init_raw_input() {
         ioctl(dev_fd, EVIOCGNAME(sizeof(name)), name);
         
         if (is_keyboard(dev_fd) && g_keyboards.count < MAX_KEYBOARDS) {
-
             g_keyboards.handles[g_keyboards.count] = dev_fd;
             pal_strncpy(g_keyboards.names[g_keyboards.count], name, 255);
             pal_memset(g_keyboards.keys[g_keyboards.count], 0, MAX_KEYS);
@@ -6525,7 +6714,6 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
     int root_x, root_y, win_x, win_y;
     unsigned int mask_return;
 
-    /* Query pointer position relative to the window */
     XQueryPointer(g_display,
                   window->window,
                   &root_return, &child_return,
@@ -6540,13 +6728,13 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
 
 static int linux_button_to_pal_button(int linux_code) {
     switch(linux_code) {
-        case BTN_LEFT:    return PAL_MOUSE_LEFT;    /* 0x0 */
-        case BTN_RIGHT:   return PAL_MOUSE_RIGHT;   /* 0x1 */
-        case BTN_MIDDLE:  return PAL_MOUSE_MIDDLE;  /* 0x2 */
-        case BTN_SIDE:    return PAL_MOUSE_4;       /* 0x3 (also known as "back") */
-        case BTN_EXTRA:   return PAL_MOUSE_5;       /* 0x4 (also known as "forward") */
-        case BTN_FORWARD: return PAL_MOUSE_5;       /* 0x4 (alternative code for forward) */
-        case BTN_BACK:    return PAL_MOUSE_4;       /* 0x3 (alternative code for back) */
+        case BTN_LEFT:    return PAL_MOUSE_LEFT;
+        case BTN_RIGHT:   return PAL_MOUSE_RIGHT;
+        case BTN_MIDDLE:  return PAL_MOUSE_MIDDLE;
+        case BTN_SIDE:    return PAL_MOUSE_4;
+        case BTN_EXTRA:   return PAL_MOUSE_5;
+        case BTN_FORWARD: return PAL_MOUSE_5;
+        case BTN_BACK:    return PAL_MOUSE_4;
         default:          return -1;
     }
 }
@@ -6578,8 +6766,8 @@ static const int linux_keycode_to_pal_vk[KEY_MAX] = {
     [KEY_I]             = PAL_KEY_I,
     [KEY_O]             = PAL_KEY_O,
     [KEY_P]             = PAL_KEY_P,
-    [KEY_LEFTBRACE]     = PAL_KEY_LEFTBRACE,  /* VK_OEM_4 '[' */
-    [KEY_RIGHTBRACE]    = PAL_KEY_RIGHTBRACE,  /* VK_OEM_6 ']' */
+    [KEY_LEFTBRACE]     = PAL_KEY_LEFTBRACE,
+    [KEY_RIGHTBRACE]    = PAL_KEY_RIGHTBRACE,
     [KEY_ENTER]         = PAL_KEY_ENTER,
     [KEY_LEFTCTRL]      = PAL_KEY_LCTRL,
     [KEY_A]             = PAL_KEY_A,
@@ -6591,11 +6779,11 @@ static const int linux_keycode_to_pal_vk[KEY_MAX] = {
     [KEY_J]             = PAL_KEY_J,
     [KEY_K]             = PAL_KEY_K,
     [KEY_L]             = PAL_KEY_L,
-    [KEY_SEMICOLON]     = PAL_KEY_SEMICOLON,  /* VK_OEM_1 ';' */
-    [KEY_APOSTROPHE]    = PAL_KEY_APOSTROPHE,  /* VK_OEM_7 ''' */
-    [KEY_GRAVE]         = PAL_KEY_BACKTICK,  /* VK_OEM_3 '`' */
+    [KEY_SEMICOLON]     = PAL_KEY_SEMICOLON,
+    [KEY_APOSTROPHE]    = PAL_KEY_APOSTROPHE,
+    [KEY_GRAVE]         = PAL_KEY_BACKTICK,
     [KEY_LEFTSHIFT]     = PAL_KEY_LSHIFT,
-    [KEY_BACKSLASH]     = PAL_KEY_BACKSLASH,  /* VK_OEM_5 '\' */
+    [KEY_BACKSLASH]     = PAL_KEY_BACKSLASH,
     [KEY_Z]             = PAL_KEY_Z,
     [KEY_X]             = PAL_KEY_X,
     [KEY_C]             = PAL_KEY_C,
@@ -6603,9 +6791,9 @@ static const int linux_keycode_to_pal_vk[KEY_MAX] = {
     [KEY_B]             = PAL_KEY_B,
     [KEY_N]             = PAL_KEY_N,
     [KEY_M]             = PAL_KEY_M,
-    [KEY_COMMA]         = PAL_KEY_COMMA,  /* VK_OEM_COMMA */
-    [KEY_DOT]           = PAL_KEY_DOT,  /* VK_OEM_PERIOD */
-    [KEY_SLASH]         = PAL_KEY_FORWARD_SLASH,  /* VK_OEM_2 '/' */
+    [KEY_COMMA]         = PAL_KEY_COMMA,
+    [KEY_DOT]           = PAL_KEY_DOT,
+    [KEY_SLASH]         = PAL_KEY_FORWARD_SLASH,
     [KEY_RIGHTSHIFT]    = PAL_KEY_RSHIFT,
     [KEY_KPASTERISK]    = PAL_KEY_MULTIPLY,
     [KEY_LEFTALT]       = PAL_KEY_LALT,
@@ -6729,7 +6917,7 @@ static const int linux_scancode_to_pal_scancode[256] = {
     /*  66 */ PAL_SCAN_F8,
     /*  67 */ PAL_SCAN_F9,
     /*  68 */ PAL_SCAN_F10,
-    /*  69 */ PAL_SCAN_NUMCLEAR,      /* NumLock */
+    /*  69 */ PAL_SCAN_NUMCLEAR,
     /*  70 */ PAL_SCAN_SCROLLLOCK,
     /*  71 */ PAL_SCAN_KP_7,
     /*  72 */ PAL_SCAN_KP_8,
@@ -6744,14 +6932,14 @@ static const int linux_scancode_to_pal_scancode[256] = {
     /*  81 */ PAL_SCAN_KP_3,
     /*  82 */ PAL_SCAN_KP_0,
     /*  83 */ PAL_SCAN_KP_PERIOD,
-    /*  84 */ PAL_SCAN_NONUSBACKSLASH,  /* 102nd key (ISO) */
+    /*  84 */ PAL_SCAN_NONUSBACKSLASH,
     /*  85 */ PAL_SCAN_F11,
     /*  86 */ PAL_SCAN_F12,
     /*  87 */ PAL_SCAN_KP_ENTER,
     /*  88 */ PAL_SCAN_RCTRL,
     /*  89 */ PAL_SCAN_KP_DIVIDE,
     /*  90 */ PAL_SCAN_SYSREQ,
-    /*  91 */ PAL_SCAN_RALT,       /* AltGr */
+    /*  91 */ PAL_SCAN_RALT,
     /*  92 */ PAL_SCAN_HOME,
     /*  93 */ PAL_SCAN_UP,
     /*  94 */ PAL_SCAN_PAGEUP,
@@ -6783,13 +6971,11 @@ static const int linux_scancode_to_pal_scancode[256] = {
     /* 120 */ PAL_SCAN_MUTE,
     /* 121 */ PAL_SCAN_VOLUMEDOWN,
     /* 122 */ PAL_SCAN_VOLUMEUP,
-    /* 123 */ PAL_SCAN_POWER,   /* some keyboards */
+    /* 123 */ PAL_SCAN_POWER,
     /* 124 */ PAL_SCAN_NONE,
     /* 125 */ PAL_SCAN_LGUI,
     /* 126 */ PAL_SCAN_RGUI,
     /* 127 */ PAL_SCAN_APPLICATION,
-
-    /* 128–255 = mostly OEM / media keys */
     [128] = PAL_SCAN_MEDIA_PLAY_PAUSE,
     [129] = PAL_SCAN_MEDIA_STOP,
     [130] = PAL_SCAN_MEDIA_PREVIOUS_TRACK,
@@ -6803,7 +6989,6 @@ static const int linux_scancode_to_pal_scancode[256] = {
     [138] = PAL_SCAN_AC_FORWARD,
     [139] = PAL_SCAN_AC_REFRESH,
     [140] = PAL_SCAN_AC_BOOKMARKS,
-
 };
 
 int linux_keycode_to_pal_virtual_key(int linux_code) {
@@ -6813,9 +6998,8 @@ int linux_keycode_to_pal_virtual_key(int linux_code) {
     return linux_keycode_to_pal_vk[linux_code];
 }
 
-
 int linux_keycode_to_utf8(int keycode, unsigned char *key_state, char *out, size_t out_size);
-/* Add this helper function to convert key states to modifier flags */
+
 static int compute_modifiers_from_key_state(unsigned char *keys) {
     int modifiers = PAL_MOD_NONE;
     
@@ -6835,7 +7019,6 @@ static int compute_modifiers_from_key_state(unsigned char *keys) {
     return modifiers;
 }
 
-/* Update this in linux_x11_poll_raw_input() after processing keyboard events */
 void linux_x11_poll_raw_input() {
     struct pollfd fds[MAX_KEYBOARDS + MAX_MICE + 1];
     int nfds = 0;
@@ -6890,12 +7073,11 @@ void linux_x11_poll_raw_input() {
 
                 uint32_t sc = tmp_scancode;
                 unsigned char old_state = g_keyboards.keys[i][sc];
-                unsigned char new_state = (ev.value > 0) ? 1 : 0; /* 0=released, 1=pressed, 2=repeat */
+                unsigned char new_state = (ev.value > 0) ? 1 : 0;
                 int is_repeat = (ev.value == 2);
 
                 g_keyboards.keys[i][sc] = new_state;
 
-                /* Send key down/up event */
                 if (old_state != new_state || is_repeat) {
                     if (!is_repeat) {
                         g_keyboards.keys_toggled[i][sc] = 1;
@@ -6911,7 +7093,6 @@ void linux_x11_poll_raw_input() {
                     event.key.modifiers = g_keyboards.cached_modifiers[i];
                     pal__eventq_push(&g_event_queue, event);
 
-                    /* Generate text input event for printable characters */
                     if (new_state || is_repeat) {
                         char text[8] = {0};
                         if (linux_keycode_to_utf8(ev.code, g_keyboards.keys[i], text, sizeof(text))) {
@@ -6925,7 +7106,7 @@ void linux_x11_poll_raw_input() {
                 }
             }
             else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
-                tmp_scancode = 0; /* reset per frame */
+                tmp_scancode = 0;
             }
         }
     }
@@ -6947,7 +7128,6 @@ void linux_x11_poll_raw_input() {
                 if (old_state != new_state) {
                     g_mice.buttons_toggled[i][pal_button] = 1;
 
-                    /* Combine modifiers from all keyboards */
                     int combined_modifiers = PAL_MOD_NONE;
                     for(int k = 0; k < g_keyboards.count; k++) {
                         combined_modifiers |= g_keyboards.cached_modifiers[k];
@@ -6983,7 +7163,6 @@ void linux_x11_poll_raw_input() {
         }
 
         if (wheel_accumulated) {
-            /* Combine modifiers from all keyboards */
             int combined_modifiers = PAL_MOD_NONE;
             for(int k = 0; k < g_keyboards.count; k++) {
                 combined_modifiers |= g_keyboards.cached_modifiers[k];
@@ -7048,21 +7227,18 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
     int pal_vk = linux_keycode_to_pal_virtual_key(keycode);
     if (pal_vk == PAL_KEY_NONE) return 0;
     
-    /* Check modifier states */
     int shift = key_state[PAL_SCAN_LSHIFT] || key_state[PAL_SCAN_RSHIFT];
     int caps = key_state[PAL_SCAN_CAPSLOCK];
     int numlock = key_state[PAL_SCAN_NUMCLEAR];
     
-    /* Handle letters (a-z) */
     if (pal_vk >= 'a' && pal_vk <= 'z') {
         char c = pal_vk;
-        if (shift ^ caps) c -= 0x20; /* Convert to uppercase */
+        if (shift ^ caps) c -= 0x20;
         out[0] = c;
         out[1] = '\0';
         return 1;
     }
     
-    /* Handle digits with shift modifiers */
     if (pal_vk >= '0' && pal_vk <= '9') {
         if (shift) {
             const char symbols[] = ")!@#$%^&*(";
@@ -7074,9 +7250,7 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
         return 1;
     }
     
-    /* Handle punctuation and symbols that match ASCII directly */
     switch (pal_vk) {
-        /* Direct ASCII matches (no shift needed) */
         case PAL_KEY_SPACE:
         case PAL_KEY_TAB:
         case PAL_KEY_ENTER:
@@ -7084,7 +7258,6 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
             out[1] = '\0';
             return 1;
         
-        /* Keys that change with shift */
         case PAL_KEY_MINUS:
             out[0] = shift ? '_' : '-';
             out[1] = '\0';
@@ -7130,7 +7303,6 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
             out[1] = '\0';
             return 1;
         
-        /* Numpad keys (always produce characters regardless of numlock) */
         case PAL_KEY_NUMPAD_DIVIDE:
             out[0] = '/';
             out[1] = '\0';
@@ -7148,7 +7320,6 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
             out[1] = '\0';
             return 1;
         
-        /* Numpad digits and period (only produce characters when numlock is on) */
         case PAL_KEY_NUMPAD_0:
             if (!numlock) return 0;
             out[0] = '0';
@@ -7206,24 +7377,19 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
             return 1;
     }
     
-    /* Non-printable keys return 0 */
     return 0;
 }
-/* Helper function to convert Linux keycode to UTF-8 text */
-/* Returns 1 if a printable character was generated, 0 otherwise */
+
 int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
                           char *out, size_t out_size) {
-    /* Fallback to your original function if X11 not available */
     if (!g_display || !g_xkb) {
         return linux_keycode_to_utf8_fallback(linux_keycode, key_state, out, out_size);
     }
     
     if (out_size < 8) return 0;
     
-    /* Linux keycode to X11 keycode (offset by 8) */
     KeyCode x_keycode = linux_keycode + 8;
     
-    /* Build modifier state */
     unsigned int modifiers = 0;
     if (key_state[PAL_SCAN_LSHIFT] || key_state[PAL_SCAN_RSHIFT])
         modifiers |= ShiftMask;
@@ -7234,14 +7400,12 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
     if (key_state[PAL_SCAN_CAPSLOCK])
         modifiers |= LockMask;
     
-    /* Translate using XKB */
     KeySym keysym;
     int shift_level = (modifiers & ShiftMask) ? 1 : 0;
     keysym = XkbKeycodeToKeysym(g_display, x_keycode, 0, shift_level);
     
     if (keysym == NoSymbol) return 0;
     
-    /* Try IME-aware lookup first */
     if (g_xic) {
         XKeyEvent event = {
             .type = KeyPress,
@@ -7260,7 +7424,6 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
         }
     }
     
-    /* Fallback: direct keysym to UTF-8 */
     int len = XkbTranslateKeySym(g_display, &keysym, modifiers, 
                                   out, out_size - 1, NULL);
     
@@ -7272,15 +7435,25 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
     return 0;
 }
 
-PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
+/* ============================================================================
+ * OPENGL CONTEXT CREATION (using dynamic GLX loading)
+ * ============================================================================ */
+
+PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
     if (!window || !window->window || !g_display) {
+        return NULL;
+    }
+
+    /* Load GLX if not already loaded */
+    if (!linux_x11_load_glx()) {
+        fprintf(stderr, "GLX ERROR: Failed to load GLX library\n");
         return NULL;
     }
 
     int screen = DefaultScreen(g_display);
 
     int fb_attribs[] = {
-        GLX_X_RENDERABLE, True,
+        GLX_X_RENDERABLE, GL_TRUE,
         GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
         GLX_RENDER_TYPE, GLX_RGBA_BIT,
         GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
@@ -7290,12 +7463,12 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
         GLX_ALPHA_SIZE, 8,
         GLX_DEPTH_SIZE, 24,
         GLX_STENCIL_SIZE, 8,
-        GLX_DOUBLEBUFFER, True,
+        GLX_DOUBLEBUFFER, GL_TRUE,
         None
     };
 
     int fb_count = 0;
-    GLXFBConfig *fb_configs = glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
+    GLXFBConfig *fb_configs = p_glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
     if (!fb_configs || fb_count == 0) {
         fprintf(stderr, "GLX ERROR: No framebuffer configs found!\n");
         if (fb_configs) XFree(fb_configs);
@@ -7313,19 +7486,17 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
         glx_profile = GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
     }
 
-    PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB =
-        (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte*)"glXCreateContextAttribsARB");
+    /* Try to create a modern context using glXCreateContextAttribsARB */
+    if (p_glXCreateContextAttribsARB) {
+        int context_attribs[] = {
+            GLX_CONTEXT_MAJOR_VERSION_ARB, major,
+            GLX_CONTEXT_MINOR_VERSION_ARB, minor,
+            GLX_CONTEXT_PROFILE_MASK_ARB, glx_profile,
+            GLX_CONTEXT_FLAGS_ARB, debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0,
+            None
+        };
 
-    if (glXCreateContextAttribsARB) {
-		int context_attribs[] = {
-		GLX_CONTEXT_MAJOR_VERSION_ARB, major,
-		GLX_CONTEXT_MINOR_VERSION_ARB, minor,
-		GLX_CONTEXT_PROFILE_MASK_ARB, glx_profile,
-		GLX_CONTEXT_FLAGS_ARB, debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0,
-		None
-		};
-
-        window->gl_context = glXCreateContextAttribsARB(g_display, fb, NULL, True, context_attribs);
+        window->gl_context = p_glXCreateContextAttribsARB(g_display, fb, NULL, True, context_attribs);
 
         /* If that failed, try without profile mask */
         if (!window->gl_context) {
@@ -7334,14 +7505,14 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
                 GLX_CONTEXT_MINOR_VERSION_ARB, minor,
                 None
             };
-            window->gl_context = glXCreateContextAttribsARB(g_display, fb, NULL, True, fallback_attribs);
+            window->gl_context = p_glXCreateContextAttribsARB(g_display, fb, NULL, True, fallback_attribs);
         }
     }
 
     /* Fallback to legacy context creation if modern method unavailable or failed */
     if (!window->gl_context) {
         fprintf(stderr, "GLX WARNING: Failed to create GL %d.%d context, falling back to legacy\n", major, minor);
-        window->gl_context = glXCreateNewContext(g_display, fb, GLX_RGBA_TYPE, NULL, True);
+        window->gl_context = p_glXCreateNewContext(g_display, fb, GLX_RGBA_TYPE, NULL, True);
     }
 
     if (!window->gl_context) {
@@ -7351,6 +7522,10 @@ PALAPI pal_gl_context pal_create_gl_context(pal_window *window, int major, int m
 
     return (pal_gl_context)window->gl_context;
 }
+
+/* ============================================================================
+ * WINDOW CREATION (using dynamic GLX loading)
+ * ============================================================================ */
 
 PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t flags) {
     pal_window *window = (pal_window*)malloc(sizeof(pal_window));
@@ -7363,9 +7538,15 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
     Colormap colormap = 0;
 
     if (flags & PAL_WINDOW_OPENGL) {
-        // For OpenGL windows, we need to choose a visual that's compatible with GLX
+        /* Load GLX for OpenGL windows */
+        if (!linux_x11_load_glx()) {
+            fprintf(stderr, "GLX ERROR: Failed to load GLX library for window creation\n");
+            free(window);
+            return NULL;
+        }
+
         int fb_attribs[] = {
-            GLX_X_RENDERABLE, True,
+            GLX_X_RENDERABLE, GL_TRUE,
             GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
             GLX_RENDER_TYPE, GLX_RGBA_BIT,
             GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
@@ -7375,12 +7556,12 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
             GLX_ALPHA_SIZE, 8,
             GLX_DEPTH_SIZE, 24,
             GLX_STENCIL_SIZE, 8,
-            GLX_DOUBLEBUFFER, True,
+            GLX_DOUBLEBUFFER, GL_TRUE,
             None
         };
 
         int fb_count = 0;
-        GLXFBConfig *fb_configs = glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
+        GLXFBConfig *fb_configs = p_glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
         if (!fb_configs || fb_count == 0) {
             fprintf(stderr, "GLX ERROR: No framebuffer configs found!\n");
             if (fb_configs) XFree(fb_configs);
@@ -7388,7 +7569,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
             return NULL;
         }
 
-        XVisualInfo *vi = glXGetVisualFromFBConfig(g_display, fb_configs[0]);
+        XVisualInfo *vi = p_glXGetVisualFromFBConfig(g_display, fb_configs[0]);
         if (!vi) {
             fprintf(stderr, "GLX ERROR: Failed to get XVisualInfo from FBConfig!\n");
             XFree(fb_configs);
@@ -7403,7 +7584,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         colormap = XCreateColormap(g_display, RootWindow(g_display, screen),
                                    visual_info.visual, AllocNone);
     } else {
-        // Non-OpenGL window
+        /* Non-OpenGL window */
         visual_info.visual = DefaultVisual(g_display, screen);
         visual_info.depth = DefaultDepth(g_display, screen);
         colormap = XCreateColormap(g_display, RootWindow(g_display, screen),
@@ -7435,9 +7616,9 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
 
     window->width = (float)width;
     window->height = (float)height;
-    window->gl_context = NULL;  // Will be set by pal_create_gl_context
+    window->gl_context = NULL;
 
-    // Register window
+    /* Register window */
     if (g_windows.count < MAX_WINDOWS) {
         window->id = g_next_window_id++;
         g_windows.windows[g_windows.count] = window;
@@ -7464,6 +7645,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
 
     return window;
 }
+
 PALAPI void *pal_get_window_handle(pal_window *window) {
     return (void*)window->window;
 }
@@ -7484,7 +7666,7 @@ PALAPI void pal_close_window(pal_window *window) {
     event.window.window_id = window->id;
     pal__eventq_push(&g_event_queue, event);
 
-    // Remove from window registry
+    /* Remove from window registry */
     for (int i = 0; i < g_windows.count; i++) {
         if (g_windows.windows[i] == window) {
             for (int j = i; j < g_windows.count - 1; j++) {
@@ -7510,10 +7692,10 @@ static void linux_x11_send_wm_state_message(Window win, long action, Atom proper
     e.xclient.message_type = XInternAtom(g_display, "_NET_WM_STATE", False);
     e.xclient.window = win;
     e.xclient.format = 32;
-    e.xclient.data.l[0] = action;      /* 1 = add, 0 = remove, 2 = toggle */
-    e.xclient.data.l[1] = property;    /* _NET_WM_STATE_MAXIMIZED_VERT or HORZ */
-    e.xclient.data.l[2] = 0;           /* second property (unused) */
-    e.xclient.data.l[3] = 1;           /* source: application */
+    e.xclient.data.l[0] = action;
+    e.xclient.data.l[1] = property;
+    e.xclient.data.l[2] = 0;
+    e.xclient.data.l[3] = 1;
     e.xclient.data.l[4] = 0;
 
     XSendEvent(g_display, DefaultRootWindow(g_display), False, SubstructureNotifyMask | SubstructureRedirectMask, &e);
@@ -7564,7 +7746,6 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int
         return pal_false;
     }
 
-    /* Find matching mode */
     RRMode selected_mode = 0;
     for (int i = 0; i < res->nmode; i++) {
         XRRModeInfo *m = &res->modes[i];
@@ -7588,7 +7769,6 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int
         return pal_false;
     }
 
-    /* Apply the mode */
     XRRSetCrtcConfig(
         g_display,
         res,
@@ -7605,7 +7785,6 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int
     XRRFreeOutputInfo(out);
     XRRFreeScreenResources(res);
 
-    /* Then set fullscreen */
     pal_make_window_fullscreen(window);
 
     return pal_true;
@@ -7616,7 +7795,6 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window) {
 
     Atom wmHints = XInternAtom(g_display, "_MOTIF_WM_HINTS", False);
 
-    /* Remove decorations using Motif WM hints */
     struct {
         unsigned long flags;
         unsigned long functions;
@@ -7625,8 +7803,8 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window) {
         unsigned long status;
     } hints;
 
-    hints.flags = (1L << 1); /* MWM_HINTS_DECORATIONS */
-    hints.decorations = 0;   /* No decorations */
+    hints.flags = (1L << 1);
+    hints.decorations = 0;
 
     XChangeProperty(
         g_display,
@@ -7639,7 +7817,6 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window) {
         5
     );
 
-    /* Resize window to match screen size */
     int sw = DisplayWidth(g_display, DefaultScreen(g_display));
     int sh = DisplayHeight(g_display, DefaultScreen(g_display));
 
@@ -7662,9 +7839,8 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window) {
         unsigned long status;
     } hints;
 
-    /* Restore decorations */
     hints.flags = (1L << 1);
-    hints.decorations = 1;  /* enable */
+    hints.decorations = 1;
 
     XChangeProperty(
         g_display,
@@ -7677,7 +7853,6 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window) {
         5
     );
 
-    /* Remove fullscreen state (if any) */
     Atom fullscreen = XInternAtom(g_display, "_NET_WM_STATE_FULLSCREEN", False);
     linux_x11_send_wm_state_message(window->window, 0, fullscreen);
 
@@ -7692,7 +7867,6 @@ PALAPI pal_bool pal_maximize_window(pal_window *window) {
     Atom max_vert = XInternAtom(g_display, "_NET_WM_STATE_MAXIMIZED_VERT", False);
     Atom max_horz = XInternAtom(g_display, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
 
-    /* action = 1 → add */
     linux_x11_send_wm_state_message(window->window, 1, max_vert);
     linux_x11_send_wm_state_message(window->window, 1, max_horz);
 
@@ -7704,7 +7878,6 @@ PALAPI pal_bool pal_minimize_window(pal_window *window) {
     if (!window || !g_display)
         return pal_false;
 
-    /* Minimize is via _NET_ACTIVE_WINDOW with a special request */
     XIconifyWindow(
         g_display,
         window->window,
@@ -7718,7 +7891,6 @@ PALAPI pal_bool pal_minimize_window(pal_window *window) {
 PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color) {
     if (!window) return;
 
-    /* Convert float color (0.0 - 1.0) to 24-bit RGB */
     unsigned long pixel = ((unsigned long)(color.r * 255) << 16) |
                           ((unsigned long)(color.g * 255) << 8)  |
                           ((unsigned long)(color.b * 255) << 0);
@@ -7727,20 +7899,65 @@ PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int heigh
     XFillRectangle(g_display, window->window, window->graphics_context, x, y, width, height);
 }
 
+/* ============================================================================
+ * OPENGL FUNCTIONS (using dynamic GLX loading)
+ * ============================================================================ */
+
 PALAPI int pal_gl_make_context_current(pal_window *window, pal_gl_context context) {
+    if (!g_glx_loaded) {
+        fprintf(stderr, "GLX ERROR: GLX not loaded\n");
+        return -1;
+    }
+
     if (window && context) {
-        if (!glXMakeCurrent(g_display, window->window, context)) {
+        if (!p_glXMakeCurrent(g_display, window->window, context)) {
             fprintf(stderr, "GLX ERROR: glXMakeCurrent failed!\n");
             return -1;
         }
     } else {
-        glXMakeCurrent(g_display, None, NULL); /* unbind context */
+        p_glXMakeCurrent(g_display, None, NULL);
     }
     return 0;
 }
 
 PALAPI void pal_swap_buffers(pal_window *window) {
-    glXSwapBuffers(g_display, window->window);
+    if (g_glx_loaded && p_glXSwapBuffers) {
+        p_glXSwapBuffers(g_display, window->window);
+    }
+}
+
+PALAPI void pal_swap_interval(int interval) {
+    if (!g_glx_loaded) return;
+
+    /* Try EXT version first (most common and reliable) */
+    if (p_glXSwapIntervalEXT) {
+        /* Need to get current drawable */
+        Window focused;
+        int revert;
+        XGetInputFocus(g_display, &focused, &revert);
+        
+        /* Find the window that matches */
+        for (int i = 0; i < g_windows.count; i++) {
+            if (g_windows.windows[i]) {
+                p_glXSwapIntervalEXT(g_display, g_windows.windows[i]->window, interval);
+                return;
+            }
+        }
+    }
+    
+    /* Try MESA version */
+    if (p_glXSwapIntervalMESA) {
+        p_glXSwapIntervalMESA((unsigned int)interval);
+        return;
+    }
+    
+    /* Try SGI version (oldest) */
+    if (p_glXSwapIntervalSGI) {
+        p_glXSwapIntervalSGI(interval);
+        return;
+    }
+    
+    fprintf(stderr, "GLX WARNING: No swap interval extension available\n");
 }
 
 PALAPI int pal_show_cursor(pal_window *window) {
@@ -7786,7 +8003,6 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
         return pal_false;
     }
 
-    /* Pick the first connected output */
     RROutput output = 0;
     for (int i = 0; i < res->noutput; i++) {
         XRROutputInfo *outInfo = XRRGetOutputInfo(g_display, res, res->outputs[i]);
@@ -7820,7 +8036,6 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
         return pal_false;
     }
 
-    /* Find a mode that matches width, height, and refresh rate */
     RRMode newMode = 0;
     for (int i = 0; i < res->nmode; i++) {
         XRRModeInfo *m = &res->modes[i];
@@ -7841,7 +8056,6 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
         return pal_false;
     }
 
-    /* Apply the new mode */
     Status status = XRRSetCrtcConfig(g_display, res, outInfo->crtc, CurrentTime, crtcInfo->x, crtcInfo->y, newMode, crtcInfo->rotation, &output, 1);
 
     XRRFreeCrtcInfo(crtcInfo);
@@ -7903,10 +8117,22 @@ PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
 }
 
 PALAPI void *pal_gl_get_proc_address(const char *procname) {
-    return (void *)glXGetProcAddress((const GLubyte *)procname);
+    /* Try glXGetProcAddress first */
+    if (p_glXGetProcAddress) {
+        void *proc = (void *)p_glXGetProcAddress((const GLubyte *)procname);
+        if (proc) return proc;
+    }
+    
+    /* Fallback to dlsym */
+    if (g_libgl) {
+        return dlsym(g_libgl, procname);
+    }
+    
+    return NULL;
 }
 
 #endif /* PLATFORM_LINUX_X11_H */
+
 #elif defined(PAL_PLATFORM_LINUX_WAYLAND) && !defined (PAL_PLATFORM_LINUX_X11) && !defined (PAL_PLATFORM_WINDOWS)
 #ifndef PLATFORM_LINUX_WAYLAND_H
 #define PLATFORM_LINUX_WAYLAND_H
