@@ -1,6 +1,5 @@
 Now:
 
-Add dark mode detection for windows and linux.
 Finish implementing all the events and window flags.
 Integrate gamepad system into the window events.
 

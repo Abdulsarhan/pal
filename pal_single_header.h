@@ -5291,7 +5291,7 @@ typedef struct _KUSER_SHARED_DATA {
     union {                                         // 0x320
         KSYSTEM_TIME TickCount;
         UINT64 TickCountQuad;
-    };
+    }tick;
 } KUSER_SHARED_DATA, *PKUSER_SHARED_DATA;
 #define KUSER_SHARED_DATA_ADDRESS 0x7FFE0000
 
@@ -5435,9 +5435,9 @@ PALAPI pal_time pal_get_time_since_boot(void) {
     LARGE_INTEGER time = {0};
 
     do {
-        time.HighPart = kuser->TickCount.High1Time;
-        time.LowPart = kuser->TickCount.LowPart;
-    } while (time.HighPart != kuser->TickCount.High2Time);
+        time.HighPart = kuser->tick.TickCount.High1Time;
+        time.LowPart = kuser->tick.TickCount.LowPart;
+    } while (time.HighPart != kuser->tick.TickCount.High2Time);
 
     uint64_t tick_ms = ((uint64_t)time.QuadPart * kuser->TickCountMultiplier) >> 24;
     uint64_t total_seconds = tick_ms / 1000;
