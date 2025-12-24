@@ -1,11 +1,10 @@
 Now:
 
+Create a replacement for all cstdlib functions that we use.
 Finish implementing all the events and window flags.
 Integrate gamepad system into the window events.
 
-Create a replacement for all cstdlib functions that we use.
-Make error codes more consistent. Some functions return 0 on success, others return 1.
-
 Later:
+Make error codes more consistent. Some functions return 0 on success, others return 1.
 Fully integrate new gamepad system that supports all gamepads.
 Finish implementing pal's API on linux_x11 and linux_wayland.
