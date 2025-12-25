@@ -2045,7 +2045,6 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 #define GET_Y_LPARAM(lp)                        ((int)(short)HIWORD(lp))
 
 // for file permissions.
-#include <dbt.h>      // For WM_DEVICECHANGE structures
 
 typedef PROC (WINAPI *PFN_wglGetProcAddress)(LPCSTR);
 typedef HGLRC (WINAPI *PFN_wglCreateContext)(HDC);
@@ -2129,6 +2128,108 @@ static HWND g_input_window = NULL;
 * 
 * WINAPI, HANDLES, TYPES END
 *
+*/
+    
+/*
+    Dev notify BEGIN
+*/
+
+#ifdef  IS_32
+#define DBTFAR
+#else
+#define DBTFAR  far
+#endif
+
+#define DBT_DEVICEARRIVAL               0x8000  // system detected a new device
+#define DBT_DEVICEREMOVECOMPLETE        0x8004  // device is gone
+
+#if(WINVER >= 0x040A)
+#define DBT_DEVTYP_DEVICEINTERFACE      0x00000005  // device interface class
+#endif /* WINVER >= 0x040A */
+
+struct _DEV_BROADCAST_HDR {     /* */
+    DWORD       dbch_size;
+    DWORD       dbch_devicetype;
+    DWORD       dbch_reserved;
+};
+
+typedef struct  _DEV_BROADCAST_HDR      DEV_BROADCAST_HDR;
+typedef         DEV_BROADCAST_HDR       DBTFAR *PDEV_BROADCAST_HDR;
+
+#if(WINVER >= 0x040A)
+
+typedef struct _DEV_BROADCAST_DEVICEINTERFACE_A {
+    DWORD       dbcc_size;
+    DWORD       dbcc_devicetype;
+    DWORD       dbcc_reserved;
+    GUID        dbcc_classguid;
+    char        dbcc_name[1];
+} DEV_BROADCAST_DEVICEINTERFACE_A, *PDEV_BROADCAST_DEVICEINTERFACE_A;
+
+typedef struct _DEV_BROADCAST_DEVICEINTERFACE_W {
+    DWORD       dbcc_size;
+    DWORD       dbcc_devicetype;
+    DWORD       dbcc_reserved;
+    GUID        dbcc_classguid;
+    wchar_t     dbcc_name[1];
+} DEV_BROADCAST_DEVICEINTERFACE_W, *PDEV_BROADCAST_DEVICEINTERFACE_W;
+
+#ifdef UNICODE
+typedef DEV_BROADCAST_DEVICEINTERFACE_W   DEV_BROADCAST_DEVICEINTERFACE;
+typedef PDEV_BROADCAST_DEVICEINTERFACE_W  PDEV_BROADCAST_DEVICEINTERFACE;
+#else
+typedef DEV_BROADCAST_DEVICEINTERFACE_A   DEV_BROADCAST_DEVICEINTERFACE;
+typedef PDEV_BROADCAST_DEVICEINTERFACE_A  PDEV_BROADCAST_DEVICEINTERFACE;
+#endif
+
+typedef struct _DEV_BROADCAST_HANDLE {
+    DWORD       dbch_size;
+    DWORD       dbch_devicetype;
+    DWORD       dbch_reserved;
+    HANDLE      dbch_handle;     // file handle used in call to RegisterDeviceNotification
+    HDEVNOTIFY  dbch_hdevnotify; // returned from RegisterDeviceNotification
+    //
+    // The following 3 fields are only valid if wParam is DBT_CUSTOMEVENT.
+    //
+    GUID        dbch_eventguid;
+    LONG        dbch_nameoffset; // offset (bytes) of variable-length string buffer (-1 if none)
+    BYTE        dbch_data[1];    // variable-sized buffer, potentially containing binary and/or text data
+} DEV_BROADCAST_HANDLE, *PDEV_BROADCAST_HANDLE;
+
+#if(WINVER >= 0x0501)
+
+//
+// Define 32-bit and 64-bit versions of the DEV_BROADCAST_HANDLE structure
+// for WOW64.  These must be kept in sync with the above structure.
+//
+
+typedef struct _DEV_BROADCAST_HANDLE32 {
+    DWORD       dbch_size;
+    DWORD       dbch_devicetype;
+    DWORD       dbch_reserved;
+    ULONG32     dbch_handle;
+    ULONG32     dbch_hdevnotify;
+    GUID        dbch_eventguid;
+    LONG        dbch_nameoffset;
+    BYTE        dbch_data[1];
+} DEV_BROADCAST_HANDLE32, *PDEV_BROADCAST_HANDLE32;
+
+typedef struct _DEV_BROADCAST_HANDLE64 {
+    DWORD       dbch_size;
+    DWORD       dbch_devicetype;
+    DWORD       dbch_reserved;
+    ULONG64     dbch_handle;
+    ULONG64     dbch_hdevnotify;
+    GUID        dbch_eventguid;
+    LONG        dbch_nameoffset;
+    BYTE        dbch_data[1];
+} DEV_BROADCAST_HANDLE64, *PDEV_BROADCAST_HANDLE64;
+
+#endif /* WINVER >= 0x0501 */
+
+#endif /* WINVER >= 0x040A */
+/*
+    Dev notify END
 */
 
 /*
