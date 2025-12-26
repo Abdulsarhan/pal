@@ -1,12 +1,11 @@
 #define _CRT_SECURE_NO_WARNINGS
-
 #include <stdio.h>
 #include <assert.h>
 
-#include <glad/glad.h>
-
 #define PAL_IMPLEMENTATION
 #include "pal_single_header.h"
+
+#include <glad/glad.h>
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720

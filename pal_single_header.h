@@ -2,8 +2,6 @@
 #define PAL_H
 
 #include <stdint.h>   /* For Clearly Defined Types. */
-#include <stddef.h>
-
 /* defines for building or using this library as a shared lib */
 #if defined(_WIN32)
     #if defined(__TINYC__)
@@ -2029,30 +2027,817 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 /*-------------------------------------*/
 /* platform-specific code--------------*/
 /*-------------------------------------*/
-#if defined(_WIN32)
-
-#ifndef PLATFORM_WIN32_H
-#define PLATFORM_WIN32_H
+#if defined(_WIN32) || defined(WIN32) || defined(__MINGW32__) || defined(_MSC_VER)
+#include <stdlib.h> /* temporary, for malloc()*/
+#include <stdint.h>
+#include <wchar.h>
 #define _CRT_SECURE_NO_WARNINGS
 
 // Windows system headers
-#include <Windows.h>
+
+/*
+   windows.h begin
+*/
+
+#ifndef CONST
+#define CONST const
+#endif
+
+/* Calling conventions */
+/* Basic Windows types */
+#define VOID void
+typedef int BOOL;
+typedef BOOL *PBOOL, *LPBOOL;
+typedef uint8_t BYTE, *LPBYTE, *PBYTE;
+typedef uint16_t WORD, *LPWORD;
+typedef uint32_t DWORD;
+
+typedef DWORD *PDWORD, *LPDWORD;
+typedef unsigned int UINT, *PUINT;
+typedef int32_t LONG, *LPLONG;
+typedef uint32_t ULONG;
+typedef int64_t LONGLONG;
+typedef uint64_t ULONGLONG;
+typedef int16_t SHORT;
+typedef uint16_t USHORT;
+typedef wchar_t WCHAR;
+typedef char CHAR;
+typedef unsigned char UCHAR;
+typedef CHAR *LPSTR, *LPCH;
+typedef const CHAR *LPCSTR;
+typedef WCHAR *LPWSTR, *LPWCH;
+
+typedef CHAR *PCHAR, *LPCH, *PCH;
+typedef CONST CHAR *LPCCH, *PCCH;
+typedef CONST WCHAR *LPCWCH, *PCWCH;
+
+typedef WCHAR *LPCWSTR;
+typedef void *LPVOID;
+typedef const void *LPCVOID;
+typedef void *PVOID;
+typedef int INT;
+typedef size_t SIZE_T;
+
+typedef uintptr_t UINT_PTR;
+typedef intptr_t INT_PTR;
+typedef intptr_t LONG_PTR;
+typedef uintptr_t ULONG_PTR;
+typedef uintptr_t DWORD_PTR;
+typedef UINT_PTR WPARAM;
+typedef LONG_PTR LPARAM;
+typedef LONG_PTR LRESULT;
+typedef WORD ATOM;
+typedef float FLOAT;
+
+/* Handle types */
+#define STRICT
+#ifdef STRICT
+
+#if 0 && (_MSC_VER > 1000)
+#define DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
+#else
+#define DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
+#endif
+#else
+typedef PVOID HANDLE;
+#define DECLARE_HANDLE(name) typedef HANDLE name
+#endif
+DECLARE_HANDLE(HKEY);
+
+typedef int32_t HRESULT;
+
+typedef void* HANDLE;
+typedef HANDLE *PHANDLE;
+
+DECLARE_HANDLE(HWND);
+DECLARE_HANDLE(HDC);
+DECLARE_HANDLE(HGLRC);
+DECLARE_HANDLE(HINSTANCE);
+typedef HINSTANCE HMODULE;
+DECLARE_HANDLE(ICON);
+DECLARE_HANDLE(HICON);
+
+#ifndef _MAC
+typedef HICON HCURSOR;      /* HICONs & HCURSORs are polymorphic */
+#else
+DECLARE_HANDLE(HCURSOR);    /* HICONs & HCURSORs are not polymorphic */
+#endif
+
+DECLARE_HANDLE(HBITMAP);
+DECLARE_HANDLE(HBRUSH);
+DECLARE_HANDLE(HMONITOR);
+DECLARE_HANDLE(HMENU);
+DECLARE_HANDLE(HGLOBAL);
+DECLARE_HANDLE(HDROP);
+DECLARE_HANDLE(HGDIOBJ);
+DECLARE_HANDLE(HKL);
+DECLARE_HANDLE(HRAWINPUT);
+
+typedef unsigned int ULONG64, *PULONG64;
+typedef unsigned int ULONG32, *PULONG32;
+typedef unsigned int DWORD32, *PDWORD32;
+ typedef unsigned __int64 UINT64;
+
+typedef long LSTATUS;
+typedef DWORD ACCESS_MASK;
+typedef ACCESS_MASK *PACCESS_MASK;
+typedef ACCESS_MASK REGSAM;
+typedef HKEY *PHKEY;
+
+#ifndef NTDDI_VERSION
+#ifdef _WIN32_WINNT
+#if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+// set NTDDI_VERSION based on _WIN32_WINNT
+#define NTDDI_VERSION   NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
+#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
+// set NTDDI_VERSION to default to WDK_NTDDI_VERSION
+#define NTDDI_VERSION   WDK_NTDDI_VERSION
+#endif // (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+#else
+// set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set
+#define NTDDI_VERSION   0x0A000010
+#endif // _WIN32_WINNT
+#endif // NTDDI_VERSION
+
+#ifndef WINVER
+#ifdef _WIN32_WINNT
+// set WINVER based on _WIN32_WINNT
+#define WINVER          _WIN32_WINNT
+#else
+#define WINVER          0x0A00
+#endif
+#endif
+
+#ifndef WINBASEAPI
+#define WINBASEAPI
+#endif
+#ifndef WINUSERAPI
+#define WINUSERAPI
+#endif
+
+#ifndef DECLSPEC_IMPORT
+#if (defined(_M_IX86) || defined(_M_IA64) || defined(_M_AMD64) || defined(_M_ARM) || defined(_M_ARM64)) && !defined(MIDL_PASS)
+#define DECLSPEC_IMPORT __declspec(dllimport)
+#else
+#define DECLSPEC_IMPORT
+#endif
+#endif
+
+#if !defined(_GDI32_)
+#define WINGDIAPI DECLSPEC_IMPORT
+#else
+#define WINGDIAPI
+#endif
+
+#ifndef WINADVAPI
+#define WINADVAPI
+#endif
+
+#ifndef EXTERN_C
+#ifdef __cplusplus
+#define EXTERN_C    extern "C"
+#else
+#define EXTERN_C    extern
+#endif
+#endif
+
+#if defined(_WIN32) || defined(_MPPC_)
+
+// Win32 doesn't support __export
+
+#ifdef _68K_
+#define STDMETHODCALLTYPE       __cdecl
+#else
+#define STDMETHODCALLTYPE       __stdcall
+#endif
+#define STDMETHODVCALLTYPE      __cdecl
+
+#define STDAPICALLTYPE          __stdcall
+#define STDAPIVCALLTYPE         __cdecl
+
+#else
+
+#define STDMETHODCALLTYPE       __export __stdcall
+#define STDMETHODVCALLTYPE      __export __cdecl
+
+#define STDAPICALLTYPE          __export __stdcall
+#define STDAPIVCALLTYPE         __export __cdecl
+
+#endif
+
+#ifndef SHSTDAPI
+#if !defined(_SHELL32_)
+#define SHSTDAPI          EXTERN_C DECLSPEC_IMPORT HRESULT STDAPICALLTYPE
+#define SHSTDAPI_(type)   EXTERN_C DECLSPEC_IMPORT type STDAPICALLTYPE
+#else
+#define SHSTDAPI          STDAPI
+#define SHSTDAPI_(type)   STDAPI_(type)
+#endif
+#endif // SHSTDAPI
+
+#ifdef _MAC
+#define CALLBACK    PASCAL
+#define WINAPI      CDECL
+#define WINAPIV     CDECL
+#define APIENTRY    WINAPI
+#define APIPRIVATE  CDECL
+#ifdef _68K_
+#define PASCAL      __pascal
+#else
+#define PASCAL
+#endif
+#elif (_MSC_VER >= 800) || defined(_STDCALL_SUPPORTED)
+#define CALLBACK    __stdcall
+#define WINAPI      __stdcall
+#define WINAPIV     __cdecl
+#define APIENTRY    WINAPI
+#define APIPRIVATE  __stdcall
+#define PASCAL      __stdcall
+#else
+#define CALLBACK
+#define WINAPI
+#define WINAPIV
+#define APIENTRY    WINAPI
+#define APIPRIVATE
+#define PASCAL      pascal
+#endif
+
+#ifndef _M_CEE_PURE
+#ifndef WINAPI_INLINE
+#define WINAPI_INLINE  WINAPI
+#endif
+#endif
+
+#define far
+#define near
+#define FAR                 far
+#define NEAR                near
+
+/* Max values */
+#define MAXDWORD 0xFFFFFFFF
+#define MAX_PATH 260
+
+#define MAKEWORD(a, b)      ((WORD)(((BYTE)(((DWORD_PTR)(a)) & 0xff)) | ((WORD)((BYTE)(((DWORD_PTR)(b)) & 0xff))) << 8))
+#define MAKELONG(a, b)      ((LONG)(((WORD)(((DWORD_PTR)(a)) & 0xffff)) | ((DWORD)((WORD)(((DWORD_PTR)(b)) & 0xffff))) << 16))
+#define LOWORD(l)           ((WORD)(((DWORD_PTR)(l)) & 0xffff))
+#define HIWORD(l)           ((WORD)((((DWORD_PTR)(l)) >> 16) & 0xffff))
+#define LOBYTE(w)           ((BYTE)(((DWORD_PTR)(w)) & 0xff))
+#define HIBYTE(w)           ((BYTE)((((DWORD_PTR)(w)) >> 8) & 0xff))
 
 #define GET_WPARAM(wp, lp)                      (wp)
 #define GET_LPARAM(wp, lp)                      (lp)
-
 #define GET_X_LPARAM(lp)                        ((int)(short)LOWORD(lp))
 #define GET_Y_LPARAM(lp)                        ((int)(short)HIWORD(lp))
 
-// for file permissions.
+#define WS_OVERLAPPED       0x00000000L
+#define WS_POPUP            0x80000000L
+#define WS_CHILD            0x40000000L
+#define WS_MINIMIZE         0x20000000L
+#define WS_VISIBLE          0x10000000L
+#define WS_DISABLED         0x08000000L
+#define WS_CLIPSIBLINGS     0x04000000L
+#define WS_CLIPCHILDREN     0x02000000L
+#define WS_MAXIMIZE         0x01000000L
+#define WS_CAPTION          0x00C00000L     /* WS_BORDER | WS_DLGFRAME  */
+#define WS_BORDER           0x00800000L
+#define WS_DLGFRAME         0x00400000L
+#define WS_VSCROLL          0x00200000L
+#define WS_HSCROLL          0x00100000L
+#define WS_SYSMENU          0x00080000L
+#define WS_THICKFRAME       0x00040000L
+#define WS_GROUP            0x00020000L
+#define WS_TABSTOP          0x00010000L
+
+#define WS_MINIMIZEBOX      0x00020000L
+#define WS_MAXIMIZEBOX      0x00010000L
+
+#define WS_TILED            WS_OVERLAPPED
+#define WS_ICONIC           WS_MINIMIZE
+#define WS_SIZEBOX          WS_THICKFRAME
+
+#define WS_OVERLAPPEDWINDOW (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX)
+#define WS_POPUPWINDOW      (WS_POPUP | WS_BORDER | WS_SYSMENU)
+#define WS_CHILDWINDOW      (WS_CHILD)
+
+#define WS_EX_TOOLWINDOW        0x00000080L
+
+#define CW_USEDEFAULT       ((int)0x80000000)
+#define GMEM_MOVEABLE       0x0002
+#define CF_TEXT             1
+#define CF_UNICODETEXT      13
+#define INFINITE            0xFFFFFFFF  // Infinite timeout
+#define STATUS_WAIT_0                           ((DWORD   )0x00000000L) 
+#define WAIT_OBJECT_0       ((STATUS_WAIT_0 ) + 0 )
+#define CREATE_SUSPENDED                  0x00000004
+
+#define SW_HIDE 0
+#define SW_SHOWNORMAL 1
+#define SW_NORMAL 1
+#define SW_SHOWMINIMIZED 2
+#define SW_SHOWMAXIMIZED 3
+#define SW_MAXIMIZE 3
+#define SW_SHOWNOACTIVATE 4
+#define SW_SHOW 5
+#define SW_MINIMIZE 6
+#define SW_SHOWMINNOACTIVE 7
+#define SW_SHOWNA 8
+#define SW_RESTORE 9
+#define SW_SHOWDEFAULT 10
+#define SW_FORCEMINIMIZE 11
+
+#define TME_LEAVE       0x00000002
+#define HOVER_DEFAULT   0xFFFFFFFF
+
+#define PM_REMOVE           0x0001
+
+#define WM_WINDOWPOSCHANGING            0x0046
+#define WM_WINDOWPOSCHANGED             0x0047
+#define WM_ACTIVATEAPP                  0x001C
+
+#define IS_INTRESOURCE(_r) ((((ULONG_PTR)(_r)) >> 16) == 0)
+#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
+#define MAKEINTRESOURCEW(i) ((LPWSTR)((ULONG_PTR)((WORD)(i))))
+#ifdef UNICODE
+#define MAKEINTRESOURCE  MAKEINTRESOURCEW
+#else
+#define MAKEINTRESOURCE  MAKEINTRESOURCEA
+#endif // !UNICODE
+
+
+#define IDC_ARROW           MAKEINTRESOURCE(32512)
+
+#if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
+#define  _WIN32_WINNT   0x0A00
+#endif
+
+#define WS_EX_TOPMOST           0x00000008L
+
+#if(_WIN32_WINNT >= 0x0500)
+#define WS_EX_NOACTIVATE        0x08000000L
+#endif /* _WIN32_WINNT >= 0x0500 */
+
+#define OSVERSION_MASK      0xFFFF0000
+#define SPVERSION_MASK      0x0000FF00
+#define SUBVERSION_MASK     0x000000FF
+#ifndef CCHDEVICENAME
+#define CCHDEVICENAME 32
+#endif
+
+#define CCHFORMNAME 32
+#define HKEY_CURRENT_USER                   (( HKEY ) (ULONG_PTR)((LONG)0x80000001) )
+
+#if(WINVER >= 0x0500)
+typedef  PVOID           HDEVNOTIFY;
+typedef  HDEVNOTIFY     *PHDEVNOTIFY;
+
+#define DEVICE_NOTIFY_WINDOW_HANDLE          0x00000000
+#define DEVICE_NOTIFY_SERVICE_HANDLE         0x00000001
+#if(_WIN32_WINNT >= 0x0501)
+#define DEVICE_NOTIFY_ALL_INTERFACE_CLASSES  0x00000004
+#endif /* _WIN32_WINNT >= 0x0501 */
+#endif
+
+//
+// macros to extract various version fields from the NTDDI version
+//
+#define OSVER(Version)  ((Version) & OSVERSION_MASK)
+#define SPVER(Version)  (((Version) & SPVERSION_MASK) >> 8)
+#define SUBVER(Version) (((Version) & SUBVERSION_MASK) )
+
+/* Boolean values */
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+
+#ifndef DUMMYUNIONNAME
+#if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
+#define DUMMYUNIONNAME   u
+#define DUMMYUNIONNAME2  u2
+#define DUMMYUNIONNAME3  u3
+#define DUMMYUNIONNAME4  u4
+#define DUMMYUNIONNAME5  u5
+#define DUMMYUNIONNAME6  u6
+#define DUMMYUNIONNAME7  u7
+#define DUMMYUNIONNAME8  u8
+#define DUMMYUNIONNAME9  u9
+#else
+#define DUMMYUNIONNAME
+#define DUMMYUNIONNAME2
+#define DUMMYUNIONNAME3
+#define DUMMYUNIONNAME4
+#define DUMMYUNIONNAME5
+#define DUMMYUNIONNAME6
+#define DUMMYUNIONNAME7
+#define DUMMYUNIONNAME8
+#define DUMMYUNIONNAME9
+#endif
+#endif // DUMMYUNIONNAME
+
+#ifndef DUMMYSTRUCTNAME
+#if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
+#define DUMMYSTRUCTNAME  s
+#define DUMMYSTRUCTNAME2 s2
+#define DUMMYSTRUCTNAME3 s3
+#define DUMMYSTRUCTNAME4 s4
+#define DUMMYSTRUCTNAME5 s5
+#define DUMMYSTRUCTNAME6 s6
+#else
+#define DUMMYSTRUCTNAME
+#define DUMMYSTRUCTNAME2
+#define DUMMYSTRUCTNAME3
+#define DUMMYSTRUCTNAME4
+#define DUMMYSTRUCTNAME5
+#define DUMMYSTRUCTNAME6
+#endif
+#endif // DUMMYSTRUCTNAME
+
+
+/* Special handles */
+#define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR)-1)
+
+typedef HANDLE NEAR *SPHANDLE;
+typedef HANDLE FAR  *LPHANDLE;
+typedef HANDLE    HLOCAL;
+typedef HANDLE    GLOBALHANDLE;
+typedef HANDLE    LOCALHANDLE;
+
+typedef __int64 (WINAPI FAR *FARPROC)();
+typedef __int64 (WINAPI NEAR *NEARPROC)();
+typedef __int64 (WINAPI *PROC)();
+
+
+/* Function pointer types */
+typedef LRESULT (CALLBACK *WNDPROC)(HWND, UINT, WPARAM, LPARAM);
+typedef struct tagPOINT
+{
+    LONG  x;
+    LONG  y;
+} POINT, *PPOINT, NEAR *NPPOINT, FAR *LPPOINT;
+
+typedef struct _POINTL {
+  LONG x;
+  LONG y;
+} POINTL, *PPOINTL;
+
+#if (_WIN32_WINNT >= ((OSVER(NTDDI_WINXPSP2)) >> 16))
+typedef struct _devicemodeA {
+    BYTE   dmDeviceName[CCHDEVICENAME];
+    WORD dmSpecVersion;
+    WORD dmDriverVersion;
+    WORD dmSize;
+    WORD dmDriverExtra;
+    DWORD dmFields;
+    union {
+      /* printer only fields */
+      struct {
+        short dmOrientation;
+        short dmPaperSize;
+        short dmPaperLength;
+        short dmPaperWidth;
+        short dmScale;
+        short dmCopies;
+        short dmDefaultSource;
+        short dmPrintQuality;
+      } DUMMYSTRUCTNAME;
+      /* display only fields */
+      struct {
+        POINTL dmPosition;
+        DWORD  dmDisplayOrientation;
+        DWORD  dmDisplayFixedOutput;
+      } DUMMYSTRUCTNAME2;
+    } DUMMYUNIONNAME;
+    short dmColor;
+    short dmDuplex;
+    short dmYResolution;
+    short dmTTOption;
+    short dmCollate;
+    BYTE   dmFormName[CCHFORMNAME];
+    WORD   dmLogPixels;
+    DWORD  dmBitsPerPel;
+    DWORD  dmPelsWidth;
+    DWORD  dmPelsHeight;
+    union {
+        DWORD  dmDisplayFlags;
+        DWORD  dmNup;
+    } DUMMYUNIONNAME2;
+    DWORD  dmDisplayFrequency;
+#if(WINVER >= 0x0400)
+    DWORD  dmICMMethod;
+    DWORD  dmICMIntent;
+    DWORD  dmMediaType;
+    DWORD  dmDitherType;
+    DWORD  dmReserved1;
+    DWORD  dmReserved2;
+#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+    DWORD  dmPanningWidth;
+    DWORD  dmPanningHeight;
+#endif
+#endif /* WINVER >= 0x0400 */
+} DEVMODEA, *PDEVMODEA, *NPDEVMODEA, *LPDEVMODEA;
+typedef struct _devicemodeW {
+    WCHAR  dmDeviceName[CCHDEVICENAME];
+    WORD dmSpecVersion;
+    WORD dmDriverVersion;
+    WORD dmSize;
+    WORD dmDriverExtra;
+    DWORD dmFields;
+    union {
+      /* printer only fields */
+      struct {
+        short dmOrientation;
+        short dmPaperSize;
+        short dmPaperLength;
+        short dmPaperWidth;
+        short dmScale;
+        short dmCopies;
+        short dmDefaultSource;
+        short dmPrintQuality;
+      } DUMMYSTRUCTNAME;
+      /* display only fields */
+      struct {
+        POINTL dmPosition;
+        DWORD  dmDisplayOrientation;
+        DWORD  dmDisplayFixedOutput;
+      } DUMMYSTRUCTNAME2;
+    } DUMMYUNIONNAME;
+    short dmColor;
+    short dmDuplex;
+    short dmYResolution;
+    short dmTTOption;
+    short dmCollate;
+    WCHAR  dmFormName[CCHFORMNAME];
+    WORD   dmLogPixels;
+    DWORD  dmBitsPerPel;
+    DWORD  dmPelsWidth;
+    DWORD  dmPelsHeight;
+    union {
+        DWORD  dmDisplayFlags;
+        DWORD  dmNup;
+    } DUMMYUNIONNAME2;
+    DWORD  dmDisplayFrequency;
+#if(WINVER >= 0x0400)
+    DWORD  dmICMMethod;
+    DWORD  dmICMIntent;
+    DWORD  dmMediaType;
+    DWORD  dmDitherType;
+    DWORD  dmReserved1;
+    DWORD  dmReserved2;
+#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+    DWORD  dmPanningWidth;
+    DWORD  dmPanningHeight;
+#endif
+#endif /* WINVER >= 0x0400 */
+} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
+#ifdef UNICODE
+typedef DEVMODEW DEVMODE;
+typedef PDEVMODEW PDEVMODE;
+typedef NPDEVMODEW NPDEVMODE;
+typedef LPDEVMODEW LPDEVMODE;
+#else
+typedef DEVMODEA DEVMODE;
+typedef PDEVMODEA PDEVMODE;
+typedef NPDEVMODEA NPDEVMODE;
+typedef LPDEVMODEA LPDEVMODE;
+#endif // UNICODE
+#else
+typedef struct _devicemodeA {
+    BYTE   dmDeviceName[CCHDEVICENAME];
+    WORD dmSpecVersion;
+    WORD dmDriverVersion;
+    WORD dmSize;
+    WORD dmDriverExtra;
+    DWORD dmFields;
+    union {
+      struct {
+        short dmOrientation;
+        short dmPaperSize;
+        short dmPaperLength;
+        short dmPaperWidth;
+      } DUMMYSTRUCTNAME;
+      POINTL dmPosition;
+    } DUMMYUNIONNAME;
+    short dmScale;
+    short dmCopies;
+    short dmDefaultSource;
+    short dmPrintQuality;
+    short dmColor;
+    short dmDuplex;
+    short dmYResolution;
+    short dmTTOption;
+    short dmCollate;
+    BYTE   dmFormName[CCHFORMNAME];
+    WORD   dmLogPixels;
+    DWORD  dmBitsPerPel;
+    DWORD  dmPelsWidth;
+    DWORD  dmPelsHeight;
+    union {
+        DWORD  dmDisplayFlags;
+        DWORD  dmNup;
+    } DUMMYUNIONNAME2;
+    DWORD  dmDisplayFrequency;
+#if(WINVER >= 0x0400)
+    DWORD  dmICMMethod;
+    DWORD  dmICMIntent;
+    DWORD  dmMediaType;
+    DWORD  dmDitherType;
+    DWORD  dmReserved1;
+    DWORD  dmReserved2;
+#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+    DWORD  dmPanningWidth;
+    DWORD  dmPanningHeight;
+#endif
+#endif /* WINVER >= 0x0400 */
+} DEVMODEA, *PDEVMODEA, *NPDEVMODEA, *LPDEVMODEA;
+typedef struct _devicemodeW {
+    WCHAR  dmDeviceName[CCHDEVICENAME];
+    WORD dmSpecVersion;
+    WORD dmDriverVersion;
+    WORD dmSize;
+    WORD dmDriverExtra;
+    DWORD dmFields;
+    union {
+      struct {
+        short dmOrientation;
+        short dmPaperSize;
+        short dmPaperLength;
+        short dmPaperWidth;
+      } DUMMYSTRUCTNAME;
+      POINTL dmPosition;
+    } DUMMYUNIONNAME;
+    short dmScale;
+    short dmCopies;
+    short dmDefaultSource;
+    short dmPrintQuality;
+    short dmColor;
+    short dmDuplex;
+    short dmYResolution;
+    short dmTTOption;
+    short dmCollate;
+    WCHAR  dmFormName[CCHFORMNAME];
+    WORD   dmLogPixels;
+    DWORD  dmBitsPerPel;
+    DWORD  dmPelsWidth;
+    DWORD  dmPelsHeight;
+    union {
+        DWORD  dmDisplayFlags;
+        DWORD  dmNup;
+    } DUMMYUNIONNAME2;
+    DWORD  dmDisplayFrequency;
+#if(WINVER >= 0x0400)
+    DWORD  dmICMMethod;
+    DWORD  dmICMIntent;
+    DWORD  dmMediaType;
+    DWORD  dmDitherType;
+    DWORD  dmReserved1;
+    DWORD  dmReserved2;
+#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+    DWORD  dmPanningWidth;
+    DWORD  dmPanningHeight;
+#endif
+#endif /* WINVER >= 0x0400 */
+} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
+#ifdef UNICODE
+typedef DEVMODEW DEVMODE;
+typedef PDEVMODEW PDEVMODE;
+typedef NPDEVMODEW NPDEVMODE;
+typedef LPDEVMODEW LPDEVMODE;
+#else
+typedef DEVMODEA DEVMODE;
+typedef PDEVMODEA PDEVMODE;
+typedef NPDEVMODEA NPDEVMODE;
+typedef LPDEVMODEA LPDEVMODE;
+#endif // UNICODE
+#endif // (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
+
+#endif /* WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP | WINAPI_PARTITION_SYSTEM) */
+
+typedef struct tagRECT
+{
+    LONG    left;
+    LONG    top;
+    LONG    right;
+    LONG    bottom;
+} RECT, *PRECT, NEAR *NPRECT, FAR *LPRECT;
+
+typedef struct tagMONITORINFO
+{
+    DWORD   cbSize;
+    RECT    rcMonitor;
+    RECT    rcWork;
+    DWORD   dwFlags;
+} MONITORINFO, *LPMONITORINFO;
+
+#ifdef __cplusplus
+typedef struct tagMONITORINFOEXA : public tagMONITORINFO
+{
+    CHAR        szDevice[CCHDEVICENAME];
+} MONITORINFOEXA, *LPMONITORINFOEXA;
+typedef struct tagMONITORINFOEXW : public tagMONITORINFO
+{
+    WCHAR       szDevice[CCHDEVICENAME];
+} MONITORINFOEXW, *LPMONITORINFOEXW;
+#ifdef UNICODE
+typedef MONITORINFOEXW MONITORINFOEX;
+typedef LPMONITORINFOEXW LPMONITORINFOEX;
+#else
+typedef MONITORINFOEXA MONITORINFOEX;
+typedef LPMONITORINFOEXA LPMONITORINFOEX;
+#endif // UNICODE
+#else // ndef __cplusplus
+typedef struct tagMONITORINFOEXA
+{
+    MONITORINFO DUMMYSTRUCTNAME;
+    CHAR        szDevice[CCHDEVICENAME];
+} MONITORINFOEXA, *LPMONITORINFOEXA;
+typedef struct tagMONITORINFOEXW
+{
+    MONITORINFO DUMMYSTRUCTNAME;
+    WCHAR       szDevice[CCHDEVICENAME];
+} MONITORINFOEXW, *LPMONITORINFOEXW;
+#ifdef UNICODE
+typedef MONITORINFOEXW MONITORINFOEX;
+typedef LPMONITORINFOEXW LPMONITORINFOEX;
+#else
+typedef MONITORINFOEXA MONITORINFOEX;
+typedef LPMONITORINFOEXA LPMONITORINFOEX;
+#endif // UNICODE
+#endif
+
+typedef struct _FILETIME {
+    DWORD dwLowDateTime;
+    DWORD dwHighDateTime;
+} FILETIME, *PFILETIME, *LPFILETIME;
+#define _FILETIME_
+
+typedef struct _WIN32_FILE_ATTRIBUTE_DATA {
+    DWORD dwFileAttributes;
+    FILETIME ftCreationTime;
+    FILETIME ftLastAccessTime;
+    FILETIME ftLastWriteTime;
+    DWORD nFileSizeHigh;
+    DWORD nFileSizeLow;
+} WIN32_FILE_ATTRIBUTE_DATA, *LPWIN32_FILE_ATTRIBUTE_DATA;
+
+/* current version of specification */
+#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+#define DM_SPECVERSION 0x0401
+#elif (WINVER >= 0x0400)
+#define DM_SPECVERSION 0x0400
+#else
+#define DM_SPECVERSION 0x0320
+#endif /* WINVER */
+
+/* field selection bits */
+#define DM_ORIENTATION          0x00000001L
+#define DM_PAPERSIZE            0x00000002L
+#define DM_PAPERLENGTH          0x00000004L
+#define DM_PAPERWIDTH           0x00000008L
+#define DM_SCALE                0x00000010L
+#if(WINVER >= 0x0500)
+#define DM_POSITION             0x00000020L
+#define DM_NUP                  0x00000040L
+#endif /* WINVER >= 0x0500 */
+#if(WINVER >= 0x0501)
+#define DM_DISPLAYORIENTATION   0x00000080L
+#endif /* WINVER >= 0x0501 */
+#define DM_COPIES               0x00000100L
+#define DM_DEFAULTSOURCE        0x00000200L
+#define DM_PRINTQUALITY         0x00000400L
+#define DM_COLOR                0x00000800L
+#define DM_DUPLEX               0x00001000L
+#define DM_YRESOLUTION          0x00002000L
+#define DM_TTOPTION             0x00004000L
+#define DM_COLLATE              0x00008000L
+#define DM_FORMNAME             0x00010000L
+#define DM_LOGPIXELS            0x00020000L
+#define DM_BITSPERPEL           0x00040000L
+#define DM_PELSWIDTH            0x00080000L
+#define DM_PELSHEIGHT           0x00100000L
+#define DM_DISPLAYFLAGS         0x00200000L
+#define DM_DISPLAYFREQUENCY     0x00400000L
+#if(WINVER >= 0x0400)
+#define DM_ICMMETHOD            0x00800000L
+#define DM_ICMINTENT            0x01000000L
+#define DM_MEDIATYPE            0x02000000L
+#define DM_DITHERTYPE           0x04000000L
+#define DM_PANNINGWIDTH         0x08000000L
+#define DM_PANNINGHEIGHT        0x10000000L
+#endif /* WINVER >= 0x0400 */
+#if(WINVER >= 0x0501)
+#define DM_DISPLAYFIXEDOUTPUT   0x20000000L
+#endif /* WINVER >= 0x0501 */
 
 typedef PROC (WINAPI *PFN_wglGetProcAddress)(LPCSTR);
 typedef HGLRC (WINAPI *PFN_wglCreateContext)(HDC);
 typedef BOOL (WINAPI *PFN_wglMakeCurrent)(HDC, HGLRC);
 typedef BOOL (WINAPI *PFN_wglDeleteContext)(HGLRC);
 typedef BOOL(WINAPI *PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)(HDC, const int *, const FLOAT *, UINT, int *, UINT *);
-typedef HGLRC(WINAPI *PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)(HDC, HGLRC, const int *);
-typedef BOOL(WINAPI *PFN_WGL_SWAP_INTERVAL_EXT)(int);
+typedef HGLRC (WINAPI *PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)(HDC, HGLRC, const int *);
+typedef BOOL (WINAPI *PFN_WGL_SWAP_INTERVAL_EXT)(int);
 
 /* WGL function pointers */
 static HMODULE g_opengl32;
@@ -2065,7 +2850,9 @@ static PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB p_wglChoosePixelFormatARB;
 static PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB p_wglCreateContextAttribsARB;
 static PFN_WGL_SWAP_INTERVAL_EXT p_wglSwapIntervalEXT;
 
-typedef HRESULT (WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD);
+typedef HRESULT (WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, uint32_t);
+
+#define FAILED(hr) (((HRESULT)(hr)) < 0)
 
 #ifndef GL_TRUE
 #define GL_TRUE 1
@@ -2096,25 +2883,36 @@ typedef HRESULT (WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD)
 #define WGL_CONTEXT_CORE_PROFILE_BIT_ARB  0x00000001
 #define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
 
+#define PFD_TYPE_RGBA        0
+#define PFD_DOUBLEBUFFER            0x00000001
+#define PFD_STEREO                  0x00000002
+#define PFD_DRAW_TO_WINDOW          0x00000004
+#define PFD_DRAW_TO_BITMAP          0x00000008
+#define PFD_SUPPORT_GDI             0x00000010
+#define PFD_SUPPORT_OPENGL          0x00000020
+#define PFD_GENERIC_FORMAT          0x00000040
+#define PFD_NEED_PALETTE            0x00000080
+#define PFD_NEED_SYSTEM_PALETTE     0x00000100
+#define PFD_SWAP_EXCHANGE           0x00000200
+#define PFD_SWAP_COPY               0x00000400
+#define PFD_SWAP_LAYER_BUFFERS      0x00000800
+#define PFD_GENERIC_ACCELERATED     0x00001000
+#define PFD_SUPPORT_DIRECTDRAW      0x00002000
+#define PFD_DIRECT3D_ACCELERATED    0x00004000
+#define PFD_SUPPORT_COMPOSITION     0x00008000
+
 /*
 * 
 * WINAPI, HANDLES, TYPES BEGIN
 *
 */
 
-#ifdef STRICT
-typedef void *HANDLE;
-#if 0 && (_MSC_VER > 1000)
-#define DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
-#else
-#define DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
-#endif
-#else
-typedef PVOID HANDLE;
-#define DECLARE_HANDLE(name) typedef HANDLE name
-#endif
-typedef HANDLE *PHANDLE;
-typedef HANDLE HDEVNOTIFY;
+typedef struct _GUID {
+    unsigned long  Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char  Data4[ 8 ];
+} GUID;
 
 static const GUID GUID_DEVINTERFACE_HID = { 0x4D1E55B2, 0xF16F, 0x11CF, { 0x88, 0xCB, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30 } };
 
@@ -2124,10 +2922,753 @@ static HDEVNOTIFY g_hDevNotify_HID = NULL;
 /* Message-only window for raw input (receives input regardless of focus) */
 static HWND g_input_window = NULL;
 
+typedef struct tagRAWINPUTHEADER {
+    DWORD dwType;
+    DWORD dwSize;
+    HANDLE hDevice;
+    WPARAM wParam;
+} RAWINPUTHEADER, *PRAWINPUTHEADER, *LPRAWINPUTHEADER;
+
+typedef struct tagRAWMOUSE {
+  USHORT usFlags;
+  union {
+    ULONG ulButtons;
+    struct {
+      USHORT usButtonFlags;
+      USHORT usButtonData;
+    } DUMMYSTRUCTNAME;
+  } DUMMYUNIONNAME;
+  ULONG  ulRawButtons;
+  LONG   lLastX;
+  LONG   lLastY;
+  ULONG  ulExtraInformation;
+} RAWMOUSE, *PRAWMOUSE, *LPRAWMOUSE;
+
+typedef struct tagRAWKEYBOARD {
+  USHORT MakeCode;
+  USHORT Flags;
+  USHORT Reserved;
+  USHORT VKey;
+  UINT   Message;
+  ULONG  ExtraInformation;
+} RAWKEYBOARD, *PRAWKEYBOARD, *LPRAWKEYBOARD;
+
+typedef struct tagRAWHID {
+  DWORD dwSizeHid;
+  DWORD dwCount;
+  BYTE  bRawData[1];
+} RAWHID, *PRAWHID, *LPRAWHID;
+
+typedef struct tagRAWINPUT {
+    RAWINPUTHEADER header;
+    union {
+        RAWMOUSE    mouse;
+        RAWKEYBOARD keyboard;
+        RAWHID      hid;
+    } data;
+} RAWINPUT, *PRAWINPUT, *LPRAWINPUT;
+
+typedef struct tagRAWINPUTDEVICE {
+    USHORT usUsagePage; // Toplevel collection UsagePage
+    USHORT usUsage;     // Toplevel collection Usage
+    DWORD dwFlags;
+    HWND hwndTarget;    // Target hwnd. NULL = follows keyboard focus
+} RAWINPUTDEVICE, *PRAWINPUTDEVICE, *LPRAWINPUTDEVICE;
+
+typedef struct tagMOUSEINPUT {
+    LONG    dx;
+    LONG    dy;
+    DWORD   mouseData;
+    DWORD   dwFlags;
+    DWORD   time;
+    ULONG_PTR dwExtraInfo;
+} MOUSEINPUT, *PMOUSEINPUT, FAR* LPMOUSEINPUT;
+
+typedef struct tagKEYBDINPUT {
+    WORD    wVk;
+    WORD    wScan;
+    DWORD   dwFlags;
+    DWORD   time;
+
+    /*
+     * When dwFlags has KEYEVENTF_SYSTEMINJECTION specified this field may carry
+     * KEY_UNICODE_SEQUENCE_ITEM or KEY_UNICODE_SEQUENCE_END which are used by InputService
+     * to distinguish injected unicode sequences. Those flags are stored in low word.
+     * When dwFlags has KEYEVENTF_ATTRIBUTED_INPUT specified this field carries in its high word
+     * ID of attributes associated with injected input. This ID is assigned by InputService and
+     * recognized only by it.
+     * For all other usage scenarios please refer to official documentation.
+     */
+    ULONG_PTR dwExtraInfo;
+} KEYBDINPUT, *PKEYBDINPUT, FAR* LPKEYBDINPUT;
+
+typedef struct tagHARDWAREINPUT {
+    DWORD   uMsg;
+    WORD    wParamL;
+    WORD    wParamH;
+} HARDWAREINPUT, *PHARDWAREINPUT, FAR* LPHARDWAREINPUT;
+
+typedef struct tagINPUT {
+    DWORD   type;
+
+    union
+    {
+        MOUSEINPUT      mi;
+        KEYBDINPUT      ki;
+        HARDWAREINPUT   hi;
+    } DUMMYUNIONNAME;
+} INPUT, *PINPUT, FAR* LPINPUT;
+#define INPUT_MOUSE     0
+
+#define MOUSEEVENTF_MOVE        0x0001 /* mouse move */
+
+typedef struct tagTRACKMOUSEEVENT {
+    DWORD cbSize;
+    DWORD dwFlags;
+    HWND  hwndTrack;
+    DWORD dwHoverTime;
+} TRACKMOUSEEVENT, *LPTRACKMOUSEEVENT;
+
+#if(WINVER >= 0x0400)
+typedef struct tagWNDCLASSEXA {
+    UINT        cbSize;
+    /* Win 3.x */
+    UINT        style;
+    WNDPROC     lpfnWndProc;
+    int         cbClsExtra;
+    int         cbWndExtra;
+    HINSTANCE   hInstance;
+    HICON       hIcon;
+    HCURSOR     hCursor;
+    HBRUSH      hbrBackground;
+    LPCSTR      lpszMenuName;
+    LPCSTR      lpszClassName;
+    /* Win 4.0 */
+    HICON       hIconSm;
+} WNDCLASSEXA, *PWNDCLASSEXA, NEAR *NPWNDCLASSEXA, FAR *LPWNDCLASSEXA;
+typedef struct tagWNDCLASSEXW {
+    UINT        cbSize;
+    /* Win 3.x */
+    UINT        style;
+    WNDPROC     lpfnWndProc;
+    int         cbClsExtra;
+    int         cbWndExtra;
+    HINSTANCE   hInstance;
+    HICON       hIcon;
+    HCURSOR     hCursor;
+    HBRUSH      hbrBackground;
+    LPCWSTR     lpszMenuName;
+    LPCWSTR     lpszClassName;
+    /* Win 4.0 */
+    HICON       hIconSm;
+} WNDCLASSEXW, *PWNDCLASSEXW, NEAR *NPWNDCLASSEXW, FAR *LPWNDCLASSEXW;
+#ifdef UNICODE
+typedef WNDCLASSEXW WNDCLASSEX;
+typedef PWNDCLASSEXW PWNDCLASSEX;
+typedef NPWNDCLASSEXW NPWNDCLASSEX;
+typedef LPWNDCLASSEXW LPWNDCLASSEX;
+#else
+typedef WNDCLASSEXA WNDCLASSEX;
+typedef PWNDCLASSEXA PWNDCLASSEX;
+typedef NPWNDCLASSEXA NPWNDCLASSEX;
+typedef LPWNDCLASSEXA LPWNDCLASSEX;
+#endif // UNICODE
+#endif /* WINVER >= 0x0400 */
+
+typedef CONST RAWINPUTDEVICE* PCRAWINPUTDEVICE;
+
+typedef struct tagRAWINPUTDEVICELIST {
+    HANDLE hDevice;
+    DWORD dwType;
+} RAWINPUTDEVICELIST, *PRAWINPUTDEVICELIST;
+
+#define RI_KEY_MAKE             0
+#define RI_KEY_BREAK            1
+#define RI_KEY_E0               2
+#define RI_KEY_E1               4
+#define RI_KEY_TERMSRV_SET_LED  8
+#define RI_KEY_TERMSRV_SHADOW   0x10
+
+#pragma pack(push, 1)
+typedef struct {
+    uint16_t idReserved; // Must be 0
+    uint16_t idType;     // Must be 1 for icons
+    uint16_t idCount;    // Number of images
+} ICONDIR;
+
+typedef struct {
+    uint8_t bWidth;         // Width in pixels
+    uint8_t bHeight;        // Height in pixels
+    uint8_t bColorCount;    // 0 if >= 8bpp
+    uint8_t bReserved;      // Must be 0
+    uint16_t wPlanes;       // Should be 1
+    uint16_t wBitCount;     // Usually 32
+    uint32_t dwBytesInRes;  // Size of PNG data
+    uint32_t dwImageOffset; // Offset to PNG data (after header)
+} ICONDIRENTRY;
+#pragma pack(pop)
+
+typedef struct _ICONINFO {
+    BOOL    fIcon;
+    DWORD   xHotspot;
+    DWORD   yHotspot;
+    HBITMAP hbmMask;
+    HBITMAP hbmColor;
+} ICONINFO;
+typedef ICONINFO *PICONINFO;
+
+#if defined(MIDL_PASS)
+typedef struct _LARGE_INTEGER {
+    LONGLONG QuadPart;
+} LARGE_INTEGER;
+#else // MIDL_PASS
+typedef union _LARGE_INTEGER {
+    struct {
+        DWORD LowPart;
+        LONG HighPart;
+    } DUMMYSTRUCTNAME;
+    struct {
+        DWORD LowPart;
+        LONG HighPart;
+    } u;
+    LONGLONG QuadPart;
+} LARGE_INTEGER;
+#endif //MIDL_PASS
+
+typedef LARGE_INTEGER *PLARGE_INTEGER;
+
+typedef enum _GET_FILEEX_INFO_LEVELS {
+    GetFileExInfoStandard,
+    GetFileExMaxInfoLevel
+} GET_FILEEX_INFO_LEVELS;
+
+typedef struct tagBITMAPINFOHEADER{
+        DWORD      biSize;
+        LONG       biWidth;
+        LONG       biHeight;
+        WORD       biPlanes;
+        WORD       biBitCount;
+        DWORD      biCompression;
+        DWORD      biSizeImage;
+        LONG       biXPelsPerMeter;
+        LONG       biYPelsPerMeter;
+        DWORD      biClrUsed;
+        DWORD      biClrImportant;
+} BITMAPINFOHEADER, FAR *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
+
+typedef struct tagRGBQUAD {
+        BYTE    rgbBlue;
+        BYTE    rgbGreen;
+        BYTE    rgbRed;
+        BYTE    rgbReserved;
+} RGBQUAD;
+
+
+typedef struct tagBITMAPINFO {
+    BITMAPINFOHEADER    bmiHeader;
+    RGBQUAD             bmiColors[1];
+} BITMAPINFO, FAR *LPBITMAPINFO, *PBITMAPINFO;
+
+typedef long            FXPT16DOT16, FAR *LPFXPT16DOT16;
+typedef long            FXPT2DOT30, FAR *LPFXPT2DOT30;
+
+typedef struct tagCIEXYZ
+{
+        FXPT2DOT30 ciexyzX;
+        FXPT2DOT30 ciexyzY;
+        FXPT2DOT30 ciexyzZ;
+} CIEXYZ;
+
+typedef struct tagICEXYZTRIPLE {
+  CIEXYZ ciexyzRed;
+  CIEXYZ ciexyzGreen;
+  CIEXYZ ciexyzBlue;
+} CIEXYZTRIPLE;
+
+typedef struct {
+        DWORD        bV5Size;
+        LONG         bV5Width;
+        LONG         bV5Height;
+        WORD         bV5Planes;
+        WORD         bV5BitCount;
+        DWORD        bV5Compression;
+        DWORD        bV5SizeImage;
+        LONG         bV5XPelsPerMeter;
+        LONG         bV5YPelsPerMeter;
+        DWORD        bV5ClrUsed;
+        DWORD        bV5ClrImportant;
+        DWORD        bV5RedMask;
+        DWORD        bV5GreenMask;
+        DWORD        bV5BlueMask;
+        DWORD        bV5AlphaMask;
+        DWORD        bV5CSType;
+        CIEXYZTRIPLE bV5Endpoints;
+        DWORD        bV5GammaRed;
+        DWORD        bV5GammaGreen;
+        DWORD        bV5GammaBlue;
+        DWORD        bV5Intent;
+        DWORD        bV5ProfileData;
+        DWORD        bV5ProfileSize;
+        DWORD        bV5Reserved;
+} BITMAPV5HEADER, FAR *LPBITMAPV5HEADER, *PBITMAPV5HEADER;
+
+typedef struct tagMSG {
+    HWND        hwnd;
+    UINT        message;
+    WPARAM      wParam;
+    LPARAM      lParam;
+    DWORD       time;
+    POINT       pt;
+#ifdef _MAC
+    DWORD       lPrivate;
+#endif
+} MSG, *PMSG, NEAR *NPMSG, FAR *LPMSG;
+
+typedef struct _SECURITY_ATTRIBUTES {
+    DWORD nLength;
+    LPVOID lpSecurityDescriptor;
+    BOOL bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+
+typedef struct _OVERLAPPED {
+    ULONG_PTR Internal;
+    ULONG_PTR InternalHigh;
+    union {
+        struct {
+            DWORD Offset;
+            DWORD OffsetHigh;
+        } DUMMYSTRUCTNAME;
+        PVOID Pointer;
+    } DUMMYUNIONNAME;
+
+    HANDLE  hEvent;
+} OVERLAPPED, *LPOVERLAPPED;
+
+typedef struct _OVERLAPPED_ENTRY {
+    ULONG_PTR lpCompletionKey;
+    LPOVERLAPPED lpOverlapped;
+    ULONG_PTR Internal;
+    DWORD dwNumberOfBytesTransferred;
+} OVERLAPPED_ENTRY, *LPOVERLAPPED_ENTRY;
+
+typedef struct tagPIXELFORMATDESCRIPTOR
+{
+    WORD  nSize;
+    WORD  nVersion;
+    DWORD dwFlags;
+    BYTE  iPixelType;
+    BYTE  cColorBits;
+    BYTE  cRedBits;
+    BYTE  cRedShift;
+    BYTE  cGreenBits;
+    BYTE  cGreenShift;
+    BYTE  cBlueBits;
+    BYTE  cBlueShift;
+    BYTE  cAlphaBits;
+    BYTE  cAlphaShift;
+    BYTE  cAccumBits;
+    BYTE  cAccumRedBits;
+    BYTE  cAccumGreenBits;
+    BYTE  cAccumBlueBits;
+    BYTE  cAccumAlphaBits;
+    BYTE  cDepthBits;
+    BYTE  cStencilBits;
+    BYTE  cAuxBuffers;
+    BYTE  iLayerType;
+    BYTE  bReserved;
+    DWORD dwLayerMask;
+    DWORD dwVisibleMask;
+    DWORD dwDamageMask;
+} PIXELFORMATDESCRIPTOR, *PPIXELFORMATDESCRIPTOR, FAR *LPPIXELFORMATDESCRIPTOR;
+
+typedef UINT_PTR (CALLBACK *LPOFNHOOKPROC) (HWND, UINT, WPARAM, LPARAM);
+
+typedef struct tagOFNA {
+   DWORD        lStructSize;
+   HWND         hwndOwner;
+   HINSTANCE    hInstance;
+   LPCSTR       lpstrFilter;
+   LPSTR        lpstrCustomFilter;
+   DWORD        nMaxCustFilter;
+   DWORD        nFilterIndex;
+   LPSTR        lpstrFile;
+   DWORD        nMaxFile;
+   LPSTR        lpstrFileTitle;
+   DWORD        nMaxFileTitle;
+   LPCSTR       lpstrInitialDir;
+   LPCSTR       lpstrTitle;
+   DWORD        Flags;
+   WORD         nFileOffset;
+   WORD         nFileExtension;
+   LPCSTR       lpstrDefExt;
+   LPARAM       lCustData;
+   LPOFNHOOKPROC lpfnHook;
+   LPCSTR       lpTemplateName;
+#ifdef _MAC
+   LPEDITMENU   lpEditInfo;
+   LPCSTR       lpstrPrompt;
+#endif
+#if (_WIN32_WINNT >= 0x0500)
+   void *        pvReserved;
+   DWORD        dwReserved;
+   DWORD        FlagsEx;
+#endif // (_WIN32_WINNT >= 0x0500)
+} OPENFILENAMEA, *LPOPENFILENAMEA;
+typedef struct tagOFNW {
+   DWORD        lStructSize;
+   HWND         hwndOwner;
+   HINSTANCE    hInstance;
+   LPCWSTR      lpstrFilter;
+   LPWSTR       lpstrCustomFilter;
+   DWORD        nMaxCustFilter;
+   DWORD        nFilterIndex;
+   LPWSTR       lpstrFile;
+   DWORD        nMaxFile;
+   LPWSTR       lpstrFileTitle;
+   DWORD        nMaxFileTitle;
+   LPCWSTR      lpstrInitialDir;
+   LPCWSTR      lpstrTitle;
+   DWORD        Flags;
+   WORD         nFileOffset;
+   WORD         nFileExtension;
+   LPCWSTR      lpstrDefExt;
+   LPARAM       lCustData;
+   LPOFNHOOKPROC lpfnHook;
+   LPCWSTR      lpTemplateName;
+#ifdef _MAC
+   LPEDITMENU   lpEditInfo;
+   LPCSTR       lpstrPrompt;
+#endif
+#if (_WIN32_WINNT >= 0x0500)
+   void *        pvReserved;
+   DWORD        dwReserved;
+   DWORD        FlagsEx;
+#endif // (_WIN32_WINNT >= 0x0500)
+} OPENFILENAMEW, *LPOPENFILENAMEW;
+#ifdef UNICODE
+typedef OPENFILENAMEW OPENFILENAME;
+typedef LPOPENFILENAMEW LPOPENFILENAME;
+#else
+typedef OPENFILENAMEA OPENFILENAME;
+typedef LPOPENFILENAMEA LPOPENFILENAME;
+#endif // UNICODE
+
+#define IMAGE_BITMAP        0
+#define IMAGE_ICON          1
+#define IMAGE_CURSOR        2
+
+#define GCLP_MENUNAME       (-8)
+#define GCLP_HBRBACKGROUND  (-10)
+#define GCLP_HCURSOR        (-12)
+#define GCLP_HICON          (-14)
+#define GCLP_HMODULE        (-16)
+#define GCLP_WNDPROC        (-24)
+#define GCLP_HICONSM        (-34)
+
+/* constants for the biCompression field */
+#define BI_RGB        0L
+#define BI_RLE8       1L
+#define BI_RLE4       2L
+#define BI_BITFIELDS  3L
+#define BI_JPEG       4L
+#define BI_PNG        5L
+#if (_WIN32_WINNT >= _WIN32_WINNT_NT4)
+#endif
+
+#define DIB_RGB_COLORS      0 /* color table in RGBs */
+#define DIB_PAL_COLORS      1 /* color table in palette indices */
+
+
+#define DACL_SECURITY_INFORMATION                   (0x00000004L)
+#define READ_CONTROL                     (0x00020000L)
+#define SYNCHRONIZE                      (0x00100000L)
+
+#define STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+
+#define STANDARD_RIGHTS_READ             (READ_CONTROL)
+#define STANDARD_RIGHTS_WRITE            (READ_CONTROL)
+#define STANDARD_RIGHTS_EXECUTE          (READ_CONTROL)
+#define FILE_READ_DATA            ( 0x0001 )    // file & pipe
+#define FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
+#define FILE_READ_EA              ( 0x0008 )    // file & directory
+#define FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
+#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
+#define FILE_WRITE_EA             ( 0x0010 )    // file & directory
+#define FILE_APPEND_DATA          ( 0x0004 )    // file
+#define FILE_EXECUTE              ( 0x0020 )    // file
+
+#define FILE_GENERIC_READ (STANDARD_RIGHTS_READ | FILE_READ_DATA | FILE_READ_ATTRIBUTES | FILE_READ_EA  | SYNCHRONIZE)
+
+
+#define FILE_GENERIC_WRITE (STANDARD_RIGHTS_WRITE | FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA | SYNCHRONIZE)
+
+
+#define FILE_GENERIC_EXECUTE (STANDARD_RIGHTS_EXECUTE | FILE_READ_ATTRIBUTES  | FILE_EXECUTE | SYNCHRONIZE)
+#define FILE_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x1FF)
+
+#define KEY_QUERY_VALUE         (0x0001)
+#define KEY_ENUMERATE_SUB_KEYS  (0x0008)
+#define KEY_NOTIFY              (0x0010)
+
+#define KEY_READ        ((STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS | KEY_NOTIFY) & (~SYNCHRONIZE))
+#define FILE_BEGIN           0
+
+typedef enum _TOKEN_INFORMATION_CLASS {
+    TokenUser = 1,
+    TokenGroups,
+    TokenPrivileges,
+    TokenOwner,
+    TokenPrimaryGroup,
+    TokenDefaultDacl,
+    TokenSource,
+    TokenType,
+    TokenImpersonationLevel,
+    TokenStatistics,
+    TokenRestrictedSids,
+    TokenSessionId,
+    TokenGroupsAndPrivileges,
+    TokenSessionReference,
+    TokenSandBoxInert,
+    TokenAuditPolicy,
+    TokenOrigin,
+    TokenElevationType,
+    TokenLinkedToken,
+    TokenElevation,
+    TokenHasRestrictions,
+    TokenAccessInformation,
+    TokenVirtualizationAllowed,
+    TokenVirtualizationEnabled,
+    TokenIntegrityLevel,
+    TokenUIAccess,
+    TokenMandatoryPolicy,
+    TokenLogonSid,
+    TokenIsAppContainer,
+    TokenCapabilities,
+    TokenAppContainerSid,
+    TokenAppContainerNumber,
+    TokenUserClaimAttributes,
+    TokenDeviceClaimAttributes,
+    TokenRestrictedUserClaimAttributes,
+    TokenRestrictedDeviceClaimAttributes,
+    TokenDeviceGroups,
+    TokenRestrictedDeviceGroups,
+    TokenSecurityAttributes,
+    TokenIsRestricted,
+    TokenProcessTrustLevel,
+    TokenPrivateNameSpace,
+    TokenSingletonAttributes,
+    TokenBnoIsolation,
+    TokenChildProcessFlags,
+    TokenIsLessPrivilegedAppContainer,
+    TokenIsSandboxed,
+    TokenIsAppSilo,
+    TokenLoggingInformation,
+    MaxTokenInfoClass  // MaxTokenInfoClass should always be the last enum
+} TOKEN_INFORMATION_CLASS, *PTOKEN_INFORMATION_CLASS;
+
+#define TOKEN_QUERY             (0x0008)
+
+
+
+#define DISP_CHANGE_SUCCESSFUL       0
+#define CDS_FULLSCREEN               0x00000004
+#define GWL_STYLE           (-16)
+#define MB_OK                       0x00000000L
+#define MB_OKCANCEL                 0x00000001L
+
+#define MB_ICONHAND                 0x00000010L
+#define MB_ICONQUESTION             0x00000020L
+#define MB_ICONEXCLAMATION          0x00000030L
+#define MB_ICONASTERISK             0x00000040L
+
+#if(WINVER >= 0x0400)
+#define MB_USERICON                 0x00000080L
+#define MB_ICONWARNING              MB_ICONEXCLAMATION
+#define MB_ICONERROR                MB_ICONHAND
+#endif /* WINVER >= 0x0400 */
+
+#define LR_LOADFROMFILE     0x00000010
+
+
+#define HWND_TOP        ((HWND)0)
+#define HWND_BOTTOM     ((HWND)1)
+#define HWND_TOPMOST    ((HWND)-1)
+#define HWND_NOTOPMOST  ((HWND)-2)
+
+#define SWP_NONE            0x0000
+#define SWP_NOSIZE          0x0001
+#define SWP_NOMOVE          0x0002
+#define SWP_NOZORDER        0x0004
+#define SWP_NOREDRAW        0x0008
+#define SWP_NOACTIVATE      0x0010
+#define SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
+#define SWP_SHOWWINDOW      0x0040
+#define SWP_HIDEWINDOW      0x0080
+#define SWP_NOCOPYBITS      0x0100
+#define SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
+#define SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
+
+#define SWP_DRAWFRAME       SWP_FRAMECHANGED
+#define SWP_NOREPOSITION    SWP_NOOWNERZORDER
+
+#if(WINVER >= 0x0400)
+#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
+#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
+#endif /* WINVER >= 0x0400 */
+#define MONITOR_DEFAULTTOPRIMARY    0x00000001
+#define MONITOR_DEFAULTTONEAREST    0x00000002
+#define LR_DEFAULTCOLOR     0x00000000
+#define LR_MONOCHROME       0x00000001
+#define LR_COLOR            0x00000002
+#define LR_COPYRETURNORG    0x00000004
+#define LR_COPYDELETEORG    0x00000008
+#define LR_LOADFROMFILE     0x00000010
+#define LR_LOADTRANSPARENT  0x00000020
+#define LR_DEFAULTSIZE      0x00000040
+#define LR_VGACOLOR         0x00000080
+#define LR_LOADMAP3DCOLORS  0x00001000
+#define LR_CREATEDIBSECTION 0x00002000
+#define LR_COPYFROMRESOURCE 0x00004000
+#define LR_SHARED           0x00008000
+
+
+#define ENUM_CURRENT_SETTINGS       ((DWORD)-1)
+#define ENUM_REGISTRY_SETTINGS      ((DWORD)-2)
+
+#define OFN_OVERWRITEPROMPT          0x00000002
+#define OFN_FILEMUSTEXIST            0x00001000
+#define OFN_PATHMUSTEXIST            0x00000800
+#define OFN_NOCHANGEDIR              0x00000008
+
+WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPWSTR lpszDeviceName,  DEVMODEW* lpDevMode, HWND hwnd,  DWORD dwflags,  LPVOID lParam);
+WINUSERAPI LONG WINAPI ChangeDisplaySettingsW(DEVMODEW* lpDevMode,  DWORD dwFlags);
+WINGDIAPI HBITMAP WINAPI CreateBitmap(int nWidth,  int nHeight,  UINT nPlanes,  UINT nBitCount,  CONST VOID *lpBits);
+WINUSERAPI HICON WINAPI CreateIconFromResourceEx(PBYTE presbits,  DWORD dwResSize,  BOOL fIcon,  DWORD dwVer,  int cxDesired,  int cyDesired,  UINT Flags);
+WINUSERAPI HWND WINAPI GetFocus(VOID);
+WINUSERAPI HWND WINAPI SetFocus(HWND hWnd);
+WINBASEAPI BOOL WINAPI FreeLibrary(  HMODULE hLibModule );
+WINUSERAPI LONG WINAPI SetWindowLongA(HWND hWnd,  int nIndex,  LONG dwNewLong);
+WINUSERAPI BOOL WINAPI SetWindowPos(HWND hWnd,  HWND hWndInsertAfter,  int X,  int Y,  int cx,  int cy,  UINT uFlags);
+WINUSERAPI int WINAPI ToUnicode(UINT wVirtKey,  UINT wScanCode, CONST BYTE *lpKeyState, LPWSTR pwszBuff,  int cchBuff,  UINT wFlags);
+WINUSERAPI HCURSOR WINAPI SetCursor(HCURSOR hCursor);
+WINUSERAPI BOOL WINAPI SetCursorPos(int X,  int Y);
+WINUSERAPI ULONG_PTR WINAPI SetClassLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+WINUSERAPI int WINAPI ReleaseDC(HWND hWnd,  HDC hDC);
+WINUSERAPI BOOL WINAPI ScreenToClient(HWND hWnd, LPPOINT lpPoint);
+WINUSERAPI BOOL WINAPI ClientToScreen(HWND hWnd, LPPOINT lpPoint);
+WINUSERAPI LRESULT WINAPI SendMessageA(HWND hWnd,  UINT Msg, WPARAM wParam, LPARAM lParam);
+WINUSERAPI HWND WINAPI WindowFromPoint(POINT Point);
+WINUSERAPI BOOL WINAPI GetWindowRect(HWND hWnd, LPRECT lpRect);
+WINUSERAPI LONG WINAPI GetWindowLongW(HWND hWnd,  int nIndex);
+WINUSERAPI UINT WINAPI GetRawInputDeviceList(PRAWINPUTDEVICELIST pRawInputDeviceList, PUINT puiNumDevices,  UINT cbSize);
+WINUSERAPI UINT WINAPI GetRawInputBuffer(PRAWINPUT pData, PUINT pcbSize, UINT cbSizeHeader);
+WINUSERAPI int WINAPI MessageBoxW(HWND hWnd,  LPWSTR lpText,  LPWSTR lpCaption,  UINT uType); /* TODO: we should prbably remove messagebox altogether. */
+WINUSERAPI UINT WINAPI MapVirtualKeyA(UINT uCode,  UINT uMapType);
+WINUSERAPI HANDLE WINAPI LoadImageA(HINSTANCE hInst, LPCSTR name, UINT type, int cx, int cy, UINT fuLoad);
+WINGDIAPI BOOL WINAPI DeleteObject(HGDIOBJ ho); 
+WINUSERAPI LRESULT WINAPI DefWindowProcW(HWND hWnd,  UINT Msg,  WPARAM wParam,  LPARAM lParam);
+WINUSERAPI HICON WINAPI CreateIconIndirect(PICONINFO piconinfo);
+WINGDIAPI HBITMAP WINAPI CreateDIBSection(HDC hdc, const BITMAPINFO *pbmi, UINT usage, VOID **ppvBits, HANDLE hSection, DWORD offset);
+WINUSERAPI BOOL WINAPI EnumDisplaySettingsW(LPWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
+WINUSERAPI BOOL SetForegroundWindow(HWND hWnd);
+WINUSERAPI BOOL WINAPI UnregisterDeviceNotification(HDEVNOTIFY Handle );
+WINUSERAPI HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance,LPWSTR lpCursorName);
+WINUSERAPI HMONITOR WINAPI MonitorFromWindow(HWND hwnd, DWORD dwFlags);
+WINUSERAPI HMONITOR WINAPI MonitorFromPoint(POINT pt, DWORD dwFlags);
+WINBASEAPI HMODULE WINAPI LoadLibraryW(LPCWSTR lpLibFileName );
+WINUSERAPI BOOL WINAPI TranslateMessage(CONST MSG *lpMsg);
+WINUSERAPI LRESULT WINAPI DispatchMessageA(CONST MSG *lpMsg);
+int WINAPI MultiByteToWideChar(UINT CodePage,DWORD dwFlags,LPCCH lpMultiByteStr,int cbMultiByte, LPWSTR lpWideCharStr,  int cchWideChar );
+int WINAPI WideCharToMultiByte(UINT CodePage,DWORD dwFlags,LPCWCH lpWideCharStr, int cchWideChar,LPSTR lpMultiByteStr,int cbMultiByte,LPCCH lpDefaultChar,LPBOOL lpUsedDefault);
+WINBASEAPI HLOCAL WINAPI LocalFree(HLOCAL hMem );
+WINBASEAPI HGLOBAL WINAPI GlobalFree(HGLOBAL hMem);
+
+WINADVAPI LSTATUS APIENTRY RegOpenKeyExA(HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult );
+WINADVAPI LSTATUS APIENTRY RegQueryValueExA(HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType,  LPBYTE lpData,  LPDWORD lpcbData );
+WINADVAPI LSTATUS APIENTRY RegCloseKey( HKEY hKey );
+WINUSERAPI BOOL WINAPI PeekMessageA(LPMSG lpMsg,HWND hWnd,UINT wMsgFilterMin,UINT wMsgFilterMax,UINT wRemoveMsg);
+WINUSERAPI ATOM WINAPI RegisterClassExW(CONST WNDCLASSEXW *); 
+WINUSERAPI BOOL WINAPI UnregisterClassW(LPWSTR lpClassName,  HINSTANCE hInstance);
+WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle,  LPCWSTR lpClassName,  LPCWSTR lpWindowName,  DWORD dwStyle,  int X,  int Y,  int nWidth,  int nHeight,  HWND hWndParent,  HMENU hMenu,  HINSTANCE hInstance,  LPVOID lpParam);
+WINUSERAPI BOOL WINAPI RegisterRawInputDevices(PCRAWINPUTDEVICE pRawInputDevices,  UINT uiNumDevices,  UINT cbSize);
+WINUSERAPI BOOL WINAPI ShowWindow(HWND hWnd, int nCmdShow);
+WINUSERAPI BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
+WINUSERAPI BOOL WINAPI CloseClipboard(VOID);
+WINBASEAPI HANDLE WINAPI GetCurrentProcess(VOID );
+WINUSERAPI BOOL WINAPI TrackMouseEvent(LPTRACKMOUSEEVENT lpEventTrack);
+WINUSERAPI BOOL WINAPI GetClientRect(HWND hWnd,LPRECT lpRect);
+WINUSERAPI BOOL WINAPI ClipCursor(CONST RECT *lpRect);
+WINBASEAPI FARPROC WINAPI GetProcAddress(HMODULE hModule, LPCSTR lpProcName );
+WINGDIAPI BOOL  WINAPI SwapBuffers(HDC);
+WINUSERAPI int WINAPI ShowCursor(BOOL bShow);
+WINUSERAPI BOOL WINAPI SetWindowTextW(HWND hWnd, LPCWSTR lpString);
+WINUSERAPI UINT WINAPI GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
+HMODULE WINAPI GetModuleHandleW(LPWSTR lpModuleName);
+WINUSERAPI BOOL WINAPI DestroyWindow(HWND hWnd);
+WINUSERAPI BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
+WINUSERAPI HDC WINAPI GetDC(HWND hWnd);
+WINUSERAPI HWND WINAPI GetForegroundWindow(VOID);
+WINUSERAPI HWND WINAPI GetParent(HWND hWnd);
+WINUSERAPI BOOL WINAPI GetMonitorInfoA(HMONITOR hMonitor,  LPMONITORINFO lpmi);
+WINUSERAPI BOOL WINAPI GetMonitorInfoW(HMONITOR hMonitor,  LPMONITORINFO lpmi);
+#ifdef UNICODE
+#define GetMonitorInfo  GetMonitorInfoW
+#else
+#define GetMonitorInfo  GetMonitorInfoA
+#endif // !UNICODE
+WINUSERAPI UINT WINAPI SendInput(UINT cInputs,LPINPUT pInputs, int cbSize);
+WINUSERAPI HANDLE WINAPI SetClipboardData(UINT uFormat,  HANDLE hMem);
+WINUSERAPI HANDLE WINAPI GetClipboardData( UINT uFormat);
+WINUSERAPI BOOL WINAPI EmptyClipboard(VOID);
+SHSTDAPI_(HINSTANCE) ShellExecuteW(HWND hwnd, LPCWSTR lpOperation, LPCWSTR lpFile, LPCWSTR lpParameters,LPCWSTR lpDirectory,INT nShowCmd);
+SHSTDAPI_(UINT) DragQueryFileW(HDROP hDrop, UINT iFile, LPWSTR lpszFile, UINT cch);
+SHSTDAPI_(void) DragFinish(HDROP hDrop);
+WINBASEAPI BOOL WINAPI GetFileAttributesExW(LPCWSTR lpFileName,GET_FILEEX_INFO_LEVELS fInfoLevelId,  LPVOID lpFileInformation);
+WINBASEAPI BOOL WINAPI GlobalUnlock( _In_ HGLOBAL hMem );
+WINBASEAPI LPVOID WINAPI GlobalLock (HGLOBAL hMem );
+#if _MSC_VER < 1900
+#define DECLSPEC_ALLOCATOR
+#else
+#define DECLSPEC_ALLOCATOR __declspec(allocator)
+#endif
+
+WINBASEAPI DECLSPEC_ALLOCATOR HGLOBAL WINAPI GlobalAlloc(UINT uFlags, SIZE_T dwBytes );
+WINBASEAPI BOOL WINAPI GetFileSizeEx(HANDLE hFile,  PLARGE_INTEGER lpFileSize);
+WINBASEAPI DWORD WINAPI GetFileAttributesW(LPCWSTR lpFileName);
+WINGDIAPI int WINAPI GetDeviceCaps(HDC hdc,  int index);
+WINBASEAPI DWORD WINAPI GetLastError( VOID );
+WINUSERAPI BOOL WINAPI GetKeyboardState(PBYTE lpKeyState);
+WINBASEAPI BOOL WINAPI SetFilePointerEx(HANDLE hFile,  LARGE_INTEGER liDistanceToMove, PLARGE_INTEGER lpNewFilePointer,  DWORD dwMoveMethod );
+
+WINUSERAPI UINT WINAPI GetRawInputDeviceInfoA(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
+WINUSERAPI UINT WINAPI GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
+#ifdef UNICODE
+#define GetRawInputDeviceInfo  GetRawInputDeviceInfoW
+#else
+#define GetRawInputDeviceInfo  GetRawInputDeviceInfoA
+#endif // !UNICODE
+
+WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationA(HANDLE hRecipient, LPVOID NotificationFilter, DWORD Flags);
+WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationW(HANDLE hRecipient, LPVOID NotificationFilter, DWORD Flags);
+#ifdef UNICODE
+#define RegisterDeviceNotification  RegisterDeviceNotificationW
+#else
+#define RegisterDeviceNotification  RegisterDeviceNotificationA
+#endif // !UNICODE
+WINBASEAPI BOOL WINAPI CloseHandle(HANDLE hObject);
+WINBASEAPI HANDLE WINAPI CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+WINBASEAPI BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
+WINGDIAPI int  WINAPI ChoosePixelFormat(HDC hdc, CONST PIXELFORMATDESCRIPTOR *ppfd);
+WINGDIAPI BOOL WINAPI SetPixelFormat(HDC hdc, int format, CONST PIXELFORMATDESCRIPTOR * ppfd);
+WINGDIAPI int  WINAPI DescribePixelFormat(HDC hdc, int iPixelFormat, UINT nBytes, LPPIXELFORMATDESCRIPTOR ppfd);
+WINBASEAPI BOOL WINAPI ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
+WINBASEAPI BOOL WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+
+WINADVAPI BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle );
+WINADVAPI BOOL WINAPI GetTokenInformation(HANDLE TokenHandle,  TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
+
 /*
-* 
-* WINAPI, HANDLES, TYPES END
-*
+* windows.h END
 */
     
 /*
@@ -2416,100 +3957,87 @@ typedef EXPLICIT_ACCESSA EXPLICIT_ACCESS;
 typedef PEXPLICIT_ACCESSA PEXPLICIT_ACCESS;
 #endif // UNICODE
 
-WINADVAPI DWORD WINAPI GetSecurityInfo(
-    _In_  HANDLE                 handle,
-    _In_  SE_OBJECT_TYPE         ObjectType,
-    _In_  SECURITY_INFORMATION   SecurityInfo,
-    _Out_opt_ PSID                 * ppsidOwner,
-    _Out_opt_ PSID                 * ppsidGroup,
-    _Out_opt_ PACL                 * ppDacl,
-    _Out_opt_ PACL                 * ppSacl,
-    _Out_opt_ PSECURITY_DESCRIPTOR * ppSecurityDescriptor
-    );
+typedef DWORD SECURITY_INFORMATION, *PSECURITY_INFORMATION;
+typedef PVOID PSID;
+typedef PVOID PACCESS_TOKEN;            
+typedef PVOID PSECURITY_DESCRIPTOR;     
+typedef PVOID PCLAIMS_BLOB;  
 
-WINADVAPI DWORD WINAPI SetNamedSecurityInfoA(
-    _In_ LPSTR               pObjectName,
-    _In_ SE_OBJECT_TYPE        ObjectType,
-    _In_ SECURITY_INFORMATION  SecurityInfo,
-    _In_opt_ PSID              psidOwner,
-    _In_opt_ PSID              psidGroup,
-    _In_opt_ PACL              pDacl,
-    _In_opt_ PACL              pSacl
-    );
-WINADVAPI DWORD WINAPI SetNamedSecurityInfoW(
-    _In_ LPWSTR               pObjectName,
-    _In_ SE_OBJECT_TYPE        ObjectType,
-    _In_ SECURITY_INFORMATION  SecurityInfo,
-    _In_opt_ PSID              psidOwner,
-    _In_opt_ PSID              psidGroup,
-    _In_opt_ PACL              pDacl,
-    _In_opt_ PACL              pSacl
-    );
+typedef struct _SID_AND_ATTRIBUTES {
+#ifdef MIDL_PASS
+    PISID Sid;
+#else // MIDL_PASS
+    PSID Sid;
+#endif // MIDL_PASS
+    DWORD Attributes;
+} SID_AND_ATTRIBUTES, * PSID_AND_ATTRIBUTES;
+
+typedef struct _TOKEN_USER {
+    SID_AND_ATTRIBUTES User;
+} TOKEN_USER, *PTOKEN_USER;
+
+typedef struct _ACL {
+    BYTE  AclRevision;
+    BYTE  Sbz1;
+    WORD   AclSize;
+    WORD   AceCount;
+    WORD   Sbz2;
+} ACL;
+typedef ACL *PACL;
+
+typedef struct _GENERIC_MAPPING {
+    ACCESS_MASK GenericRead;
+    ACCESS_MASK GenericWrite;
+    ACCESS_MASK GenericExecute;
+    ACCESS_MASK GenericAll;
+} GENERIC_MAPPING;
+typedef GENERIC_MAPPING *PGENERIC_MAPPING;
+
+/* it's offscreen? I don't care. you don't want to look at this trash code anyway. Fuck you microsoft. */
+
+WINADVAPI DWORD WINAPI GetSecurityInfo(HANDLE  handle,  SE_OBJECT_TYPE ObjectType,  SECURITY_INFORMATION  SecurityInfo, PSID  *ppsidOwner, PSID  *ppsidGroup, PACL *ppDacl, PACL  *ppSacl, PSECURITY_DESCRIPTOR *ppSecurityDescriptor );
+
+WINADVAPI DWORD WINAPI SetNamedSecurityInfoA( LPSTR  pObjectName, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION  SecurityInfo, PSID psidOwner, PSID psidGroup, PACL pDacl, PACL pSacl );
+WINADVAPI DWORD WINAPI SetNamedSecurityInfoW( LPWSTR pObjectName, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION  SecurityInfo, PSID psidOwner, PSID psidGroup, PACL pDacl, PACL pSacl );
 #ifdef UNICODE
 #define SetNamedSecurityInfo  SetNamedSecurityInfoW
 #else
 #define SetNamedSecurityInfo  SetNamedSecurityInfoA
 #endif // !UNICODE
 
-WINADVAPI DWORD WINAPI GetNamedSecurityInfoA(
-    _In_  LPCSTR               pObjectName,
-    _In_  SE_OBJECT_TYPE         ObjectType,
-    _In_  SECURITY_INFORMATION   SecurityInfo,
-    _Out_opt_       PSID         * ppsidOwner,
-    _Out_opt_       PSID         * ppsidGroup,
-    _Out_opt_       PACL         * ppDacl,
-    _Out_opt_       PACL         * ppSacl,
-    _Out_ PSECURITY_DESCRIPTOR   * ppSecurityDescriptor
-    );
-WINADVAPI DWORD WINAPI GetNamedSecurityInfoW(
-    _In_  LPCWSTR               pObjectName,
-    _In_  SE_OBJECT_TYPE         ObjectType,
-    _In_  SECURITY_INFORMATION   SecurityInfo,
-    _Out_opt_       PSID         * ppsidOwner,
-    _Out_opt_       PSID         * ppsidGroup,
-    _Out_opt_       PACL         * ppDacl,
-    _Out_opt_       PACL         * ppSacl,
-    _Out_ PSECURITY_DESCRIPTOR   * ppSecurityDescriptor
-    );
+WINADVAPI DWORD WINAPI GetNamedSecurityInfoA(  LPCSTR  pObjectName,  SE_OBJECT_TYPE ObjectType,  SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR   *ppSecurityDescriptor );
+WINADVAPI DWORD WINAPI GetNamedSecurityInfoW(  LPCWSTR pObjectName,  SE_OBJECT_TYPE ObjectType,  SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR   *ppSecurityDescriptor );
 #ifdef UNICODE
 #define GetNamedSecurityInfo  GetNamedSecurityInfoW
 #else
 #define GetNamedSecurityInfo  GetNamedSecurityInfoA
 #endif // !UNICODE
 
-WINADVAPI DWORD WINAPI SetEntriesInAclA(
-    _In_ ULONG               cCountOfExplicitEntries,
-    _In_reads_opt_(cCountOfExplicitEntries)  PEXPLICIT_ACCESS_A  pListOfExplicitEntries,
-    _In_opt_  PACL           OldAcl,
-    _Out_ PACL              * NewAcl
-    );
-WINADVAPI DWORD WINAPI SetEntriesInAclW(
-    _In_ ULONG               cCountOfExplicitEntries,
-    _In_reads_opt_(cCountOfExplicitEntries)  PEXPLICIT_ACCESS_W  pListOfExplicitEntries,
-    _In_opt_  PACL           OldAcl,
-    _Out_ PACL              * NewAcl
-    );
+WINADVAPI DWORD WINAPI SetEntriesInAclA( ULONG cCountOfExplicitEntries,  PEXPLICIT_ACCESS_A  pListOfExplicitEntries, PACL OldAcl, PACL *NewAcl );
+WINADVAPI DWORD WINAPI SetEntriesInAclW( ULONG cCountOfExplicitEntries,  PEXPLICIT_ACCESS_W  pListOfExplicitEntries, PACL OldAcl, PACL *NewAcl );
 #ifdef UNICODE
 #define SetEntriesInAcl  SetEntriesInAclW
 #else
 #define SetEntriesInAcl  SetEntriesInAclA
 #endif // !UNICODE
 
-WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclA(
-    _In_  PACL          pacl,
-    _In_  PTRUSTEE_A    pTrustee,
-    _Out_ PACCESS_MASK  pAccessRights
-    );
-WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(
-    _In_  PACL          pacl,
-    _In_  PTRUSTEE_W    pTrustee,
-    _Out_ PACCESS_MASK  pAccessRights
-    );
+WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclA(  PACL pacl, PTRUSTEE_A pTrustee, PACCESS_MASK  pAccessRights );
+WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(  PACL pacl, PTRUSTEE_W pTrustee, PACCESS_MASK  pAccessRights );
 #ifdef UNICODE
 #define GetEffectiveRightsFromAcl  GetEffectiveRightsFromAclW
 #else
 #define GetEffectiveRightsFromAcl  GetEffectiveRightsFromAclA
 #endif // !UNICODE
+
+#define FILE_SHARE_READ                 0x00000001  
+#define OPEN_EXISTING       3
+#define CREATE_ALWAYS       2
+
+#define GENERIC_READ                     (0x80000000L)
+#define GENERIC_WRITE                    (0x40000000L)
+#define GENERIC_EXECUTE                  (0x20000000L)
+#define GENERIC_ALL                      (0x10000000L)
+#define FILE_ATTRIBUTE_NORMAL               0x00000080 
 
 /*
 *
@@ -2529,7 +4057,6 @@ typedef unsigned __int64 QWORD;
 static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = pal_false;
 
-static HDC s_fakeDC = {0};
 uint32_t g_next_window_id = 1;
 
 /* On windows, a message pump is specific to the gui thread (a thread that creates windows). */
@@ -2549,6 +4076,49 @@ struct pal_monitor {
     HMONITOR handle;
 };
 
+#if defined(_M_MRX000) && !(defined(MIDL_PASS) || defined(RC_INVOKED)) && defined(ENABLE_RESTRICTED)
+#define RESTRICTED_POINTER __restrict
+#else
+#define RESTRICTED_POINTER
+#endif
+
+typedef struct _LIST_ENTRY {
+   struct _LIST_ENTRY *Flink;
+   struct _LIST_ENTRY *Blink;
+} LIST_ENTRY, *PLIST_ENTRY, *RESTRICTED_POINTER PRLIST_ENTRY;
+
+typedef struct _RTL_CRITICAL_SECTION_DEBUG {
+    WORD   Type;
+    WORD   CreatorBackTraceIndex;
+    struct _RTL_CRITICAL_SECTION *CriticalSection;
+    LIST_ENTRY ProcessLocksList;
+    DWORD EntryCount;
+    DWORD ContentionCount;
+    DWORD Flags;
+    WORD   CreatorBackTraceIndexHigh;
+    WORD   Identifier;
+} RTL_CRITICAL_SECTION_DEBUG, *PRTL_CRITICAL_SECTION_DEBUG, RTL_RESOURCE_DEBUG, *PRTL_RESOURCE_DEBUG;
+
+#pragma pack(push, 8)
+
+typedef struct _RTL_CRITICAL_SECTION {
+PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
+
+//
+//  The following three fields control entering and exiting the critical
+//  section for the resource
+//
+
+LONG LockCount;
+LONG RecursionCount;
+HANDLE OwningThread;        // from the thread's ClientId->UniqueThread
+HANDLE LockSemaphore;
+ULONG_PTR SpinCount;        // force size on 64-bit systems when packed
+} RTL_CRITICAL_SECTION, *PRTL_CRITICAL_SECTION;
+
+#pragma pack(pop)
+
+typedef RTL_CRITICAL_SECTION CRITICAL_SECTION;
 
 struct pal_mutex {
     CRITICAL_SECTION cs;
@@ -2936,29 +4506,10 @@ typedef struct win32_gamepad_context {
 } win32_gamepad_context;
 win32_gamepad_context win32_gamepad_ctx = {0};
 
-#pragma pack(push, 1)
-typedef struct {
-    uint16_t idReserved; // Must be 0
-    uint16_t idType;     // Must be 1 for icons
-    uint16_t idCount;    // Number of images
-} ICONDIR;
-
-typedef struct {
-    uint8_t bWidth;         // Width in pixels
-    uint8_t bHeight;        // Height in pixels
-    uint8_t bColorCount;    // 0 if >= 8bpp
-    uint8_t bReserved;      // Must be 0
-    uint16_t wPlanes;       // Should be 1
-    uint16_t wBitCount;     // Usually 32
-    uint32_t dwBytesInRes;  // Size of PNG data
-    uint32_t dwImageOffset; // Offset to PNG data (after header)
-} ICONDIRENTRY;
-#pragma pack(pop)
-
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int height, int refresh_rate) {
-    DEVMODEA dm = {0};
+    DEVMODEW dm = {0};
 
-    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
+    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
 
     dm.dmSize = sizeof(dm);
     dm.dmPelsWidth = width;
@@ -2966,8 +4517,7 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int
     dm.dmDisplayFrequency = refresh_rate;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
-    if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
-        MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
+    if (ChangeDisplaySettingsExW(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
         return pal_false;
     }
 
@@ -2978,17 +4528,16 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int
 }
 
 PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
-    DEVMODEA dm = {0};
+    DEVMODEW dm = {0};
 
-    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
-    EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
+    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
+    EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm);
     dm.dmSize = sizeof(dm);
     dm.dmPelsWidth = (DWORD)window->width;
     dm.dmPelsHeight = (DWORD)window->height;
     dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
 
-    if (ChangeDisplaySettingsExA(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
-        MessageBoxA(window->hwnd, "Failed to switch display mode", "Error", MB_OK);
+    if (ChangeDisplaySettingsExW(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
         return pal_false;
     }
 
@@ -3003,18 +4552,16 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
     MONITORINFO mi = {.cbSize = sizeof(mi)};
 
     // Save the current window style and rect
-    window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE);
+    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
 
     // Get the monitor bounds
     if (!GetMonitorInfo(monitor, &mi)) {
-        MessageBoxA(window->hwnd, "Failed to get monitor info.", "Error", MB_OK);
         return pal_false;
     }
 
     // Set the window to borderless fullscreen
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     if (!SetWindowPos(window->hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
-        MessageBoxA(window->hwnd, "Failed to resize window.", "Error", MB_OK);
         return pal_false;
     }
 
@@ -3024,17 +4571,15 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
 PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
     RECT rect;
     // Restore display mode (in case exclusive mode was used)
-    ChangeDisplaySettings(NULL, 0);
+    ChangeDisplaySettingsW(NULL, 0);
 
     // Restore the window style
     if (SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle) == 0) {
-        MessageBoxA(window->hwnd, "Failed to restore window style.", "Error", MB_OK);
         return pal_false;
     }
     GetWindowRect(window->hwnd, &rect);
     // Restore the window's size and position
     if (!SetWindowPos(window->hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED)) {
-        MessageBoxA(window->hwnd, "Failed to restore window position.", "Error", MB_OK);
         return pal_false;
     }
 
@@ -3059,7 +4604,6 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
         size = 256;
 
     if (!f) {
-        MessageBoxA(window->hwnd, "Failed to open cursor file.", "SetCustomCursor Error", MB_ICONERROR);
         return;
     }
 
@@ -3070,26 +4614,22 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
     if (pal_memcmp(header, "RIFF", 4) == 0 && pal_memcmp(header + 8, "ACON", 4) == 0) {
         hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
         if (!hCursor) {
-            MessageBoxA(window->hwnd, "Failed to load .ani cursor.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
     } else if (header[0] == 0x00 && header[1] == 0x00 && header[2] == 0x02 && header[3] == 0x00) {
         hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
         if (!hCursor) {
-            MessageBoxA(window->hwnd, "Failed to load .cur cursor.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
     } else {
         pixels = stbi_load(filepath, &width, &height, &channels, 4);
         if (!pixels) {
-            MessageBoxA(window->hwnd, "Failed to load image with stb_image.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
 
         resized = malloc(size * size * 4);
         if (!resized) {
             stbi_image_free(pixels);
-            MessageBoxA(window->hwnd, "Failed to allocate memory for resized image.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
 
@@ -3113,7 +4653,6 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
 
         if (!hBitmap || !bitmapData) {
             free(resized);
-            MessageBoxA(window->hwnd, "Failed to create DIB section.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
 
@@ -3138,16 +4677,15 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
 
         hCursor = CreateIconIndirect(&ii);
 
-        DeleteObject(ii.hbmMask);
-        DeleteObject(hBitmap);
+        DeleteObject((HGDIOBJ)ii.hbmMask);
+        DeleteObject((HGDIOBJ)hBitmap);
 
         if (!hCursor) {
-            MessageBoxA(window->hwnd, "Failed to create cursor from image.", "SetCustomCursor Error", MB_ICONERROR);
             return;
         }
     }
 
-    SetClassLongPtr(window->hwnd, GCLP_HCURSOR, (LONG_PTR)hCursor);
+    SetClassLongPtrA(window->hwnd, GCLP_HCURSOR, (LONG_PTR)hCursor);
     SetCursor(hCursor);
 }
 // older windows versions do not support pngs being embedded in .ico
@@ -3300,48 +4838,53 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     return hIcon;
 }
 
+#define WM_GETICON                      0x007F
+#define WM_SETICON                      0x0080
+
+#define ICON_SMALL          0
+#define ICON_BIG            1
+#if(_WIN32_WINNT >= 0x0501)
+#define ICON_SMALL2         2
+#endif /* _WIN32_WINNT >= 0x0501 */
+
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
     HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
     if (hIcon) {
-        SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-        SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+        SendMessageA(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        SendMessageA(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
     } else {
-        MessageBoxA(window->hwnd, "Failed to load window icon", "Error", MB_OK | MB_ICONERROR);
     }
 }
 
 PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path) {
     HICON hIcon = win32_load_icon_from_file(image_path, pal_true);
     if (hIcon) {
-        SendMessage(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-        SendMessage(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+        SendMessageA(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        SendMessageA(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
     } else {
-        MessageBoxA(window->hwnd, "Failed to load window icon", "Error", MB_OK | MB_ICONERROR);
     }
 }
 
 PALAPI void pal_set_taskbar_icon(pal_window* window, const char* image_path) {
     HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
     if (hIcon) {
-        SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
-        SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
+        SetClassLongPtrA(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
+        SetClassLongPtrA(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
     } else {
-        MessageBoxA(window->hwnd, "Failed to load taskbar icon", "Error", MB_OK | MB_ICONERROR);
     }
 }
 
 PALAPI void pal_set_taskbar_icon_legacy(pal_window* window, const char* image_path) {
     HICON hIcon = win32_load_icon_from_file(image_path, pal_true);
     if (hIcon) {
-        SetClassLongPtr(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
-        SetClassLongPtr(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
+        SetClassLongPtrA(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
+        SetClassLongPtrA(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
     } else {
-        MessageBoxA(window->hwnd, "Failed to load legacy taskbar icon", "Error", MB_OK | MB_ICONERROR);
     }
 }
 
 LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    return DefWindowProcA(hwnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
 void win32_handle_raw_input(HRAWINPUT raw_input) {
@@ -3351,6 +4894,7 @@ void win32_handle_raw_input(HRAWINPUT raw_input) {
 
 // --- pal_get_gamepad_count ---
 
+#define ERROR_SUCCESS                    0L
 PALAPI int pal_get_gamepad_count(void) {
     // Poll remaining XInput slots
     for (DWORD i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
@@ -3539,6 +5083,15 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
     pal_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+#define RIM_TYPEMOUSE       0
+#define RIM_TYPEKEYBOARD    1
+#define RIM_TYPEHID         2
+#define RIM_TYPEMAX         2
+
+#define RIDI_PREPARSEDDATA      0x20000005
+#define RIDI_DEVICENAME         0x20000007  // the return valus is the character length, not the byte size
+#define RIDI_DEVICEINFO         0x2000000b
+
 void win32_enumerate_keyboards(void) {
     UINT numDevices;
     GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
@@ -3570,6 +5123,7 @@ void win32_enumerate_keyboards(void) {
 
     free(deviceList);
 }
+
 
 void win32_enumerate_mice(void) {
     UINT numDevices;
@@ -3714,6 +5268,9 @@ static void update_modifier_state(int pal_scancode, pal_bool is_key_released, in
         g_keyboards.cached_modifiers[keyboard_index] |= modifier_flag;
     }
 }
+#define MAPVK_VK_TO_VSC     (0)
+#define CP_UTF8                   65001       // UTF-8 translation
+
 void win32_handle_keyboard(const RAWINPUT* raw) {
     // Find keyboard index
     int kb_index = 0;
@@ -3789,7 +5346,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         GetKeyboardState(keyboard_state);
         
         WCHAR utf16_buffer[4] = {0};
-        UINT scan_code = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+        UINT scan_code = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
         int result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
         
         if (result > 0) {
@@ -3816,6 +5373,13 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         }
     }
 }
+
+#define RI_MOUSE_WHEEL              0x0400
+#define WHEEL_DELTA                     120
+
+#if(WINVER >= 0x0600)
+#define RI_MOUSE_HWHEEL             0x0800
+#endif /* WINVER >= 0x0600 */
 
 void win32_handle_mouse(const RAWINPUT* raw) {
     // Find mouse index
@@ -3948,6 +5512,26 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     }
 }
 
+#define WM_INPUT                        0x00FF
+#define WM_DEVICECHANGE                 0x0219
+#define WM_CREATE                       0x0001
+#define WM_DESTROY                      0x0002
+#define WM_MOVE                         0x0003
+#define WM_SIZE                         0x0005
+#define WM_MOUSEMOVE                    0x0200
+#define WM_CLOSE                        0x0010
+#define WM_QUIT                         0x0012
+
+#if((_WIN32_WINNT >= 0x0400) || (WINVER >= 0x0500))
+#define WM_MOUSEHOVER                   0x02A1
+#define WM_MOUSELEAVE                   0x02A3
+#endif
+#if(WINVER >= 0x0500)
+#define WM_NCMOUSEHOVER                 0x02A0
+#define WM_NCMOUSELEAVE                 0x02A2
+#endif /* WINVER >= 0x0500 */
+#define WM_DROPFILES                    0x0233
+
 // Input window proc - handles device change notifications for the message-only window
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
@@ -3970,17 +5554,36 @@ static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wpar
             return TRUE;
         } break;
     }
-    return DefWindowProcA(hwnd, msg, wparam, lparam);
+    return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-static pal_bool win32_create_input_window(void) {
-    WNDCLASSEXA wc = {0};
-    wc.cbSize = sizeof(WNDCLASSEXA);
-    wc.lpfnWndProc = win32_input_window_proc;
-    wc.hInstance = GetModuleHandleA(NULL);
-    wc.lpszClassName = "PAL_RawInputWindow";
+#define ERROR_CLASS_ALREADY_EXISTS       1410L
 
-    if (!RegisterClassExA(&wc)) {
+#if(WINVER >= 0x0500)
+#define HWND_MESSAGE     ((HWND)-3)
+#endif /* WINVER >= 0x0500 */
+
+#define RIDEV_REMOVE            0x00000001
+#define RIDEV_EXCLUDE           0x00000010
+#define RIDEV_PAGEONLY          0x00000020
+#define RIDEV_NOLEGACY          0x00000030
+#define RIDEV_INPUTSINK         0x00000100
+#define RIDEV_CAPTUREMOUSE      0x00000200  // effective when mouse nolegacy is specified, otherwise it would be an error
+#define RIDEV_NOHOTKEYS         0x00000200  // effective for keyboard.
+#define RIDEV_APPKEYS           0x00000400  // effective for keyboard.
+#if(_WIN32_WINNT >= 0x0501)
+#define RIDEV_EXINPUTSINK       0x00001000
+#define RIDEV_DEVNOTIFY         0x00002000
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+static pal_bool win32_create_input_window(void) {
+    WNDCLASSEXW wc = {0};
+    wc.cbSize = sizeof(WNDCLASSEXW);
+    wc.lpfnWndProc = win32_input_window_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.lpszClassName = L"PAL_RawInputWindow";
+
+    if (!RegisterClassExW(&wc)) {
         DWORD err = GetLastError();
         if (err != ERROR_CLASS_ALREADY_EXISTS) {
             printf("Failed to register input window class: %lu\n", err);
@@ -3989,10 +5592,10 @@ static pal_bool win32_create_input_window(void) {
     }
 
     // HWND_MESSAGE creates a message-only window (invisible, no taskbar entry)
-    g_input_window = CreateWindowExA(
+    g_input_window = CreateWindowExW(
         0,
         wc.lpszClassName,
-        "",
+        L"",
         0,
         0, 0, 0, 0,
         HWND_MESSAGE,
@@ -4035,7 +5638,7 @@ static pal_bool win32_create_input_window(void) {
     DEV_BROADCAST_DEVICEINTERFACE filter = {0};
     filter.dbcc_size = sizeof(filter);
     filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
-    filter.dbcc_classguid = GUID_DEVINTERFACE_HID;
+    //filter.dbcc_classguid = GUID_DEVINTERFACE_HID;
 
     g_hDevNotify_HID = RegisterDeviceNotification(
         g_input_window,
@@ -4062,8 +5665,18 @@ static void win32_destroy_input_window(void) {
         g_input_window = NULL;
     }
 
-    UnregisterClassA("PAL_RawInputWindow", GetModuleHandleA(NULL));
+    UnregisterClassW(L"PAL_RawInputWindow", GetModuleHandleW(NULL));
 }
+
+typedef struct tagWINDOWPOS {
+    HWND    hwnd;
+    HWND    hwndInsertAfter;
+    int     x;
+    int     y;
+    int     cx;
+    int     cy;
+    UINT    flags;
+} WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
 
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     pal_window* window = win32_find_window_by_hwnd(hwnd);
@@ -4254,7 +5867,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         } break;
         default:
             event.type = PAL_EVENT_NONE;
-            return DefWindowProcA(hwnd, msg, wparam, lparam);
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
     pal__eventq_push(&g_event_queue, event);
     return 0;
@@ -4270,7 +5883,7 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
     /* Load WGL extensions if not already loaded */
     if (!g_wgl_extensions_loaded) {
 
-		g_opengl32 = LoadLibraryA("opengl32.dll");
+		g_opengl32 = LoadLibraryW(L"opengl32.dll");
 		if (!g_opengl32) return pal_false;
 
 		/* Get base WGL functions from opengl32.dll */
@@ -4279,20 +5892,19 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 		p_wglMakeCurrent = (PFN_wglMakeCurrent)GetProcAddress(g_opengl32, "wglMakeCurrent");
 		p_wglDeleteContext = (PFN_wglDeleteContext)GetProcAddress(g_opengl32, "wglDeleteContext");
 
-        WNDCLASSEXA fakewc = {0};
-        fakewc.cbSize = sizeof(WNDCLASSEXA);
-        fakewc.lpfnWndProc = DefWindowProcA;
-        fakewc.hInstance = GetModuleHandleA(0);
-        fakewc.lpszClassName = "PAL_WGL_Loader";
-        RegisterClassExA(&fakewc);
+        WNDCLASSEXW fakewc = {0};
+        fakewc.cbSize = sizeof(WNDCLASSEXW);
+        fakewc.lpfnWndProc = DefWindowProcW;
+        fakewc.hInstance = GetModuleHandleW(0);
+        fakewc.lpszClassName = L"PAL_WGL_Loader";
+        RegisterClassExW(&fakewc);
 
-        HWND fake_hwnd = CreateWindowExA(
-            0, fakewc.lpszClassName, "", WS_OVERLAPPEDWINDOW,
+        HWND fake_hwnd = CreateWindowExW(
+            0, fakewc.lpszClassName, L"", WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, 1, 1,
             NULL, NULL, fakewc.hInstance, NULL);
 
         if (!fake_hwnd) {
-            MessageBoxA(window->hwnd, "Failed to create dummy window for WGL.", "OpenGL Error", MB_ICONERROR);
             return NULL;
         }
 
@@ -4310,32 +5922,29 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
         if (!fake_pf || !SetPixelFormat(fake_dc, fake_pf, &fake_pfd)) {
             ReleaseDC(fake_hwnd, fake_dc);
             DestroyWindow(fake_hwnd);
-            UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
-            MessageBoxA(window->hwnd, "Failed to set pixel format on dummy window.", "OpenGL Error", MB_ICONERROR);
+            UnregisterClassW(fakewc.lpszClassName, fakewc.hInstance);
             return NULL;
         }
 
-        HGLRC fake_rc = wglCreateContext(fake_dc);
-        if (!fake_rc || !wglMakeCurrent(fake_dc, fake_rc)) {
+        HGLRC fake_rc = p_wglCreateContext(fake_dc);
+        if (!fake_rc || !p_wglMakeCurrent(fake_dc, fake_rc)) {
             ReleaseDC(fake_hwnd, fake_dc);
             DestroyWindow(fake_hwnd);
-            UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
-            MessageBoxA(window->hwnd, "Failed to create dummy GL context.", "OpenGL Error", MB_ICONERROR);
+            UnregisterClassW(fakewc.lpszClassName, fakewc.hInstance);
             return NULL;
         }
 
-		p_wglChoosePixelFormatARB = (PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)wglGetProcAddress("wglChoosePixelFormatARB");
-		p_wglCreateContextAttribsARB = (PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)wglGetProcAddress("wglCreateContextAttribsARB");
-		p_wglSwapIntervalEXT = (PFN_WGL_SWAP_INTERVAL_EXT)wglGetProcAddress("wglSwapIntervalEXT");
+		p_wglChoosePixelFormatARB = (PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)p_wglGetProcAddress("wglChoosePixelFormatARB");
+		p_wglCreateContextAttribsARB = (PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)p_wglGetProcAddress("wglCreateContextAttribsARB");
+		p_wglSwapIntervalEXT = (PFN_WGL_SWAP_INTERVAL_EXT)p_wglGetProcAddress("wglSwapIntervalEXT");
 
-        wglMakeCurrent(NULL, NULL);
-        wglDeleteContext(fake_rc);
+        p_wglMakeCurrent(NULL, NULL);
+        p_wglDeleteContext(fake_rc);
         ReleaseDC(fake_hwnd, fake_dc);
         DestroyWindow(fake_hwnd);
-        UnregisterClassA(fakewc.lpszClassName, fakewc.hInstance);
+        UnregisterClassW(fakewc.lpszClassName, fakewc.hInstance);
 
         if (!p_wglChoosePixelFormatARB || !p_wglCreateContextAttribsARB) {
-            MessageBoxA(window->hwnd, "Required WGL extensions not available.", "OpenGL Error", MB_ICONERROR);
             return NULL;
         }
 
@@ -4344,7 +5953,6 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 
     window->hdc = GetDC(window->hwnd);
     if (!window->hdc) {
-        MessageBoxA(window->hwnd, "Failed to get device context.", "OpenGL Error", MB_ICONERROR);
         return NULL;
     }
 
@@ -4366,7 +5974,6 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
     int pixelFormatID;
     UINT numFormats;
     if (!p_wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats) || numFormats == 0) {
-        MessageBoxA(window->hwnd, "wglChoosePixelFormatARB() failed.", "OpenGL Error", MB_ICONERROR);
         return NULL;
     }
 
@@ -4374,7 +5981,6 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
     pfd.nSize = sizeof(pfd);
     DescribePixelFormat(window->hdc, pixelFormatID, sizeof(pfd), &pfd);
     if (!SetPixelFormat(window->hdc, pixelFormatID, &pfd)) {
-        MessageBoxA(window->hwnd, "SetPixelFormat() failed.", "OpenGL Error", MB_ICONERROR);
         return NULL;
     }
 
@@ -4403,7 +6009,6 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
     }
 
     if (!window->hglrc) {
-        MessageBoxA(window->hwnd, "wglCreateContextAttribsARB() failed.", "OpenGL Error", MB_ICONERROR);
         return NULL;
     }
 
@@ -4413,6 +6018,18 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
+
+    // Convert UTF-8 title to UTF-16
+    WCHAR* wtitle = NULL;
+    if (window_title && *window_title) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, window_title, -1, NULL, 0);
+        if (wlen > 0) {
+            wtitle = (WCHAR*)malloc(wlen * sizeof(WCHAR));
+            if (wtitle) {
+                MultiByteToWideChar(CP_UTF8, 0, window_title, -1, wtitle, wlen);
+            }
+        }
+    }
 
     if (window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
         ext_window_style |= WS_EX_NOACTIVATE;
@@ -4442,16 +6059,15 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
     if (window_flags & PAL_WINDOW_FULLSCREEN) {
 
-        DEVMODE dm = {0};
+        DEVMODEW dm = {0};
         dm.dmSize = sizeof(dm);
         dm.dmPelsWidth = width;
         dm.dmPelsHeight = height;
         dm.dmBitsPerPel = 32;
         dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
 
-        LONG result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
+        LONG result = ChangeDisplaySettingsW(&dm, CDS_FULLSCREEN);
         if (result != DISP_CHANGE_SUCCESSFUL) {
-            MessageBoxA(NULL, "Failed to make window fullscreen!", "Error", MB_OK);
         }
         window_style = WS_POPUP;
     }
@@ -4461,36 +6077,34 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         window_flags |= PAL_WINDOW_OPENGL;
     }
 
-    WNDCLASSEXA wc = {0};
-
-    wc.cbSize = sizeof(WNDCLASSEXA);
+    WNDCLASSEXW wc = {0};
+    wc.cbSize = sizeof(WNDCLASSEXW);
     wc.lpfnWndProc = win32_window_proc;
-    wc.hInstance = GetModuleHandleA(0);
-    wc.lpszClassName = "Win32 Window Class";
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.lpszClassName = L"Win32 Window Class";
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
 
-    RegisterClassExA(&wc);
+    RegisterClassExW(&wc);
 
     pal_window* window = (pal_window*)malloc(sizeof(pal_window));
     window->width = (float)width;
     window->height = (float)height;
-    window->hwnd = CreateWindowExA(
-        ext_window_style, // Optional window styles.
-        wc.lpszClassName, // Window class
-        window_title,     // Window text
-        window_style,     // Window style
-
-        // Size and position
+    window->hwnd = CreateWindowExW(
+        ext_window_style,
+        wc.lpszClassName,
+        wtitle ? wtitle : L"",  // Use converted title
+        window_style,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         width,
         height,
-
-        NULL,         // Parent window
-        NULL,         // Menu
-        wc.hInstance, // Instance handle
-        NULL          // Additional application data
+        NULL,
+        NULL,
+        wc.hInstance,
+        NULL
     );
+
+    free(wtitle);  // Safe to free after CreateWindowExW (it copies the string)
 
     if (window->hwnd == NULL) {
         return window;
@@ -4507,7 +6121,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         RegCloseKey(key);
     }
 
-    HMODULE dwmapi = LoadLibraryA("dwmapi.dll");
+    HMODULE dwmapi = LoadLibraryW(L"dwmapi.dll");
     if (!dwmapi) {
         return NULL;  // Windows XP or dwmapi not available
     }
@@ -4574,7 +6188,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	// but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes,
 	// so we have to save it here. - Abdelrahman june 13, 2024
 
-	window->windowedStyle = GetWindowLongA(window->hwnd, GWL_STYLE); // style of the final_window.
+    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
 	return window;
 }
 
@@ -4605,6 +6219,8 @@ PALAPI void pal_close_window(pal_window *window) {
     window->id = 0;
     free(window);
 }
+#define LOGPIXELSX    88    /* Logical pixels/inch in X                 */
+#define LOGPIXELSY    90    /* Logical pixels/inch in Y                 */
 
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     RECT rect;
@@ -4632,8 +6248,7 @@ PALAPI void *pal_get_window_handle(pal_window *window) {
 }
 
 PALAPI int pal_gl_make_context_current(pal_window* window, pal_gl_context context) {
-    if (!wglMakeCurrent(window->hdc, context)) {
-        MessageBoxA(window->hwnd, "wglMakeCurrent() failed.", "Try again later", MB_ICONERROR);
+    if (!p_wglMakeCurrent(window->hdc, context)) {
         return 1;
     }
     return 0;
@@ -4717,7 +6332,30 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 }
 
 PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
-    return (pal_bool)SetWindowTextA(window->hwnd, string);
+    int wlen;
+    WCHAR* wstring;
+    BOOL result;
+
+    if (!string || !*string)
+        return (pal_bool)SetWindowTextW(window->hwnd, L"");
+
+    wlen = MultiByteToWideChar(CP_UTF8, 0, string, -1, NULL, 0);
+    if (wlen <= 0)
+        return 0;
+
+    wstring = (WCHAR*)malloc(wlen * sizeof(WCHAR));
+    if (!wstring)
+        return 0;
+
+    if (MultiByteToWideChar(CP_UTF8, 0, string, -1, wstring, wlen) <= 0) {
+        free(wstring);
+        return 0;
+    }
+
+    result = SetWindowTextW(window->hwnd, wstring);
+    free(wstring);
+
+    return (pal_bool)result;
 }
 
 PALAPI pal_monitor* pal_get_primary_monitor(void) {
@@ -4729,14 +6367,17 @@ PALAPI pal_monitor* pal_get_primary_monitor(void) {
 }
 
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
-    MONITORINFOEX mi = {.cbSize = sizeof(MONITORINFOEX)};
-    DEVMODE dm = {.dmSize = sizeof(DEVMODE)};
+    MONITORINFOEXW mi = {0};
+    mi.cbSize = sizeof(MONITORINFOEXW);
+    DEVMODEW dm = {0};
+    dm.dmSize = sizeof(DEVMODEW);
+
     pal_video_mode* mode;
 
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
 
-    if (!EnumDisplaySettings(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
+    if (!EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
         return 0;
 
     mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
@@ -4749,9 +6390,9 @@ PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
 }
 
 PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
-    DEVMODEA dm = {.dmSize = sizeof(DEVMODEA)};
+    DEVMODEW dm = {.dmSize = sizeof(DEVMODEW)};
     if (mode == NULL) {
-        if (ChangeDisplaySettingsA(NULL, 0)) {
+        if (ChangeDisplaySettingsW(NULL, 0)) {
             return 1;
         } else {
             return 0;
@@ -4761,7 +6402,7 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
         dm.dmPelsHeight = mode->height;
         dm.dmDisplayFrequency = mode->refresh_rate;
         dm.dmBitsPerPel = mode->bits_per_pixel;
-        if (ChangeDisplaySettingsA(&dm, 0)) {
+        if (ChangeDisplaySettingsW(&dm, 0)) {
             return 1;
         } else {
             return 0;
@@ -4771,12 +6412,12 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
 
 PALAPI void* pal_gl_get_proc_address(const char* proc) {
     static HMODULE opengl_module = NULL; // Cached across all calls
-    void* p = (void*)wglGetProcAddress(proc);
+    void* p = (void*)p_wglGetProcAddress(proc);
 
     if (p == NULL || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
         // Load opengl32.dll once on first call, reuse handle afterwards
         if (opengl_module == NULL) {
-            opengl_module = LoadLibraryA("opengl32.dll");
+            opengl_module = LoadLibraryW(L"opengl32.dll");
         }
 
         if (opengl_module != NULL) {
@@ -4824,6 +6465,13 @@ RawInputHandler Win32InputHandlers[3] = {
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
 
+#ifdef _WIN64
+#define RAWINPUT_ALIGN(x)   (((x) + sizeof(QWORD) - 1) & ~(sizeof(QWORD) - 1))
+#else   // _WIN64
+#define RAWINPUT_ALIGN(x)   (((x) + sizeof(DWORD) - 1) & ~(sizeof(DWORD) - 1))
+#endif  // _WIN64
+
+#define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
 
 static int win32_get_raw_input_buffer(void) {
 	static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
@@ -4867,6 +6515,9 @@ static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
     
     return utf16_str;
 }
+
+#define INVALID_FILE_ATTRIBUTES ((DWORD)-1)
+#define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
 
 PALAPI pal_bool pal_does_file_exist(const char* file_path) {
     wchar_t* wide_path = win32_utf8_to_utf16(file_path);
@@ -4938,6 +6589,7 @@ PALAPI size_t pal_get_last_read_time(const char* file) {
     return ((uint64_t)fileInfo.ftLastAccessTime.dwHighDateTime << 32) |
            fileInfo.ftLastAccessTime.dwLowDateTime;
 }
+
 
 PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     wchar_t* wide_path = NULL;
@@ -5152,7 +6804,6 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
         CloseHandle(file);
         return NULL;
     }
-
     while (total_read < total_size) {
         DWORD chunk = (DWORD)((total_size - total_read > MAXDWORD) ? MAXDWORD : (total_size - total_read));
         DWORD read_now = 0;
@@ -5595,7 +7246,6 @@ PALAPI uint64_t pal_get_timer_frequency(void) {
 //----------------------------------------------------------------------------------
 // Clip Board Functions.
 //----------------------------------------------------------------------------------
-
 PALAPI char* pal_clipboard_get(void) {
     HANDLE hData;
     wchar_t* wtext = NULL;
@@ -5678,24 +7328,40 @@ void pal_mouse_warp_relative(int dx, int dy) {
 //----------------------------------------------------------------------------------
 PALAPI void pal_url_launch(char* url) {
     HINSTANCE result;
+    int wlen;
+    WCHAR* wurl;
 
     if (!url || !*url)
         return;
 
-    // ShellExecuteA automatically opens the URL with the default app (e.g., browser)
-    result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+    // Get required buffer size for UTF-16 conversion
+    wlen = MultiByteToWideChar(CP_UTF8, 0, url, -1, NULL, 0);
+    if (wlen <= 0)
+        return;
+
+    // Allocate buffer for wide string
+    wurl = (WCHAR*)malloc(wlen * sizeof(WCHAR));
+    if (!wurl)
+        return;
+
+    // Convert UTF-8 to UTF-16
+    if (MultiByteToWideChar(CP_UTF8, 0, url, -1, wurl, wlen) <= 0) {
+        free(wurl);
+        return;
+    }
+
+    // ShellExecuteW opens the URL with the default app (e.g., browser)
+    result = ShellExecuteW(NULL, L"open", wurl, NULL, NULL, SW_SHOWNORMAL);
+
+    free(wurl);
 
     // Optional: check if it failed
     if ((INT_PTR)result <= 32) {
-        MessageBoxA(NULL, "Failed to open URL.", "Error", MB_ICONERROR);
     }
 }
-
 //----------------------------------------------------------------------------------
 // File Requester Functions.
 //----------------------------------------------------------------------------------
-
-#include <commdlg.h>
 
 typedef struct PalRequester {
     char path[MAX_PATH];
@@ -5912,7 +7578,7 @@ PALAPI void pal_destroy_thread(pal_thread *thread) {
 // Dynamic Library Functions.
 //----------------------------------------------------------------------------------
 PALAPI void* pal_load_dynamic_library(const char* dll) {
-    HMODULE result = LoadLibraryA(dll);
+    HMODULE result = LoadLibraryW(dll);
     if (result) return (void*)result;
     return NULL;
 }
@@ -5957,7 +7623,6 @@ PALAPI void pal_shutdown(void) {
     }
     g_windows.count = 0;
 }
-#endif // PLATFORM_WIN32_H
 
 #elif __linux__
 
@@ -9111,8 +10776,5 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
 }
 #endif /* PLATFORM_LINUX_WAYLAND_H */
 #endif // linux_* platforms
-
-#endif // Platform selection defines
-
 
 #endif /* PAL_IMPLEMENTATION */
