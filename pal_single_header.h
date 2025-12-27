@@ -1634,12 +1634,14 @@ PALAPI const char *pal_get_keyboard_name(int keyboard_id) {
 }
 
 PALAPI int pal_get_keyboard_indices(int scan_code, int *keyboard_indices) {
+    int count = 0;
+    int i;
+
     if (!keyboard_indices || scan_code < 0 || scan_code >= MAX_SCANCODES) {
         return 0;
     }
 
-    int count = 0;
-    for (int i = 0; i < g_keyboards.count; i++) {
+    for (i = 0; i < g_keyboards.count; i++) {
         if (g_keyboards.keys[i][scan_code]) {
             keyboard_indices[count++] = i;
         }
@@ -1648,13 +1650,14 @@ PALAPI int pal_get_keyboard_indices(int scan_code, int *keyboard_indices) {
 }
 
 PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
+    int i;
     if (scan_code < 0 || scan_code >= MAX_SCANCODES) {
         return pal_false;
     }
 
     // -1 means check ANY keyboard
     if (keyboard_id == -1) {
-        for (int i = 0; i < g_keyboards.count; i++) {
+        for (i = 0; i < g_keyboards.count; i++) {
             if (g_keyboards.keys_toggled[i][scan_code] && g_keyboards.keys[i][scan_code]) {
                 return pal_true;
             }
@@ -1671,13 +1674,14 @@ PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
 }
 
 PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
+    int i;
     if (scan_code < 0 || scan_code >= MAX_SCANCODES) {
         return pal_false;
     }
 
     // -1 means check ANY keyboard
     if (keyboard_id == -1) {
-        for (int i = 0; i < g_keyboards.count; i++) {
+        for (i = 0; i < g_keyboards.count; i++) {
             if (g_keyboards.keys[i][scan_code]) {
                 return pal_true;
             }
@@ -1707,24 +1711,26 @@ PALAPI const char *pal_get_mouse_name(int mouse_id) {
 }
 
 PALAPI int pal_get_mouse_indices(int *mouse_indices) {
+    int i;
     if (!mouse_indices) {
         return 0;
     }
 
-    for (int i = 0; i < g_mice.count; i++) {
+    for (i = 0; i < g_mice.count; i++) {
         mouse_indices[i] = i;
     }
     return g_mice.count;
 }
 
 PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
+    int i;
     if (button < 0 || button >= MAX_MOUSE_BUTTONS) {
         return pal_false;
     }
 
     // -1 means check ANY mouse
     if (mouse_id == -1) {
-        for (int i = 0; i < g_mice.count; i++) {
+        for (i = 0; i < g_mice.count; i++) {
             if (g_mice.buttons[i][button]) {
                 return pal_true;
             }
@@ -1741,13 +1747,14 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
 }
 
 PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
+    int i;
     if (button < 0 || button >= MAX_MOUSE_BUTTONS) {
         return pal_false;
     }
 
     // -1 means check ANY mouse
     if (mouse_id == -1) {
-        for (int i = 0; i < g_mice.count; i++) {
+        for (i = 0; i < g_mice.count; i++) {
             if (g_mice.buttons_toggled[i][button] && g_mice.buttons[i][button]) {
                 return pal_true;
             }
@@ -1765,12 +1772,13 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
 
 PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
     pal_vec2 delta;
+    int i;
     delta.x = 0.0f;
     delta.y = 0.0f;
 
     // -1 means get combined delta from ALL mice
     if (mouse_id == -1) {
-        for (int i = 0; i < g_mice.count; i++) {
+        for (i = 0; i < g_mice.count; i++) {
             delta.x += (float)g_mice.dx[i];
             delta.y += (float)g_mice.dy[i];
         }
@@ -1788,13 +1796,13 @@ PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
 }
 
 void pal__reset_mouse_deltas(void) {
-    for (int i = 0; i < g_mice.count; i++) {
+    int i;
+    for (i = 0; i < g_mice.count; i++) {
         g_mice.dx[i] = 0;
         g_mice.dy[i] = 0;
         g_mice.wheel[i] = 0;
     }
 }
-
 
 // clang-format off
 enum {
@@ -1935,8 +1943,9 @@ PALAPI pal_bool pal_are_strings_equal(const char* s1, const char* s2) {
 PALAPI void *pal_memset(void *buf, int value, size_t count) {
     unsigned char *p = buf;
     unsigned char v = (unsigned char)value;
+	size_t i = 0;
 
-    for (size_t i = 0; i < count; i++) {
+    for (; i < count; i++) {
         p[i] = v;
     }
 
@@ -1946,8 +1955,9 @@ PALAPI void *pal_memset(void *buf, int value, size_t count) {
 PALAPI int pal_memcmp(const void *a, const void *b, size_t n) {
     const unsigned char *p1 = a;
     const unsigned char *p2 = b;
+    size_t i = 0;
 
-    for (size_t i = 0; i < n; i++) {
+    for (; i < n; i++) {
         if (p1[i] != p2[i])
             return (p1[i] < p2[i]) ? -1 : 1;
     }
@@ -1958,8 +1968,9 @@ PALAPI int pal_memcmp(const void *a, const void *b, size_t n) {
 PALAPI void *pal_memcpy(void *dest, const void *src, size_t n) {
     unsigned char *d = dest;
     const unsigned char *s = src;
+    size_t i = 0;
 
-    for (size_t i = 0; i < n; i++) {
+    for (; i < n; i++) {
         d[i] = s[i];
     }
 
@@ -1967,9 +1978,10 @@ PALAPI void *pal_memcpy(void *dest, const void *src, size_t n) {
 }
 
 PALAPI size_t pal_strlen(const char *str) {
+    const char *count = NULL;
     if (!str) return 0;
 
-    const char *count = str;
+    count = str;
     while (*count != '\0')
         count++;
 
@@ -2326,6 +2338,36 @@ typedef HKEY *PHKEY;
 
 #define WS_EX_TOOLWINDOW        0x00000080L
 
+#define WM_INPUT                        0x00FF
+#define WM_DEVICECHANGE                 0x0219
+#define WM_CREATE                       0x0001
+#define WM_DESTROY                      0x0002
+#define WM_MOVE                         0x0003
+#define WM_SIZE                         0x0005
+#define WM_MOUSEMOVE                    0x0200
+#define WM_CLOSE                        0x0010
+#define WM_QUIT                         0x0012
+
+#define WM_GETICON                      0x007F
+#define WM_SETICON                      0x0080
+
+#define ICON_SMALL          0
+#define ICON_BIG            1
+#if(_WIN32_WINNT >= 0x0501)
+#define ICON_SMALL2         2
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#if((_WIN32_WINNT >= 0x0400) || (WINVER >= 0x0500))
+#define WM_MOUSEHOVER                   0x02A1
+#define WM_MOUSELEAVE                   0x02A3
+#endif
+#if(WINVER >= 0x0500)
+#define WM_NCMOUSEHOVER                 0x02A0
+#define WM_NCMOUSELEAVE                 0x02A2
+#endif /* WINVER >= 0x0500 */
+#define WM_DROPFILES                    0x0233
+
+
 #define CW_USEDEFAULT       ((int)0x80000000)
 #define GMEM_MOVEABLE       0x0002
 #define CF_TEXT             1
@@ -2369,7 +2411,7 @@ typedef HKEY *PHKEY;
 #endif // !UNICODE
 
 
-#define IDC_ARROW           MAKEINTRESOURCE(32512)
+#define IDC_ARROW           MAKEINTRESOURCEW(32512)
 
 #if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
 #define  _WIN32_WINNT   0x0A00
@@ -3605,8 +3647,10 @@ typedef enum _TOKEN_INFORMATION_CLASS {
 #define OFN_PATHMUSTEXIST            0x00000800
 #define OFN_NOCHANGEDIR              0x00000008
 
-WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPWSTR lpszDeviceName,  DEVMODEW* lpDevMode, HWND hwnd,  DWORD dwflags,  LPVOID lParam);
+WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPCWSTR lpszDeviceName,  DEVMODEW* lpDevMode, HWND hwnd,  DWORD dwflags,  LPVOID lParam);
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsW(DEVMODEW* lpDevMode,  DWORD dwFlags);
+WINUSERAPI BOOL WINAPI EnumDisplaySettingsW(LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
+
 WINGDIAPI HBITMAP WINAPI CreateBitmap(int nWidth,  int nHeight,  UINT nPlanes,  UINT nBitCount,  CONST VOID *lpBits);
 WINUSERAPI HICON WINAPI CreateIconFromResourceEx(PBYTE presbits,  DWORD dwResSize,  BOOL fIcon,  DWORD dwVer,  int cxDesired,  int cyDesired,  UINT Flags);
 WINUSERAPI HWND WINAPI GetFocus(VOID);
@@ -3627,17 +3671,16 @@ WINUSERAPI BOOL WINAPI GetWindowRect(HWND hWnd, LPRECT lpRect);
 WINUSERAPI LONG WINAPI GetWindowLongW(HWND hWnd,  int nIndex);
 WINUSERAPI UINT WINAPI GetRawInputDeviceList(PRAWINPUTDEVICELIST pRawInputDeviceList, PUINT puiNumDevices,  UINT cbSize);
 WINUSERAPI UINT WINAPI GetRawInputBuffer(PRAWINPUT pData, PUINT pcbSize, UINT cbSizeHeader);
-WINUSERAPI int WINAPI MessageBoxW(HWND hWnd,  LPWSTR lpText,  LPWSTR lpCaption,  UINT uType); /* TODO: we should prbably remove messagebox altogether. */
+WINUSERAPI int WINAPI MessageBoxW(HWND hWnd,  LPCWSTR lpText,  LPWSTR lpCaption,  UINT uType); /* TODO: we should prbably remove messagebox altogether. */
 WINUSERAPI UINT WINAPI MapVirtualKeyA(UINT uCode,  UINT uMapType);
 WINUSERAPI HANDLE WINAPI LoadImageA(HINSTANCE hInst, LPCSTR name, UINT type, int cx, int cy, UINT fuLoad);
 WINGDIAPI BOOL WINAPI DeleteObject(HGDIOBJ ho); 
 WINUSERAPI LRESULT WINAPI DefWindowProcW(HWND hWnd,  UINT Msg,  WPARAM wParam,  LPARAM lParam);
 WINUSERAPI HICON WINAPI CreateIconIndirect(PICONINFO piconinfo);
 WINGDIAPI HBITMAP WINAPI CreateDIBSection(HDC hdc, const BITMAPINFO *pbmi, UINT usage, VOID **ppvBits, HANDLE hSection, DWORD offset);
-WINUSERAPI BOOL WINAPI EnumDisplaySettingsW(LPWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
 WINUSERAPI BOOL SetForegroundWindow(HWND hWnd);
 WINUSERAPI BOOL WINAPI UnregisterDeviceNotification(HDEVNOTIFY Handle );
-WINUSERAPI HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance,LPWSTR lpCursorName);
+WINUSERAPI HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance,LPCWSTR lpCursorName);
 WINUSERAPI HMONITOR WINAPI MonitorFromWindow(HWND hwnd, DWORD dwFlags);
 WINUSERAPI HMONITOR WINAPI MonitorFromPoint(POINT pt, DWORD dwFlags);
 WINBASEAPI HMODULE WINAPI LoadLibraryW(LPCWSTR lpLibFileName );
@@ -3653,7 +3696,7 @@ WINADVAPI LSTATUS APIENTRY RegQueryValueExA(HKEY hKey, LPCSTR lpValueName, LPDWO
 WINADVAPI LSTATUS APIENTRY RegCloseKey( HKEY hKey );
 WINUSERAPI BOOL WINAPI PeekMessageA(LPMSG lpMsg,HWND hWnd,UINT wMsgFilterMin,UINT wMsgFilterMax,UINT wRemoveMsg);
 WINUSERAPI ATOM WINAPI RegisterClassExW(CONST WNDCLASSEXW *); 
-WINUSERAPI BOOL WINAPI UnregisterClassW(LPWSTR lpClassName,  HINSTANCE hInstance);
+WINUSERAPI BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName,  HINSTANCE hInstance);
 WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle,  LPCWSTR lpClassName,  LPCWSTR lpWindowName,  DWORD dwStyle,  int X,  int Y,  int nWidth,  int nHeight,  HWND hWndParent,  HMENU hMenu,  HINSTANCE hInstance,  LPVOID lpParam);
 WINUSERAPI BOOL WINAPI RegisterRawInputDevices(PCRAWINPUTDEVICE pRawInputDevices,  UINT uiNumDevices,  UINT cbSize);
 WINUSERAPI BOOL WINAPI ShowWindow(HWND hWnd, int nCmdShow);
@@ -3668,7 +3711,7 @@ WINGDIAPI BOOL  WINAPI SwapBuffers(HDC);
 WINUSERAPI int WINAPI ShowCursor(BOOL bShow);
 WINUSERAPI BOOL WINAPI SetWindowTextW(HWND hWnd, LPCWSTR lpString);
 WINUSERAPI UINT WINAPI GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
-HMODULE WINAPI GetModuleHandleW(LPWSTR lpModuleName);
+HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
 WINUSERAPI BOOL WINAPI DestroyWindow(HWND hWnd);
 WINUSERAPI BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
 WINUSERAPI HDC WINAPI GetDC(HWND hWnd);
@@ -4631,6 +4674,7 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
     void* bitmapData = NULL;
     HBITMAP hBitmap = NULL;
     ICONINFO ii = {0};
+    int x, y;
 
     if (size <= 0)
         size = 32;
@@ -4690,8 +4734,8 @@ PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, i
             return;
         }
 
-        for (int y = 0; y < size; ++y) {
-            for (int x = 0; x < size; ++x) {
+        for (y = 0; y < size; ++y) {
+            for (x = 0; x < size; ++x) {
                 unsigned char* src = &resized[(y * size + x) * 4];
                 unsigned char* dst = (unsigned char*)bitmapData + (y * size + x) * 4;
                 dst[0] = src[2]; // B
@@ -4744,6 +4788,7 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     HDC hdc = GetDC(NULL);
     HBITMAP color_bitmap, mask_bitmap;
     ICONINFO ii = {0};
+    int i;
 
     if (!file)
         return NULL;
@@ -4826,7 +4871,7 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
         return NULL;
 
     // Convert RGBA to BGRA
-    for (int i = 0; i < width * height; ++i) {
+    for (i = 0; i < width * height; ++i) {
         uint8_t r = rgba[i * 4 + 0];
         uint8_t g = rgba[i * 4 + 1];
         uint8_t b = rgba[i * 4 + 2];
@@ -4872,14 +4917,6 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     return hIcon;
 }
 
-#define WM_GETICON                      0x007F
-#define WM_SETICON                      0x0080
-
-#define ICON_SMALL          0
-#define ICON_BIG            1
-#if(_WIN32_WINNT >= 0x0501)
-#define ICON_SMALL2         2
-#endif /* _WIN32_WINNT >= 0x0501 */
 
 PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
     HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
@@ -4931,19 +4968,22 @@ void win32_handle_raw_input(HRAWINPUT raw_input) {
 #define ERROR_SUCCESS                    0L
 PALAPI int pal_get_gamepad_count(void) {
     // Poll remaining XInput slots
-    for (DWORD i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
+    DWORD it = 0;
+    int total_count = 0;
+    int i = 0;
+
+    for (; it < MAX_XINPUT_CONTROLLERS; ++it) {
 
         XINPUT_STATE state;
-        if (XinputGetstate_fn(i, &state) == ERROR_SUCCESS) {
-            win32_gamepad_ctx.xinput_connected[i] = pal_true;
-            win32_gamepad_ctx.xinput_state[i] = state;
+        if (XinputGetstate_fn(it, &state) == ERROR_SUCCESS) {
+            win32_gamepad_ctx.xinput_connected[it] = pal_true;
+            win32_gamepad_ctx.xinput_state[it] = state;
         } else {
-            win32_gamepad_ctx.xinput_connected[i] = pal_false;
+            win32_gamepad_ctx.xinput_connected[it] = pal_false;
         }
     }
 
-    int total_count = 0;
-    for (int i = 0; i < MAX_XINPUT_CONTROLLERS; ++i) {
+    for (; i < MAX_XINPUT_CONTROLLERS; ++i) {
         if (win32_gamepad_ctx.xinput_connected[i])
             total_count++;
     }
@@ -5003,6 +5043,19 @@ void win32_shutdown_gamepads(void) {
 }
 
 PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
+
+    const XINPUT_GAMEPAD* pad;
+
+    // Process analog sticks with proper deadzone handling
+    float lx;
+    float ly;
+    float rx;
+    float ry;
+	float left_magnitude;
+	float normalized;
+	float right_magnitude; 
+    WORD buttons;
+
     pal_memset(out_state, 0, sizeof(pal_gamepad_state));
 
     // XInput controllers only
@@ -5015,33 +5068,31 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
         return pal_false;
     }
 
-    const XINPUT_GAMEPAD* pad = &win32_gamepad_ctx.xinput_state[index].Gamepad;
-
-    // Process analog sticks with proper deadzone handling
-    float lx = (float)pad->sThumbLX;
-    float ly = (float)pad->sThumbLY;
-    float rx = (float)pad->sThumbRX;
-    float ry = (float)pad->sThumbRY;
+	pad = &win32_gamepad_ctx.xinput_state[index].Gamepad;
+	lx = (float)pad->sThumbLX;
+	ly = (float)pad->sThumbLY; 
+	rx = (float)pad->sThumbRX;
+	ry = (float)pad->sThumbRY;
+	left_magnitude = sqrtf(lx * lx + ly * ly);
 
     // Apply circular deadzone for left stick
-    float left_magnitude = sqrtf(lx * lx + ly * ly);
     if (left_magnitude < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
         lx = ly = 0;
     } else {
         // Normalize to remove deadzone
-        float normalized = (left_magnitude - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) /
+        normalized = (left_magnitude - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) /
                            (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
         lx = (lx / left_magnitude) * normalized;
         ly = (ly / left_magnitude) * normalized;
     }
 
     // Apply circular deadzone for right stick
-    float right_magnitude = sqrtf(rx * rx + ry * ry);
+    right_magnitude = sqrtf(rx * rx + ry * ry);
     if (right_magnitude < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
         rx = ry = 0;
     } else {
         // Normalize to remove deadzone
-        float normalized = (right_magnitude - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) /
+        normalized = (right_magnitude - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) /
                            (32767.0f - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
         rx = (rx / right_magnitude) * normalized;
         ry = (ry / right_magnitude) * normalized;
@@ -5057,21 +5108,21 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
     out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bRightTrigger / 255.0f);
 
     // Process buttons
-    WORD b = pad->wButtons;
-    out_state->buttons.a = (b & XINPUT_GAMEPAD_A) != 0;
-    out_state->buttons.b = (b & XINPUT_GAMEPAD_B) != 0;
-    out_state->buttons.x = (b & XINPUT_GAMEPAD_X) != 0;
-    out_state->buttons.y = (b & XINPUT_GAMEPAD_Y) != 0;
-    out_state->buttons.back = (b & XINPUT_GAMEPAD_BACK) != 0;
-    out_state->buttons.start = (b & XINPUT_GAMEPAD_START) != 0;
-    out_state->buttons.left_stick = (b & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
-    out_state->buttons.right_stick = (b & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
-    out_state->buttons.left_shoulder = (b & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
-    out_state->buttons.right_shoulder = (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
-    out_state->buttons.dpad_up = (b & XINPUT_GAMEPAD_DPAD_UP) != 0;
-    out_state->buttons.dpad_down = (b & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
-    out_state->buttons.dpad_left = (b & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
-    out_state->buttons.dpad_right = (b & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
+    buttons = pad->wButtons;
+    out_state->buttons.a = (buttons & XINPUT_GAMEPAD_A) != 0;
+    out_state->buttons.b = (buttons & XINPUT_GAMEPAD_B) != 0;
+    out_state->buttons.x = (buttons & XINPUT_GAMEPAD_X) != 0;
+    out_state->buttons.y = (buttons & XINPUT_GAMEPAD_Y) != 0;
+    out_state->buttons.back = (buttons & XINPUT_GAMEPAD_BACK) != 0;
+    out_state->buttons.start = (buttons & XINPUT_GAMEPAD_START) != 0;
+    out_state->buttons.left_stick = (buttons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
+    out_state->buttons.right_stick = (buttons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
+    out_state->buttons.left_shoulder = (buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
+    out_state->buttons.right_shoulder = (buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
+    out_state->buttons.dpad_up = (buttons & XINPUT_GAMEPAD_DPAD_UP) != 0;
+    out_state->buttons.dpad_down = (buttons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
+    out_state->buttons.dpad_left = (buttons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
+    out_state->buttons.dpad_right = (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
 
     // Set controller info
     pal_strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
@@ -5127,20 +5178,24 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
 #define RIDI_DEVICEINFO         0x2000000b
 
 void win32_enumerate_keyboards(void) {
-    UINT numDevices;
-    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    UINT numDevices = 0;
+	UINT i;
+    PRAWINPUTDEVICELIST deviceList;
+	UINT size = 0;
+	int idx = 0;
 
-    PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
 
     g_keyboards.count = 0;
 
-    for (UINT i = 0; i < numDevices && g_keyboards.count < MAX_KEYBOARDS; i++) {
+    for (i = 0; i < numDevices && g_keyboards.count < MAX_KEYBOARDS; i++) {
         if (deviceList[i].dwType == RIM_TYPEKEYBOARD) {
-            int idx = g_keyboards.count;
+            idx = g_keyboards.count;
             g_keyboards.handles[idx] = deviceList[i].hDevice;
 
-            UINT size = 0;
             GetRawInputDeviceInfo(g_keyboards.handles[idx], RIDI_DEVICENAME, NULL, &size);
             if (size < sizeof(g_keyboards.names[idx])) {
                 GetRawInputDeviceInfo(g_keyboards.handles[idx], RIDI_DEVICENAME, 
@@ -5160,20 +5215,22 @@ void win32_enumerate_keyboards(void) {
 
 
 void win32_enumerate_mice(void) {
-    UINT numDevices;
-    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    UINT numDevices = 0;
+	UINT i = 0;
+    PRAWINPUTDEVICELIST deviceList;
+	UINT size = 0;
 
-    PRAWINPUTDEVICELIST deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+    deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
 
     g_mice.count = 0;
 
-    for (UINT i = 0; i < numDevices && g_mice.count < MAX_MICE; i++) {
+    for (; i < numDevices && g_mice.count < MAX_MICE; i++) {
         if (deviceList[i].dwType == RIM_TYPEMOUSE) {
             int idx = g_mice.count;
             g_mice.handles[idx] = deviceList[i].hDevice;
 
-            UINT size = 0;
             GetRawInputDeviceInfo(g_mice.handles[idx], RIDI_DEVICENAME, NULL, &size);
             if (size < sizeof(g_mice.names[idx])) {
                 GetRawInputDeviceInfo(g_mice.handles[idx], RIDI_DEVICENAME, 
@@ -5196,7 +5253,8 @@ void win32_enumerate_mice(void) {
 
 // Helper to find window by HWND
 static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
-    for (int i = 0; i < g_windows.count; i++) {
+    int i = 0;
+    for (; i < g_windows.count; i++) {
         if (g_windows.windows[i] && g_windows.windows[i]->hwnd == hwnd) {
             return g_windows.windows[i];
         }
@@ -5206,7 +5264,8 @@ static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
 
 // Helper to find window by ID
 static pal_window* win32_find_window_by_id(uint32_t id) {
-    for (int i = 0; i < g_windows.count; i++) {
+    int i = 0;
+    for (; i < g_windows.count; i++) {
         if (g_windows.windows[i] && g_windows.windows[i]->id == id) {
             return g_windows.windows[i];
         }
@@ -5226,12 +5285,14 @@ static pal_window* win32_get_focused_window(void) {
 // Get the window under the mouse cursor
 static pal_window* win32_get_window_under_cursor(void) {
     POINT pt;
+    HWND hwnd;
+    pal_window *window = NULL;
+
     GetCursorPos(&pt);
-    HWND hwnd = WindowFromPoint(pt);
-    
+    hwnd = WindowFromPoint(pt);
     // Walk up parent chain to find our window
     while (hwnd) {
-        pal_window* window = win32_find_window_by_hwnd(hwnd);
+        window = win32_find_window_by_hwnd(hwnd);
         if (window) {
             return window;
         }
@@ -5308,23 +5369,37 @@ static void update_modifier_state(int pal_scancode, pal_bool is_key_released, in
 void win32_handle_keyboard(const RAWINPUT* raw) {
     // Find keyboard index
     int kb_index = 0;
-    for (int i = 0; i < g_keyboards.count; i++) {
+    int i;
+    USHORT vk, makecode, flags;
+    pal_event event = {0};
+    pal_bool is_key_released, is_extended, is_repeat;
+    int pal_scancode = 0;
+	int pal_key;
+    static uint8_t key_is_down[MAX_KEYBOARDS][PAL_SCAN_COUNT] = {0};
+    pal_window *target_window = NULL;
+    uint32_t target_window_id = 0;
+	BYTE keyboard_state[256] = {0};
+	WCHAR utf16_buffer[4] = {0};
+	UINT scan_code = 0;
+	char utf8_buffer[8] = {0};
+	int utf8_len = 0;
+    int result = 0;
+
+    for (i = 0; i < g_keyboards.count; i++) {
         if (g_keyboards.handles[i] == raw->header.hDevice) {
             kb_index = i;
             break;
         }
     }
 
-    USHORT vk = raw->data.keyboard.VKey;
-    USHORT makecode = raw->data.keyboard.MakeCode;
-    USHORT flags = raw->data.keyboard.Flags;
-    pal_event event = {0};
+    vk = raw->data.keyboard.VKey;
+    makecode = raw->data.keyboard.MakeCode;
+    flags = raw->data.keyboard.Flags;
 
-    pal_bool is_key_released = (flags & RI_KEY_BREAK) != 0;
-    pal_bool is_extended = (flags & RI_KEY_E0) != 0;
+    is_key_released = (flags & RI_KEY_BREAK) != 0;
+    is_extended = (flags & RI_KEY_E0) != 0;
 
     // *** COMPUTE pal_scancode FIRST (from makecode) ***
-    int pal_scancode = 0;
     if (is_extended) {
         if (makecode < 256) pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
     } else {
@@ -5332,11 +5407,11 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     }
 
     // *** DERIVE pal_key FROM pal_scancode (preserves left/right modifier distinction) ***
-    int pal_key = (pal_scancode < PAL_SCAN_COUNT) ? pal_scancode_to_keycode[pal_scancode] : 0;
+    pal_key = (pal_scancode < PAL_SCAN_COUNT) ? pal_scancode_to_keycode[pal_scancode] : 0;
 
     // Track key repeat state using scancode (not vk)
-    static uint8_t key_is_down[MAX_KEYBOARDS][PAL_SCAN_COUNT] = {0};
-    pal_bool is_repeat = pal_false;
+	is_repeat = pal_false;
+
     if (pal_scancode > 0 && pal_scancode < PAL_SCAN_COUNT) {
         if (!is_key_released && key_is_down[kb_index][pal_scancode]) {
             is_repeat = pal_true;
@@ -5348,8 +5423,8 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     update_modifier_state(pal_scancode, is_key_released, kb_index);
 
     // Determine which window should receive this keyboard event
-    pal_window* target_window = win32_get_focused_window();
-    uint32_t target_window_id = target_window ? target_window->id : 0;
+    target_window = win32_get_focused_window();
+    target_window_id = target_window ? target_window->id : 0;
 
     if (is_key_released) {
         event.key.type = PAL_EVENT_KEY_UP;
@@ -5376,16 +5451,13 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         pal__eventq_push(&g_event_queue, event);
 
         // Text input event
-        BYTE keyboard_state[256] = {0};
         GetKeyboardState(keyboard_state);
         
-        WCHAR utf16_buffer[4] = {0};
-        UINT scan_code = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
-        int result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
+        scan_code = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
+        result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
         
         if (result > 0) {
-            char utf8_buffer[8] = {0};
-            int utf8_len = WideCharToMultiByte(CP_UTF8, 0, utf16_buffer, result,
+            utf8_len = WideCharToMultiByte(CP_UTF8, 0, utf16_buffer, result,
                                                 utf8_buffer, sizeof(utf8_buffer) - 1, NULL, NULL);
             
             if (utf8_len > 0) {
@@ -5411,29 +5483,39 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
 void win32_handle_mouse(const RAWINPUT* raw) {
     // Find mouse index
     int mouse_index = 0;
-    for (int i = 0; i < g_mice.count; i++) {
+    pal_event event = {0};
+    int32_t dx, dy;
+    USHORT buttons;
+    pal_window *target_window;
+	uint32_t target_window_id;
+    POINT point = {0};
+    SHORT wheel_delta, hwheel_delta;
+    uint16_t down, up;
+    int i, k;
+	int pal_button, old_state;
+	int cached_modifiers = 0;
+
+    for (i = 0; i < g_mice.count; i++) {
         if (g_mice.handles[i] == raw->header.hDevice) {
             mouse_index = i;
             break;
         }
     }
 
-    pal_event event = {0};
-    int32_t dx = raw->data.mouse.lLastX;
-    int32_t dy = raw->data.mouse.lLastY;
+    dx = raw->data.mouse.lLastX;
+    dy = raw->data.mouse.lLastY;
 
     // Update per-mouse delta
     g_mice.dx[mouse_index] += dx;
     g_mice.dy[mouse_index] += dy;
 
-    USHORT buttons = raw->data.mouse.usButtonFlags;
+     buttons = raw->data.mouse.usButtonFlags;
     
     // Determine which window the mouse is interacting with
-    pal_window* target_window = win32_get_window_under_cursor();
-    uint32_t target_window_id = target_window ? target_window->id : 0;
+    target_window = win32_get_window_under_cursor();
+    target_window_id = target_window ? target_window->id : 0;
     
     // Get cursor position relative to the target window
-    POINT point = {0};
     GetCursorPos(&point);
     if (target_window) {
         ScreenToClient(target_window->hwnd, &point);
@@ -5454,7 +5536,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
 
     // Handle mouse wheel
     if (buttons & RI_MOUSE_WHEEL) {
-        SHORT wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
+        wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
         g_mice.wheel[mouse_index] += wheel_delta / WHEEL_DELTA;
 
         event.wheel.type = PAL_EVENT_MOUSE_WHEEL;
@@ -5470,7 +5552,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
 
     // Handle horizontal wheel
     if (buttons & RI_MOUSE_HWHEEL) {
-        SHORT hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
+        hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
 
         event.wheel.type = PAL_EVENT_MOUSE_WHEEL;
         event.wheel.mouse_x = point.x;
@@ -5484,13 +5566,13 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     }
 
     // Handle button events
-    for (int i = 0; i < 5; i++) {
-        uint16_t down = (buttons >> (i * 2)) & 1;
-        uint16_t up = (buttons >> (i * 2 + 1)) & 1;
-        int pal_button = win32_button_to_pal_button[i];
+    for (i = 0; i < 5; i++) {
+        down = (buttons >> (i * 2)) & 1;
+        up = (buttons >> (i * 2 + 1)) & 1;
+        pal_button = win32_button_to_pal_button[i];
 
         if (down) {
-            int old_state = g_mice.buttons[mouse_index][pal_button];
+            old_state = g_mice.buttons[mouse_index][pal_button];
             g_mice.buttons[mouse_index][pal_button] = 1;
             
             // Mark as toggled if state changed
@@ -5500,8 +5582,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             
             g_cached_mouse_buttons |= (1 << i);
 
-            int cached_modifiers = 0;
-            for (int k = 0; k < g_keyboards.count; k++) {
+            for (k = 0; k < g_keyboards.count; k++) {
                 cached_modifiers |= g_keyboards.cached_modifiers[k];
             }
             
@@ -5520,8 +5601,8 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             g_mice.buttons_toggled[mouse_index][pal_button] = 0;
             g_cached_mouse_buttons &= ~(1 << i);
 
-            int cached_modifiers = 0;
-            for (int k = 0; k < g_keyboards.count; k++) {
+            cached_modifiers = 0;
+            for (k = 0; k < g_keyboards.count; k++) {
                 cached_modifiers |= g_keyboards.cached_modifiers[k];
             }
 
@@ -5538,26 +5619,6 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         }
     }
 }
-
-#define WM_INPUT                        0x00FF
-#define WM_DEVICECHANGE                 0x0219
-#define WM_CREATE                       0x0001
-#define WM_DESTROY                      0x0002
-#define WM_MOVE                         0x0003
-#define WM_SIZE                         0x0005
-#define WM_MOUSEMOVE                    0x0200
-#define WM_CLOSE                        0x0010
-#define WM_QUIT                         0x0012
-
-#if((_WIN32_WINNT >= 0x0400) || (WINVER >= 0x0500))
-#define WM_MOUSEHOVER                   0x02A1
-#define WM_MOUSELEAVE                   0x02A3
-#endif
-#if(WINVER >= 0x0500)
-#define WM_NCMOUSEHOVER                 0x02A0
-#define WM_NCMOUSELEAVE                 0x02A2
-#endif /* WINVER >= 0x0500 */
-#define WM_DROPFILES                    0x0233
 
 // Input window proc - handles device change notifications for the message-only window
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -5715,6 +5776,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
     WCHAR buffer[MAX_PATH];
     int len;
     char* utf8;
+    int i;
 
      switch (msg) {
         case WM_CLOSE:
@@ -5827,8 +5889,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             hDrop = (HDROP)wparam;
             count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
             paths = malloc(sizeof(char*) * count);
-            for (UINT i = 0; i < count; ++i) {
-                DragQueryFileW(hDrop, i, buffer, MAX_PATH);
+            for (i = 0; i < count; ++i) {
+                DragQueryFileW(hDrop, (UINT)i, buffer, MAX_PATH);
                 len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
                 utf8 = malloc(len);
                 WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
@@ -5895,6 +5957,47 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 static pal_bool g_wgl_extensions_loaded = pal_false;
 
 PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
+    WNDCLASSEXW fakewc = {0};
+	HWND fake_hwnd = NULL;
+	HDC fake_dc = NULL;
+	PIXELFORMATDESCRIPTOR fake_pfd = {0}, pfd = {0};
+	int fake_pf = 0;
+	HGLRC fake_rc = NULL;
+
+    const int pixelAttribs[] = {
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+        WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+        WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
+        WGL_COLOR_BITS_ARB, 32,
+        WGL_ALPHA_BITS_ARB, 8,
+        WGL_DEPTH_BITS_ARB, 24,
+        WGL_STENCIL_BITS_ARB, 8,
+        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
+        WGL_SAMPLES_ARB, 4,
+        0
+    };
+
+    int pixelFormatID;
+    UINT numFormats;
+
+	int wgl_profile = 0;
+
+	int contextAttribs[] = {
+		WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+		WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+		WGL_CONTEXT_PROFILE_MASK_ARB, wgl_profile,
+		WGL_CONTEXT_FLAGS_ARB, debug_context ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
+		0
+	};
+
+	int fallbackAttribs[] = {
+		WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+		WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+		0
+	};
+
     if (!window || !window->hwnd) {
         return NULL;
     }
@@ -5911,14 +6014,13 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 		p_wglMakeCurrent = (PFN_wglMakeCurrent)GetProcAddress(g_opengl32, "wglMakeCurrent");
 		p_wglDeleteContext = (PFN_wglDeleteContext)GetProcAddress(g_opengl32, "wglDeleteContext");
 
-        WNDCLASSEXW fakewc = {0};
         fakewc.cbSize = sizeof(WNDCLASSEXW);
         fakewc.lpfnWndProc = DefWindowProcW;
         fakewc.hInstance = GetModuleHandleW(0);
         fakewc.lpszClassName = L"PAL_WGL_Loader";
         RegisterClassExW(&fakewc);
 
-        HWND fake_hwnd = CreateWindowExW(
+        fake_hwnd = CreateWindowExW(
             0, fakewc.lpszClassName, L"", WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, 1, 1,
             NULL, NULL, fakewc.hInstance, NULL);
@@ -5927,9 +6029,8 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
             return NULL;
         }
 
-        HDC fake_dc = GetDC(fake_hwnd);
+        fake_dc = GetDC(fake_hwnd);
 
-        PIXELFORMATDESCRIPTOR fake_pfd = {0};
         fake_pfd.nSize = sizeof(fake_pfd);
         fake_pfd.nVersion = 1;
         fake_pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
@@ -5937,7 +6038,7 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
         fake_pfd.cColorBits = 32;
         fake_pfd.cDepthBits = 24;
 
-        int fake_pf = ChoosePixelFormat(fake_dc, &fake_pfd);
+        fake_pf = ChoosePixelFormat(fake_dc, &fake_pfd);
         if (!fake_pf || !SetPixelFormat(fake_dc, fake_pf, &fake_pfd)) {
             ReleaseDC(fake_hwnd, fake_dc);
             DestroyWindow(fake_hwnd);
@@ -5945,7 +6046,7 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
             return NULL;
         }
 
-        HGLRC fake_rc = p_wglCreateContext(fake_dc);
+        fake_rc = p_wglCreateContext(fake_dc);
         if (!fake_rc || !p_wglMakeCurrent(fake_dc, fake_rc)) {
             ReleaseDC(fake_hwnd, fake_dc);
             DestroyWindow(fake_hwnd);
@@ -5975,55 +6076,24 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
         return NULL;
     }
 
-    const int pixelAttribs[] = {
-        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-        WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-        WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-        WGL_COLOR_BITS_ARB, 32,
-        WGL_ALPHA_BITS_ARB, 8,
-        WGL_DEPTH_BITS_ARB, 24,
-        WGL_STENCIL_BITS_ARB, 8,
-        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-        WGL_SAMPLES_ARB, 4,
-        0
-    };
-
-    int pixelFormatID;
-    UINT numFormats;
     if (!p_wglChoosePixelFormatARB(window->hdc, pixelAttribs, NULL, 1, &pixelFormatID, &numFormats) || numFormats == 0) {
         return NULL;
     }
 
-    PIXELFORMATDESCRIPTOR pfd = {0};
     pfd.nSize = sizeof(pfd);
     DescribePixelFormat(window->hdc, pixelFormatID, sizeof(pfd), &pfd);
     if (!SetPixelFormat(window->hdc, pixelFormatID, &pfd)) {
         return NULL;
     }
 
-	int wgl_profile;
 	if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
 		wgl_profile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
 	} else {
 		wgl_profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
 	}
 
-	int contextAttribs[] = {
-		WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-		WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-		WGL_CONTEXT_PROFILE_MASK_ARB, wgl_profile,
-		WGL_CONTEXT_FLAGS_ARB, debug_context ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
-		0
-	};
     window->hglrc = p_wglCreateContextAttribsARB(window->hdc, NULL, contextAttribs);
     if (!window->hglrc) {
-        int fallbackAttribs[] = {
-            WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-            WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-            0
-        };
         window->hglrc = p_wglCreateContextAttribsARB(window->hdc, NULL, fallbackAttribs);
     }
 
@@ -6035,12 +6105,11 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 }
 
 static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
-    if (!utf8_str) return NULL;
-    
     int len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, NULL, 0);
-    if (len == 0) return NULL;
-    
     wchar_t* utf16_str = (wchar_t*)malloc(len * sizeof(wchar_t));
+
+    if (!utf8_str) return NULL;
+    if (len == 0) return NULL;
     if (!utf16_str) return NULL;
     
     if (MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, utf16_str, len) == 0) {
@@ -6055,6 +6124,17 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
 	WCHAR *wtitle = NULL;
+	DEVMODEW dm = {0};
+	LONG result;
+    WNDCLASSEXW wc = {0};
+	pal_window* window = NULL;
+
+    HKEY key;
+    DWORD is_light_mode = 1;  // Default to light mode
+    DWORD size = sizeof(is_light_mode);
+	HMODULE dwmapi = NULL;
+
+    PFN_DwmSetWindowAttribute DwmSetWindowAttributePtr;
 
     wtitle = win32_utf8_to_utf16(window_title);
 
@@ -6086,14 +6166,13 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
     if (window_flags & PAL_WINDOW_FULLSCREEN) {
 
-        DEVMODEW dm = {0};
         dm.dmSize = sizeof(dm);
         dm.dmPelsWidth = width;
         dm.dmPelsHeight = height;
         dm.dmBitsPerPel = 32;
         dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
 
-        LONG result = ChangeDisplaySettingsW(&dm, CDS_FULLSCREEN);
+        result = ChangeDisplaySettingsW(&dm, CDS_FULLSCREEN);
         if (result != DISP_CHANGE_SUCCESSFUL) {
         }
         window_style = WS_POPUP;
@@ -6104,7 +6183,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         window_flags |= PAL_WINDOW_OPENGL;
     }
 
-    WNDCLASSEXW wc = {0};
     wc.cbSize = sizeof(WNDCLASSEXW);
     wc.lpfnWndProc = win32_window_proc;
     wc.hInstance = GetModuleHandleW(NULL);
@@ -6113,7 +6191,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
     RegisterClassExW(&wc);
 
-    pal_window* window = (pal_window*)malloc(sizeof(pal_window));
+    window = (pal_window*)malloc(sizeof(pal_window));
     window->width = (float)width;
     window->height = (float)height;
     window->hwnd = CreateWindowExW(
@@ -6138,35 +6216,33 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     } else {
         window->id = g_next_window_id++; 
     }
-
-    HKEY key;
-    DWORD is_light_mode = 1;  // Default to light mode
-    DWORD size = sizeof(is_light_mode);
     
     if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &key) == ERROR_SUCCESS) {
         RegQueryValueExA(key, "AppsUseLightTheme", NULL, NULL, (LPBYTE)&is_light_mode, &size);
         RegCloseKey(key);
     }
 
-    HMODULE dwmapi = LoadLibraryW(L"dwmapi.dll");
-    if (!dwmapi) {
-        return NULL;  // Windows XP or dwmapi not available
-    }
-    
-    PFN_DwmSetWindowAttribute DwmSetWindowAttributePtr = 
-        (PFN_DwmSetWindowAttribute)GetProcAddress(dwmapi, "DwmSetWindowAttribute");
-    
-    if (DwmSetWindowAttributePtr) {
-        BOOL dark_mode = TRUE;
-        HRESULT hr = DwmSetWindowAttributePtr(window->hwnd, 20, &dark_mode, sizeof(dark_mode));
-        
-        // Fallback for older Windows 10 builds
-        if (FAILED(hr)) {
-            DwmSetWindowAttributePtr(window->hwnd, 19, &dark_mode, sizeof(dark_mode));
-        }
-    }
-    
-    FreeLibrary(dwmapi);
+    if (!is_light_mode) {
+		dwmapi = LoadLibraryW(L"dwmapi.dll");
+		if (!dwmapi) {
+			return NULL;  // Windows XP or dwmapi not available
+		}
+		
+		DwmSetWindowAttributePtr = (PFN_DwmSetWindowAttribute)GetProcAddress(dwmapi, "DwmSetWindowAttribute");
+		
+		if (DwmSetWindowAttributePtr) {
+			BOOL dark_mode = TRUE;
+			HRESULT hr = DwmSetWindowAttributePtr(window->hwnd, 20, &dark_mode, sizeof(dark_mode));
+			
+			// Fallback for older Windows 10 builds
+			if (FAILED(hr)) {
+				DwmSetWindowAttributePtr(window->hwnd, 19, &dark_mode, sizeof(dark_mode));
+			}
+		}
+		
+		FreeLibrary(dwmapi);
+	}
+
     // Register window in global registry with unique ID
     if (g_windows.count < MAX_WINDOWS) {
         window->id = g_next_window_id++;
@@ -6220,6 +6296,8 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
 PALAPI void pal_close_window(pal_window *window) {
     pal_event event = {0};
+    int i;
+    int j;
     if (!window || !window->hwnd)
         return;
 
@@ -6228,10 +6306,10 @@ PALAPI void pal_close_window(pal_window *window) {
     pal__eventq_push(&g_event_queue, event);
 
     // Remove from window registry
-    for (int i = 0; i < g_windows.count; i++) {
+    for (i = 0; i < g_windows.count; i++) {
         if (g_windows.windows[i] == window) {
             // Shift remaining windows down
-            for (int j = i; j < g_windows.count - 1; j++) {
+            for (j = i; j < g_windows.count - 1; j++) {
                 g_windows.windows[j] = g_windows.windows[j + 1];
             }
             g_windows.windows[g_windows.count - 1] = NULL;
@@ -6252,6 +6330,9 @@ PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     RECT rect;
     HDC hdc;
     int dpi_x, dpi_y;
+    float scale_x, scale_y;
+    pal_ivec2 border_size;
+
     GetClientRect(window->hwnd, &rect);
 
     hdc = GetDC(window->hwnd);
@@ -6260,10 +6341,9 @@ PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     ReleaseDC(window->hwnd, hdc);
 
     // Convert logical pixels to physical pixels
-    float scale_x = dpi_x / 96.0f;
-    float scale_y = dpi_y / 96.0f;
+    scale_x = dpi_x / 96.0f;
+    scale_y = dpi_y / 96.0f;
 
-    pal_ivec2 border_size;
     border_size.x = (int)((rect.right - rect.left) * scale_x);
     border_size.y = (int)((rect.bottom - rect.top) * scale_y);
     return border_size;
@@ -6311,15 +6391,16 @@ static int win32_get_raw_input_buffer(void);
 PALAPI pal_bool pal_poll_events(pal_event* event) {
     MSG msg = {0};
     pal_event_queue* queue = &g_event_queue;
+    int i;
 
     if (!g_message_pump_drained) {
         pal__reset_mouse_deltas();
         
         // Reset toggle flags for all keyboards/mice
-        for (int i = 0; i < g_keyboards.count; i++) {
+        for (i = 0; i < g_keyboards.count; i++) {
             pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
         }
-        for (int i = 0; i < g_mice.count; i++) {
+        for (i = 0; i < g_mice.count; i++) {
             pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
         }
         
@@ -6383,11 +6464,10 @@ PALAPI pal_monitor* pal_get_primary_monitor(void) {
 
 PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
     MONITORINFOEXW mi = {0};
-    mi.cbSize = sizeof(MONITORINFOEXW);
     DEVMODEW dm = {0};
-    dm.dmSize = sizeof(DEVMODEW);
-
     pal_video_mode* mode;
+    mi.cbSize = sizeof(MONITORINFOEXW);
+    dm.dmSize = sizeof(DEVMODEW);
 
     if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
         return 0;
@@ -6494,8 +6574,9 @@ static int win32_get_raw_input_buffer(void) {
     UINT input_event_count = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
     PRAWINPUT raw = (PRAWINPUT)g_raw_input_buffer;
     UINT type = 0;
+	UINT i;
 
-    for (UINT i = 0; i < input_event_count; ++i) {
+    for (i = 0; i < input_event_count; ++i) {
         type = raw->header.dwType;
         if (type == RIM_TYPEMOUSE) {
             win32_handle_mouse(raw);
@@ -6598,7 +6679,6 @@ PALAPI uint32_t pal_get_file_permissions(const char* file_path) {
     DWORD dwRes = 0;
     HANDLE hToken = NULL;
     GENERIC_MAPPING mapping = {0};
-
     ACCESS_MASK accessRights = 0;
 
     if (!file_path) {
@@ -7359,14 +7439,17 @@ static PalRequester* win32_get_requester(void* id) {
 }
 
 static void win32_build_filter_string(char** types, uint32_t type_count, char* out, size_t out_size) {
+    size_t pos = 0;
+	uint32_t i;
+	size_t remaining = 0;
+
     if (out_size == 0) return;
     
     out[0] = '\0';
-    size_t pos = 0;
     
-    for (uint32_t i = 0; i < type_count; i++) {
+    for (i = 0; i < type_count; i++) {
         const char* ext = types[i];
-        size_t remaining = out_size - pos;
+        remaining = out_size - pos;
         if (remaining <= 1) break;  // Need room for final null
         
         int written = snprintf(out + pos, remaining, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
@@ -7596,12 +7679,13 @@ PALAPI void pal_init(void) {
 }
 
 PALAPI void pal_shutdown(void) {
+    int i = 0;
     win32_shutdown_gamepads();
     win32_destroy_input_window();
     pal__eventq_free(g_event_queue);
     
     // Clear window registry
-    for (int i = 0; i < g_windows.count; i++) {
+    for (; i < g_windows.count; i++) {
         g_windows.windows[i] = NULL;
     }
     g_windows.count = 0;
@@ -8117,7 +8201,8 @@ uint32_t g_next_window_id = 1;
 
 /* X11 window registry (uses same g_windows from cross-platform section) */
 static pal_window* x11_find_window_by_xwindow(Window xwin) {
-    for (int i = 0; i < g_windows.count; i++) {
+    int i;
+    for (i = 0; i < g_windows.count; i++) {
         if (g_windows.windows[i] && g_windows.windows[i]->window == xwin) {
             return g_windows.windows[i];
         }
@@ -8126,7 +8211,8 @@ static pal_window* x11_find_window_by_xwindow(Window xwin) {
 }
 
 static pal_window* x11_find_window_by_id(uint32_t id) {
-    for (int i = 0; i < g_windows.count; i++) {
+    int i;
+    for (i = 0; i < g_windows.count; i++) {
         if (g_windows.windows[i] && g_windows.windows[i]->id == id) {
             return g_windows.windows[i];
         }

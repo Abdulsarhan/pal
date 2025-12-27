@@ -20,15 +20,17 @@ typedef struct OpenglInfo {
 } OpenglInfo;
 
 static OpenglInfo get_opengl_info(void) {
+    int i = 0;
+	int numExtensions;
+
     OpenglInfo info = {0};
     info.vendor = (char*)glGetString(GL_VENDOR);
     info.renderer = (char*)glGetString(GL_RENDERER);
     info.version = (char*)glGetString(GL_VERSION);
     info.shadingLanguageVersion = (char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
     if (glGetStringi) {
-        int numExtensions;
         glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
-        for (int i = 0; i < numExtensions; i++) {
+        for (; i < numExtensions; i++) {
             const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
             strcat(info.extensionsi, ext);
             strcat(info.extensionsi, " ");
@@ -136,7 +138,8 @@ int main() {
         }
 
 #ifdef _WIN32
-        for (int i = 0; i < pal_get_gamepad_count(); i++) {
+        int i = 0;
+        for (; i < pal_get_gamepad_count(); i++) {
             if (pal_get_gamepad_state(i, &state)) {
                 /*
                                 printf("\nController %d: %s\n", i, state.name);

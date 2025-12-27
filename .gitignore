@@ -8,6 +8,8 @@
 *.vcxproj.filters
 *.hint
 
+a.out
+a.exe
 #unfinished documentation
 docs/*
 # User-specific files
