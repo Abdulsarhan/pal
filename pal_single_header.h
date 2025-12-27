@@ -1537,14 +1537,11 @@ pal_bool pal__init_eventq() {
         return 0;
     }
 
-    g_event_queue = (pal_event_queue){
-        // size and capacity are measured in pal_events, not bytes.
-        .size = 0,
-        .capacity = capacity,
-        .front = 0,
-        .back = 0,
-        .events = events
-    };
+    g_event_queue.size = 0;
+    g_event_queue.capacity = capacity;
+    g_event_queue.front = 0;
+    g_event_queue.back = 0;
+    g_event_queue.events = events;
 
     return 1;
 }
@@ -2189,6 +2186,14 @@ typedef HKEY *PHKEY;
 #define WINGDIAPI
 #endif
 
+#ifndef WINCOMMDLGAPI
+#if !defined(_COMDLG32_)
+#define WINCOMMDLGAPI DECLSPEC_IMPORT
+#else
+#define WINCOMMDLGAPI
+#endif
+#endif // WINCOMMDLGAPI
+
 #ifndef WINADVAPI
 #define WINADVAPI
 #endif
@@ -2411,7 +2416,6 @@ typedef  HDEVNOTIFY     *PHDEVNOTIFY;
 #ifndef FALSE
 #define FALSE 0
 #endif
-
 
 #ifndef DUMMYUNIONNAME
 #if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
@@ -3089,6 +3093,13 @@ typedef struct tagRAWINPUTDEVICELIST {
 #define RI_KEY_TERMSRV_SET_LED  8
 #define RI_KEY_TERMSRV_SHADOW   0x10
 
+#define RI_MOUSE_WHEEL              0x0400
+#define WHEEL_DELTA                     120
+
+#if(WINVER >= 0x0600)
+#define RI_MOUSE_HWHEEL             0x0800
+#endif /* WINVER >= 0x0600 */
+
 #pragma pack(push, 1)
 typedef struct {
     uint16_t idReserved; // Must be 0
@@ -3143,40 +3154,40 @@ typedef enum _GET_FILEEX_INFO_LEVELS {
 } GET_FILEEX_INFO_LEVELS;
 
 typedef struct tagBITMAPINFOHEADER{
-        DWORD      biSize;
-        LONG       biWidth;
-        LONG       biHeight;
-        WORD       biPlanes;
-        WORD       biBitCount;
-        DWORD      biCompression;
-        DWORD      biSizeImage;
-        LONG       biXPelsPerMeter;
-        LONG       biYPelsPerMeter;
-        DWORD      biClrUsed;
-        DWORD      biClrImportant;
+DWORD biSize;
+LONG  biWidth;
+LONG  biHeight;
+WORD  biPlanes;
+WORD  biBitCount;
+DWORD biCompression;
+DWORD biSizeImage;
+LONG  biXPelsPerMeter;
+LONG  biYPelsPerMeter;
+DWORD biClrUsed;
+DWORD biClrImportant;
 } BITMAPINFOHEADER, FAR *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
 
 typedef struct tagRGBQUAD {
-        BYTE    rgbBlue;
-        BYTE    rgbGreen;
-        BYTE    rgbRed;
-        BYTE    rgbReserved;
+BYTE rgbBlue;
+BYTE rgbGreen;
+BYTE rgbRed;
+BYTE rgbReserved;
 } RGBQUAD;
 
 
 typedef struct tagBITMAPINFO {
-    BITMAPINFOHEADER    bmiHeader;
-    RGBQUAD             bmiColors[1];
+    BITMAPINFOHEADER bmiHeader;
+    RGBQUAD          bmiColors[1];
 } BITMAPINFO, FAR *LPBITMAPINFO, *PBITMAPINFO;
 
-typedef long            FXPT16DOT16, FAR *LPFXPT16DOT16;
-typedef long            FXPT2DOT30, FAR *LPFXPT2DOT30;
+typedef long FXPT16DOT16, FAR *LPFXPT16DOT16;
+typedef long FXPT2DOT30, FAR *LPFXPT2DOT30;
 
 typedef struct tagCIEXYZ
 {
-        FXPT2DOT30 ciexyzX;
-        FXPT2DOT30 ciexyzY;
-        FXPT2DOT30 ciexyzZ;
+	FXPT2DOT30 ciexyzX;
+	FXPT2DOT30 ciexyzY;
+	FXPT2DOT30 ciexyzZ;
 } CIEXYZ;
 
 typedef struct tagICEXYZTRIPLE {
@@ -3352,6 +3363,60 @@ typedef LPOPENFILENAMEW LPOPENFILENAME;
 typedef OPENFILENAMEA OPENFILENAME;
 typedef LPOPENFILENAMEA LPOPENFILENAME;
 #endif // UNICODE
+
+typedef DWORD (WINAPI *PTHREAD_START_ROUTINE)(
+    LPVOID lpThreadParameter
+    );
+typedef PTHREAD_START_ROUTINE LPTHREAD_START_ROUTINE;
+
+#if defined(_M_MRX000) && !(defined(MIDL_PASS) || defined(RC_INVOKED)) && defined(ENABLE_RESTRICTED)
+#define RESTRICTED_POINTER __restrict
+#else
+#define RESTRICTED_POINTER
+#endif
+
+typedef struct _LIST_ENTRY {
+   struct _LIST_ENTRY *Flink;
+   struct _LIST_ENTRY *Blink;
+} LIST_ENTRY, *PLIST_ENTRY, *RESTRICTED_POINTER PRLIST_ENTRY;
+
+typedef struct _RTL_CRITICAL_SECTION_DEBUG {
+    WORD   Type;
+    WORD   CreatorBackTraceIndex;
+    struct _RTL_CRITICAL_SECTION *CriticalSection;
+    LIST_ENTRY ProcessLocksList;
+    DWORD EntryCount;
+    DWORD ContentionCount;
+    DWORD Flags;
+    WORD   CreatorBackTraceIndexHigh;
+    WORD   Identifier;
+} RTL_CRITICAL_SECTION_DEBUG, *PRTL_CRITICAL_SECTION_DEBUG, RTL_RESOURCE_DEBUG, *PRTL_RESOURCE_DEBUG;
+
+#pragma pack(push, 8)
+
+typedef struct _RTL_CRITICAL_SECTION {
+PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
+
+//
+//  The following three fields control entering and exiting the critical
+//  section for the resource
+//
+
+LONG LockCount;
+LONG RecursionCount;
+HANDLE OwningThread;        // from the thread's ClientId->UniqueThread
+HANDLE LockSemaphore;
+ULONG_PTR SpinCount;        // force size on 64-bit systems when packed
+} RTL_CRITICAL_SECTION, *PRTL_CRITICAL_SECTION;
+
+#pragma pack(pop)
+
+typedef RTL_CRITICAL_SECTION CRITICAL_SECTION;
+typedef PRTL_CRITICAL_SECTION LPCRITICAL_SECTION;
+
+struct pal_mutex {
+    CRITICAL_SECTION cs;
+};
 
 #define IMAGE_BITMAP        0
 #define IMAGE_ICON          1
@@ -3662,10 +3727,26 @@ WINGDIAPI int  WINAPI ChoosePixelFormat(HDC hdc, CONST PIXELFORMATDESCRIPTOR *pp
 WINGDIAPI BOOL WINAPI SetPixelFormat(HDC hdc, int format, CONST PIXELFORMATDESCRIPTOR * ppfd);
 WINGDIAPI int  WINAPI DescribePixelFormat(HDC hdc, int iPixelFormat, UINT nBytes, LPPIXELFORMATDESCRIPTOR ppfd);
 WINBASEAPI BOOL WINAPI ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
+WINBASEAPI BOOL WINAPI CopyFileW(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists);
 WINBASEAPI BOOL WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
-
 WINADVAPI BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle );
 WINADVAPI BOOL WINAPI GetTokenInformation(HANDLE TokenHandle,  TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
+WINBASEAPI HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
+WINBASEAPI DWORD WINAPI ResumeThread(HANDLE hThread);
+WINBASEAPI DWORD WINAPI WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds); 
+WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
+WINBASEAPI BOOL WINAPI ResetEvent(HANDLE hEvent);
+WINBASEAPI BOOL WINAPI SetEvent(HANDLE hEvent);
+WINCOMMDLGAPI BOOL APIENTRY GetSaveFileNameW(LPOPENFILENAMEW);
+WINCOMMDLGAPI BOOL  APIENTRY GetOpenFileNameW(LPOPENFILENAMEW);
+WINBASEAPI DECLSPEC_ALLOCATOR LPVOID WINAPI HeapAlloc(HANDLE hHeap,  DWORD dwFlags,  SIZE_T dwBytes );
+WINBASEAPI HANDLE WINAPI GetProcessHeap(VOID);
+WINBASEAPI BOOL WINAPI HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem);
+WINBASEAPI VOID WINAPI InitializeCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINBASEAPI VOID WINAPI EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINBASEAPI BOOL WINAPI TryEnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINBASEAPI VOID WINAPI LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINBASEAPI VOID WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
 
 /*
 * windows.h END
@@ -4076,53 +4157,6 @@ struct pal_monitor {
     HMONITOR handle;
 };
 
-#if defined(_M_MRX000) && !(defined(MIDL_PASS) || defined(RC_INVOKED)) && defined(ENABLE_RESTRICTED)
-#define RESTRICTED_POINTER __restrict
-#else
-#define RESTRICTED_POINTER
-#endif
-
-typedef struct _LIST_ENTRY {
-   struct _LIST_ENTRY *Flink;
-   struct _LIST_ENTRY *Blink;
-} LIST_ENTRY, *PLIST_ENTRY, *RESTRICTED_POINTER PRLIST_ENTRY;
-
-typedef struct _RTL_CRITICAL_SECTION_DEBUG {
-    WORD   Type;
-    WORD   CreatorBackTraceIndex;
-    struct _RTL_CRITICAL_SECTION *CriticalSection;
-    LIST_ENTRY ProcessLocksList;
-    DWORD EntryCount;
-    DWORD ContentionCount;
-    DWORD Flags;
-    WORD   CreatorBackTraceIndexHigh;
-    WORD   Identifier;
-} RTL_CRITICAL_SECTION_DEBUG, *PRTL_CRITICAL_SECTION_DEBUG, RTL_RESOURCE_DEBUG, *PRTL_RESOURCE_DEBUG;
-
-#pragma pack(push, 8)
-
-typedef struct _RTL_CRITICAL_SECTION {
-PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
-
-//
-//  The following three fields control entering and exiting the critical
-//  section for the resource
-//
-
-LONG LockCount;
-LONG RecursionCount;
-HANDLE OwningThread;        // from the thread's ClientId->UniqueThread
-HANDLE LockSemaphore;
-ULONG_PTR SpinCount;        // force size on 64-bit systems when packed
-} RTL_CRITICAL_SECTION, *PRTL_CRITICAL_SECTION;
-
-#pragma pack(pop)
-
-typedef RTL_CRITICAL_SECTION CRITICAL_SECTION;
-
-struct pal_mutex {
-    CRITICAL_SECTION cs;
-};
 
 #define MAX_XINPUT_CONTROLLERS 4
 #define PAL_MAX_GAMEPADS 16
@@ -4832,8 +4866,8 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
 
     hIcon = CreateIconIndirect(&ii);
 
-    DeleteObject(color_bitmap);
-    DeleteObject(mask_bitmap);
+    DeleteObject((HGDIOBJ)color_bitmap);
+    DeleteObject((HGDIOBJ)mask_bitmap);
 
     return hIcon;
 }
@@ -5374,13 +5408,6 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     }
 }
 
-#define RI_MOUSE_WHEEL              0x0400
-#define WHEEL_DELTA                     120
-
-#if(WINVER >= 0x0600)
-#define RI_MOUSE_HWHEEL             0x0800
-#endif /* WINVER >= 0x0600 */
-
 void win32_handle_mouse(const RAWINPUT* raw) {
     // Find mouse index
     int mouse_index = 0;
@@ -5586,7 +5613,6 @@ static pal_bool win32_create_input_window(void) {
     if (!RegisterClassExW(&wc)) {
         DWORD err = GetLastError();
         if (err != ERROR_CLASS_ALREADY_EXISTS) {
-            printf("Failed to register input window class: %lu\n", err);
             return pal_false;
         }
     }
@@ -5605,7 +5631,6 @@ static pal_bool win32_create_input_window(void) {
     );
 
     if (!g_input_window) {
-        printf("Failed to create input window: %lu\n", GetLastError());
         return pal_false;
     }
 
@@ -5628,7 +5653,6 @@ static pal_bool win32_create_input_window(void) {
     rid[2].hwndTarget = g_input_window;
 
     if (!RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE))) {
-        printf("RegisterRawInputDevices failed: %lu\n", GetLastError());
         DestroyWindow(g_input_window);
         g_input_window = NULL;
         return pal_false;
@@ -5647,7 +5671,6 @@ static pal_bool win32_create_input_window(void) {
     );
 
     if (!g_hDevNotify_HID) {
-        printf("RegisterDeviceNotification failed: %lu\n", GetLastError());
         // Non-fatal - continue without hotplug support
     }
 
@@ -5829,11 +5852,9 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             if ((BOOL)wparam == FALSE) {
                 event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
                 event.window.focused = 0;
-                printf("PAL: Lost Focus!\n");
             } else {
                 event.window.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
                 event.window.focused = 1;
-                printf("PAL: Gained Focus!\n");
             }
         }; break;
             // TODO: Make this return a pal_event of some kind.
@@ -5843,7 +5864,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-                        printf("Device Arrived: %ls\n", pDi->dbcc_name);
                         
                         // Re-enumerate all input devices
                         win32_enumerate_keyboards();
@@ -5855,7 +5875,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-                        printf("Device Removed: %ls\n", pDi->dbcc_name);
                         
                         // Re-enumerate all input devices
                         win32_enumerate_keyboards();
@@ -6015,21 +6034,29 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
     return (pal_gl_context)window->hglrc;
 }
 
+static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
+    if (!utf8_str) return NULL;
+    
+    int len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, NULL, 0);
+    if (len == 0) return NULL;
+    
+    wchar_t* utf16_str = (wchar_t*)malloc(len * sizeof(wchar_t));
+    if (!utf16_str) return NULL;
+    
+    if (MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, utf16_str, len) == 0) {
+        free(utf16_str);
+        return NULL;
+    }
+    
+    return utf16_str;
+}
+
 PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
+	WCHAR *wtitle = NULL;
 
-    // Convert UTF-8 title to UTF-16
-    WCHAR* wtitle = NULL;
-    if (window_title && *window_title) {
-        int wlen = MultiByteToWideChar(CP_UTF8, 0, window_title, -1, NULL, 0);
-        if (wlen > 0) {
-            wtitle = (WCHAR*)malloc(wlen * sizeof(WCHAR));
-            if (wtitle) {
-                MultiByteToWideChar(CP_UTF8, 0, window_title, -1, wtitle, wlen);
-            }
-        }
-    }
+    wtitle = win32_utf8_to_utf16(window_title);
 
     if (window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
         ext_window_style |= WS_EX_NOACTIVATE;
@@ -6146,7 +6173,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         g_windows.windows[g_windows.count] = window;
         g_windows.count++;
     } else {
-        printf("ERROR: Maximum number of windows reached\n");
     }
     
     // Raw input and device notification registration is now done in pal_init()
@@ -6339,18 +6365,7 @@ PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
     if (!string || !*string)
         return (pal_bool)SetWindowTextW(window->hwnd, L"");
 
-    wlen = MultiByteToWideChar(CP_UTF8, 0, string, -1, NULL, 0);
-    if (wlen <= 0)
-        return 0;
-
-    wstring = (WCHAR*)malloc(wlen * sizeof(WCHAR));
-    if (!wstring)
-        return 0;
-
-    if (MultiByteToWideChar(CP_UTF8, 0, string, -1, wstring, wlen) <= 0) {
-        free(wstring);
-        return 0;
-    }
+    wstring = win32_utf8_to_utf16(string);
 
     result = SetWindowTextW(window->hwnd, wstring);
     free(wstring);
@@ -6499,22 +6514,6 @@ static int win32_get_raw_input_buffer(void) {
 //----------------------------------------------------------------------------------
 
 // Helper function to convert UTF-8 to UTF-16
-static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
-    if (!utf8_str) return NULL;
-    
-    int len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, NULL, 0);
-    if (len == 0) return NULL;
-    
-    wchar_t* utf16_str = (wchar_t*)malloc(len * sizeof(wchar_t));
-    if (!utf16_str) return NULL;
-    
-    if (MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, utf16_str, len) == 0) {
-        free(utf16_str);
-        return NULL;
-    }
-    
-    return utf16_str;
-}
 
 #define INVALID_FILE_ATTRIBUTES ((DWORD)-1)
 #define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
@@ -7327,38 +7326,21 @@ void pal_mouse_warp_relative(int dx, int dy) {
 // Url Launch Function.
 //----------------------------------------------------------------------------------
 PALAPI void pal_url_launch(char* url) {
-    HINSTANCE result;
-    int wlen;
-    WCHAR* wurl;
+	HINSTANCE result;
+	int wlen;
+	WCHAR* wurl;
 
-    if (!url || !*url)
-        return;
+	if (!url || !*url) return;
 
-    // Get required buffer size for UTF-16 conversion
-    wlen = MultiByteToWideChar(CP_UTF8, 0, url, -1, NULL, 0);
-    if (wlen <= 0)
-        return;
+	wurl = win32_utf8_to_utf16(url);
+	if (!wurl) free(wurl);
 
-    // Allocate buffer for wide string
-    wurl = (WCHAR*)malloc(wlen * sizeof(WCHAR));
-    if (!wurl)
-        return;
+	// ShellExecuteW opens the URL with the default app (e.g., browser)
+	result = ShellExecuteW(NULL, L"open", wurl, NULL, NULL, SW_SHOWNORMAL);
 
-    // Convert UTF-8 to UTF-16
-    if (MultiByteToWideChar(CP_UTF8, 0, url, -1, wurl, wlen) <= 0) {
-        free(wurl);
-        return;
-    }
-
-    // ShellExecuteW opens the URL with the default app (e.g., browser)
-    result = ShellExecuteW(NULL, L"open", wurl, NULL, NULL, SW_SHOWNORMAL);
-
-    free(wurl);
-
-    // Optional: check if it failed
-    if ((INT_PTR)result <= 32) {
-    }
+	free(wurl);
 }
+
 //----------------------------------------------------------------------------------
 // File Requester Functions.
 //----------------------------------------------------------------------------------
@@ -7406,9 +7388,9 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
 
 void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
-    OPENFILENAMEA ofn = {0};
-    char filter[512];
-    char path[MAX_PATH] = {0};
+    OPENFILENAMEW ofn = {0};
+    LPWSTR filter[512];
+    LPWSTR path[MAX_PATH] = {0};
 
     if (!req)
         return;
@@ -7423,7 +7405,7 @@ void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
     ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
 
-    if (GetSaveFileNameA(&ofn)) {
+    if (GetSaveFileNameW(&ofn)) {
         pal_strcpy(req->path, path);
     } else {
         req->path[0] = '\0';
@@ -7432,7 +7414,7 @@ void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
 
 void pal_create_load_dialog(char** types, uint32_t type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
-    OPENFILENAMEA ofn = {0};
+    OPENFILENAMEW ofn = {0};
     char filter[512];
     char path[MAX_PATH] = {0};
 
@@ -7449,7 +7431,7 @@ void pal_create_load_dialog(char** types, uint32_t type_count, void* id) {
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
 
-    if (GetOpenFileNameA(&ofn)) {
+    if (GetOpenFileNameW(&ofn)) {
         pal_strcpy(req->path, path);
     } else {
         req->path[0] = '\0';
@@ -7469,6 +7451,7 @@ char* pal_show_load_dialog(void* id) {
 //----------------------------------------------------------------------------------
 // Multi-threadding functions.
 //----------------------------------------------------------------------------------
+
 PALAPI pal_mutex *pal_create_mutex() {
     pal_mutex *mutex = malloc(sizeof(*mutex));
     if (!mutex) return NULL;
@@ -7578,7 +7561,7 @@ PALAPI void pal_destroy_thread(pal_thread *thread) {
 // Dynamic Library Functions.
 //----------------------------------------------------------------------------------
 PALAPI void* pal_load_dynamic_library(const char* dll) {
-    HMODULE result = LoadLibraryW(dll);
+    HMODULE result = LoadLibraryW((LPCWSTR)dll);
     if (result) return (void*)result;
     return NULL;
 }
