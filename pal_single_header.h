@@ -1,7 +1,54 @@
 #ifndef PAL_H
 #define PAL_H
 
-#include <stdint.h>   /* For Clearly Defined Types. */
+#include <limits.h>
+#include <stdlib.h> /* temporary, for malloc()*/
+#include <math.h>
+
+#ifndef _STDINT_H
+/* 8-bit type */
+/* according to the c standard, char is guarunteed to be 1 byte. */
+#if UCHAR_MAX == 0xFF
+typedef unsigned char  uint8_t;
+typedef signed   char  int8_t;
+#else
+#error "No 8-bit type available on this platform."
+#endif /* 8-bit type */
+
+/* 16-bit type */
+/* according to the c standard, short is guarunteed to be at least 2 bytes, since it has to be at least bigger than a char. */
+#if USHRT_MAX == 0xFFFF
+typedef unsigned short uint16_t;
+typedef signed   short int16_t;
+#elif UINT_MAX == 0xFFFF
+typedef unsigned int   uint16_t;
+typedef signed   int   int16_t;
+#else
+#error "No 16-bit type available on this platform."
+#endif /* 16-bit types */
+
+/* 32-bit type */
+#if UINT_MAX == 0xFFFFFFFFUL
+typedef unsigned int uint32_t;
+typedef signed   int int32_t;
+#elif ULONG_MAX == 0xFFFFFFFFUL
+typedef unsigned long  uint32_t;
+typedef signed   long  int32_t;
+#else
+#error "No 32-bit type available on this platform."
+#endif /* 32 bit types */
+
+#if ULONG_MAX == 0xFFFFFFFFFFFFFFFFUL
+typedef unsigned long uint64_t;
+typedef signed   long int64_t;
+#elif defined(ULLONG_MAX) && ULLONG_MAX == 0xFFFFFFFFFFFFFFFFULL
+typedef unsigned long long uint64_t;
+typedef signed   long long int64_t;
+#else
+#error "No 64-bit type available on this platform."
+#endif
+
+#endif
 /* defines for building or using this library as a shared lib */
 #if defined(_WIN32)
     #if defined(__TINYC__)
@@ -839,6 +886,14 @@ typedef struct {
     uint32_t seconds;
 } pal_time;
 
+typedef struct {
+   int width;
+   int height;
+   int num_channels;
+   int bits_per_pixel;
+   unsigned char *image_data;
+}pal_image;
+
 #define PAL_MAX_TOUCHES 2
 typedef struct {
     /* Standard gamepad controls */
@@ -1366,13 +1421,9 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window);
 PALAPI pal_bool pal_maximize_window(pal_window *window);
 PALAPI pal_bool pal_minimize_window(pal_window *window);
 
-PALAPI void pal_set_window_icon(pal_window *window, const char *image_path);
-/* I am thinking that a better way of doing legacy stuff is with macros.
- Just have a macro like WINDOWS_XP_OR_LATER or WINDOWS_VISTA_OR_LATER. */
-PALAPI void pal_set_window_icon_legacy(pal_window *window, const char *image_path);
-PALAPI void pal_set_taskbar_icon(pal_window *taskbar, const char *image_path);
-PALAPI void pal_set_taskbar_icon_legacy(pal_window *taskbar, const char *image_path);
-PALAPI void pal_set_cursor(pal_window *window, const char *image_path, int size, int hotspot_x, int hotspot_y);
+PALAPI void pal_set_window_icon(pal_window* window, unsigned char *image, int size);
+PALAPI void pal_set_taskbar_icon(unsigned char *image, int size);
+PALAPI void pal_set_cursor(pal_window* window, unsigned char *image, int size, int hotspot_x, int hotspot_y);
 PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor);
 PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode);
 PALAPI pal_monitor *pal_get_primary_monitor(void);
@@ -1382,9 +1433,6 @@ PALAPI int pal_gl_make_context_current(pal_window *window, pal_gl_context contex
 
 /* Rendering functions (implemented using GDI on windows and X11 on linux) */
 PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color);
-
-/* Image Loading */
-PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp);
 
 /* Keyboard input */
 PALAPI int pal_get_keyboard_count(void);
@@ -1419,7 +1467,7 @@ PALAPI size_t pal_get_last_read_time(const char *file);
 PALAPI size_t pal_get_file_size(const char *file_path);
 PALAPI uint32_t pal_get_file_permissions(const char *file_path);
 PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t permission_flags);
-PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read); // This heap-allocates memory, and give you back a pointer to it. call pal_close_file() to free the memory.
+PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_read); /* This heap-allocates memory, and give you back a pointer to it. call pal_close_file() to free the memory. */
 PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *buffer);
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 PALAPI pal_bool pal_close_file(const unsigned char *file);
@@ -1441,8 +1489,8 @@ PALAPI void pal_clipboard_set(const char *text);
 PALAPI char *pal_clipboard_get(void);
 
 /* File dialog / requester */
-PALAPI void pal_create_save_dialog(char **types, uint32_t type_count, void *id);
-PALAPI void pal_create_load_dialog(char **types, uint32_t type_count, void *id);
+PALAPI void pal_create_save_dialog(char **types, int type_count, void *id);
+PALAPI void pal_create_load_dialog(char **types, int type_count, void *id);
 PALAPI char *pal_show_save_dialog(void *id);
 PALAPI char *pal_show_load_dialog(void *id);
 
@@ -1519,16 +1567,12 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll);
 /*-------------------------------------*/
 /* Cross-platform code ----------------*/
 /*-------------------------------------*/
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image_resize2.h"
 
 pal_event_queue g_event_queue = {0};
 
 pal_bool pal__init_eventq() {
 
-    // -- CREATE QUEUE FOR THE WINDOW --
+    /* -- CREATE QUEUE FOR THE WINDOW -- */
     size_t capacity = 10000;
     pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
 
@@ -1546,7 +1590,7 @@ pal_bool pal__init_eventq() {
     return 1;
 }
 
-// push / enqueue
+/* push / enqueue */
 void pal__eventq_push(pal_event_queue* queue, pal_event event) {
 	if (queue->size == queue->capacity) {
 		fprintf(stderr, "ERROR: %s(): Event queue->size has reached capacity. Not going to enqueue->\n", __func__);
@@ -1565,10 +1609,6 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
         queue.events = NULL;
         return 0;
     }
-}
-
-PALAPI unsigned char *pal_load_image(char const *filename, int *x, int *y, int *comp, int req_comp) {
-    return stbi_load(filename, x, y, comp, req_comp);
 }
 
 /* Window registry */
@@ -1641,7 +1681,7 @@ PALAPI int pal_get_keyboard_indices(int scan_code, int *keyboard_indices) {
         return 0;
     }
 
-    for (i = 0; i < g_keyboards.count; i++) {
+    for (i = 0; i < g_keyboards.count; ++i) {
         if (g_keyboards.keys[i][scan_code]) {
             keyboard_indices[count++] = i;
         }
@@ -1655,9 +1695,9 @@ PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
         return pal_false;
     }
 
-    // -1 means check ANY keyboard
+    /* -1 means check ANY keyboard */
     if (keyboard_id == -1) {
-        for (i = 0; i < g_keyboards.count; i++) {
+        for (i = 0; i < g_keyboards.count; ++i) {
             if (g_keyboards.keys_toggled[i][scan_code] && g_keyboards.keys[i][scan_code]) {
                 return pal_true;
             }
@@ -1669,7 +1709,7 @@ PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
         return pal_false;
     }
 
-    // Return true only if the key was toggled this frame AND is currently down
+    /* Return true only if the key was toggled this frame AND is currently down */
     return (g_keyboards.keys_toggled[keyboard_id][scan_code] && g_keyboards.keys[keyboard_id][scan_code]) ? pal_true : pal_false;
 }
 
@@ -1679,9 +1719,9 @@ PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
         return pal_false;
     }
 
-    // -1 means check ANY keyboard
+    /* -1 means check ANY keyboard */
     if (keyboard_id == -1) {
-        for (i = 0; i < g_keyboards.count; i++) {
+        for (i = 0; i < g_keyboards.count; ++i) {
             if (g_keyboards.keys[i][scan_code]) {
                 return pal_true;
             }
@@ -1693,11 +1733,11 @@ PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
         return pal_false;
     }
 
-    // Return true as long as the key is held down
+    /* Return true as long as the key is held down */
     return g_keyboards.keys[keyboard_id][scan_code] ? pal_true : pal_false;
 }
 
-// ========== Mouse Functions ==========
+/* ========== Mouse Functions ========== */
 
 PALAPI int pal_get_mouse_count(void) {
     return g_mice.count;
@@ -1728,7 +1768,7 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
         return pal_false;
     }
 
-    // -1 means check ANY mouse
+    /* -1 means check ANY mouse */
     if (mouse_id == -1) {
         for (i = 0; i < g_mice.count; i++) {
             if (g_mice.buttons[i][button]) {
@@ -1742,7 +1782,7 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
         return pal_false;
     }
 
-    // Return true as long as the button is held down
+    /* Return true as long as the button is held down */
     return g_mice.buttons[mouse_id][button] ? pal_true : pal_false;
 }
 
@@ -1752,7 +1792,7 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
         return pal_false;
     }
 
-    // -1 means check ANY mouse
+    /* -1 means check ANY mouse */
     if (mouse_id == -1) {
         for (i = 0; i < g_mice.count; i++) {
             if (g_mice.buttons_toggled[i][button] && g_mice.buttons[i][button]) {
@@ -1766,7 +1806,7 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
         return pal_false;
     }
 
-    // Return true only if the button was toggled this frame AND is currently down
+    /* Return true only if the button was toggled this frame AND is currently down */
     return (g_mice.buttons_toggled[mouse_id][button] && g_mice.buttons[mouse_id][button]) ? pal_true : pal_false;
 }
 
@@ -1776,7 +1816,7 @@ PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
     delta.x = 0.0f;
     delta.y = 0.0f;
 
-    // -1 means get combined delta from ALL mice
+    /* -1 means get combined delta from ALL mice */
     if (mouse_id == -1) {
         for (i = 0; i < g_mice.count; i++) {
             delta.x += (float)g_mice.dx[i];
@@ -1789,7 +1829,7 @@ PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
         return delta;
     }
 
-    // Return delta for specific mouse
+    /* Return delta for specific mouse */
     delta.x = (float)g_mice.dx[mouse_id];
     delta.y = (float)g_mice.dy[mouse_id];
     return delta;
@@ -1804,43 +1844,43 @@ void pal__reset_mouse_deltas(void) {
     }
 }
 
-// clang-format off
+/* clang-format off */
 enum {
-    PAL_UPPER_BIT = (1 << 0),     // A-Z
-    PAL_LOWER_BIT = (1 << 1),     // a-z
-    PAL_DIGIT_BIT = (1 << 2),     // 0-9
-    PAL_UNDER_BIT = (1 << 3),     // _
-    PAL_HYPHEN_BIT = (1 << 4),    // -
-    PAL_DOT_BIT = (1 << 5),       // .
-    PAL_EOL_BIT = (1 << 6),       // \r, \n (included in whitespace)
-    PAL_WHITESPACE_BIT = (1 << 7) // All whitespace chars
+    PAL_UPPER_BIT = (1 << 0),     /* A-Z */
+    PAL_LOWER_BIT = (1 << 1),     /* a-z */
+    PAL_DIGIT_BIT = (1 << 2),     /* 0-9 */
+    PAL_UNDER_BIT = (1 << 3),     /* _ */
+    PAL_HYPHEN_BIT = (1 << 4),    /* - */
+    PAL_DOT_BIT = (1 << 5),       /* . */
+    PAL_EOL_BIT = (1 << 6),       /* \r, \n (included in whitespace) */
+    PAL_WHITESPACE_BIT = (1 << 7) /* All whitespace chars */
 };
 
 static const uint8_t pal_char_masks[128] = {
-    // Control characters (0-31)
+    /* Control characters (0-31) */
     [0] = 0, [1] = 0, [2] = 0, [3] = 0, [4] = 0,
     [5] = 0, [6] = 0, [7] = 0, [8] = 0,
 
-    ['\t'] = PAL_WHITESPACE_BIT, // tab
-    ['\n'] = PAL_WHITESPACE_BIT | PAL_EOL_BIT, // new line
-    ['\v'] = PAL_WHITESPACE_BIT, // vertical tab (not used anymore)
-    ['\f'] = PAL_WHITESPACE_BIT, // form feed (not used anymore)
-    ['\r'] = PAL_WHITESPACE_BIT | PAL_EOL_BIT, // carriage return
+    ['\t'] = PAL_WHITESPACE_BIT, /* tab */
+    ['\n'] = PAL_WHITESPACE_BIT | PAL_EOL_BIT, /* new line */
+    ['\v'] = PAL_WHITESPACE_BIT, /* vertical tab (not used anymore) */
+    ['\f'] = PAL_WHITESPACE_BIT, /* form feed (not used anymore) */
+    ['\r'] = PAL_WHITESPACE_BIT | PAL_EOL_BIT, /* carriage return */
 
     [14] = 0, [15] = 0, [16] = 0, [17] = 0, [18] = 0,
     [19] = 0, [20] = 0, [21] = 0, [22] = 0, [23] = 0,
     [24] = 0, [25] = 0, [26] = 0, [27] = 0, [28] = 0,
     [29] = 0, [30] = 0, [31] = 0,
 
-    // Printable characters (32-127)
-    [' '] = PAL_WHITESPACE_BIT, // Space
+    /* Printable characters (32-127) */
+    [' '] = PAL_WHITESPACE_BIT, /* Space */
     ['!'] = 0, ['"'] = 0, ['#'] = 0, ['$'] = 0,
     ['%'] = 0, ['&'] = 0, ['\''] = 0, ['('] = 0,
     [')'] = 0, ['*'] = 0, ['+'] = 0, [','] = 0,
     ['-'] = PAL_HYPHEN_BIT, ['.'] = PAL_DOT_BIT,
     ['/'] = 0,
 
-    // Numbers (0-9)
+    /* Numbers (0-9) */
     ['0'] = PAL_DIGIT_BIT, ['1'] = PAL_DIGIT_BIT,
     ['2'] = PAL_DIGIT_BIT, ['3'] = PAL_DIGIT_BIT,
     ['4'] = PAL_DIGIT_BIT, ['5'] = PAL_DIGIT_BIT,
@@ -1850,7 +1890,7 @@ static const uint8_t pal_char_masks[128] = {
     [':'] = 0, [';'] = 0, ['<'] = 0, ['='] = 0,
     ['>'] = 0, ['?'] = 0, ['@'] = 0,
 
-    // Uppercase (A-Z)
+    /* Uppercase (A-Z) */
     ['A'] = PAL_UPPER_BIT, ['B'] = PAL_UPPER_BIT,
     ['C'] = PAL_UPPER_BIT, ['D'] = PAL_UPPER_BIT,
     ['E'] = PAL_UPPER_BIT, ['F'] = PAL_UPPER_BIT,
@@ -1868,7 +1908,7 @@ static const uint8_t pal_char_masks[128] = {
     ['['] = 0, ['\\'] = 0, [']'] = 0, ['^'] = 0,
     ['_'] = PAL_UNDER_BIT, ['`'] = 0,
 
-    // Lowercase (a-z)
+    /* Lowercase (a-z) */
     ['a'] = PAL_LOWER_BIT, ['b'] = PAL_LOWER_BIT,
     ['c'] = PAL_LOWER_BIT, ['d'] = PAL_LOWER_BIT,
     ['e'] = PAL_LOWER_BIT, ['f'] = PAL_LOWER_BIT,
@@ -1884,11 +1924,11 @@ static const uint8_t pal_char_masks[128] = {
     ['y'] = PAL_LOWER_BIT, ['z'] = PAL_LOWER_BIT,
 
     ['{'] = 0, ['|'] = 0, ['}'] = 0, ['~'] = 0,
-    [127] = 0 // DEL
+    [127] = 0 /* DEL */
 };
 
-// clang-format on
-// String Parsing functions
+/* clang-format on */
+/* String Parsing functions */
 PALAPI pal_bool pal_is_uppercase(char ch) {
     return pal_char_masks[(pal_bool)ch] & PAL_UPPER_BIT;
 }
@@ -1997,12 +2037,12 @@ PALAPI char *pal_strcpy(char *dest, const char *src) {
 PALAPI char *pal_strncpy(char *dest, const char *src, size_t n) {
     size_t i = 0;
 
-    // Copy characters from src until either end-of-source or reaching n.
+    /* Copy characters from src until either end-of-source or reaching n. */
     for (; i < n && src[i] != '\0'; i++) {
         dest[i] = src[i];
     }
 
-    // Pad the rest with '\0' if needed.
+    /* Pad the rest with '\0' if needed. */
     for (; i < n; i++) {
         dest[i] = '\0';
     }
@@ -2010,13 +2050,13 @@ PALAPI char *pal_strncpy(char *dest, const char *src, size_t n) {
     return dest;
 }
 
-// String comparison
+/* String comparison */
 PALAPI int pal_strcmp(const char* s1, const char* s2) {
 	while (*s1 && (*s1 == *s2)) {
 		s1++;
 		s2++;
 	}
-	// Cast to unsigned char to match standard strcmp behavior
+	/* Cast to unsigned char to match standard strcmp behavior */
 	return (unsigned char)*s1 - (unsigned char)*s2;
 }
 
@@ -2027,8 +2067,7 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
         n--;
     }
 
-    if (n == 0)
-        return 0;
+    if (n == 0) return 0;
 
     return (unsigned char)*s1 - (unsigned char)*s2;
 }
@@ -2037,12 +2076,7 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 /* platform-specific code--------------*/
 /*-------------------------------------*/
 #if defined(_WIN32) || defined(WIN32) || defined(__MINGW32__) || defined(_MSC_VER)
-#include <stdlib.h> /* temporary, for malloc()*/
-#include <stdint.h>
-#include <wchar.h>
 #define _CRT_SECURE_NO_WARNINGS
-
-// Windows system headers
 
 /*
    windows.h begin
@@ -2052,8 +2086,6 @@ PALAPI int pal_strncmp(const char* s1, const char* s2, size_t n) {
 #define CONST const
 #endif
 
-/* Calling conventions */
-/* Basic Windows types */
 #define VOID void
 typedef int BOOL;
 typedef BOOL *PBOOL, *LPBOOL;
@@ -2069,7 +2101,11 @@ typedef int64_t LONGLONG;
 typedef uint64_t ULONGLONG;
 typedef int16_t SHORT;
 typedef uint16_t USHORT;
-typedef wchar_t WCHAR;
+#if !defined(_NATIVE_WCHAR_T_DEFINED)
+    typedef unsigned short WCHAR;
+#else
+    typedef wchar_t WCHAR;
+#endif
 typedef char CHAR;
 typedef unsigned char UCHAR;
 typedef CHAR *LPSTR, *LPCH;
@@ -2156,21 +2192,21 @@ typedef HKEY *PHKEY;
 #ifndef NTDDI_VERSION
 #ifdef _WIN32_WINNT
 #if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
-// set NTDDI_VERSION based on _WIN32_WINNT
+/* set NTDDI_VERSION based on _WIN32_WINNT */
 #define NTDDI_VERSION   NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
 #elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
-// set NTDDI_VERSION to default to WDK_NTDDI_VERSION
+/* set NTDDI_VERSION to default to WDK_NTDDI_VERSION */
 #define NTDDI_VERSION   WDK_NTDDI_VERSION
-#endif // (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
+#endif /* (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE) */
 #else
-// set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set
+/* set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set */
 #define NTDDI_VERSION   0x0A000010
-#endif // _WIN32_WINNT
-#endif // NTDDI_VERSION
+#endif /* _WIN32_WINNT */
+#endif /* NTDDI_VERSION */
 
 #ifndef WINVER
 #ifdef _WIN32_WINNT
-// set WINVER based on _WIN32_WINNT
+/* set WINVER based on _WIN32_WINNT */
 #define WINVER          _WIN32_WINNT
 #else
 #define WINVER          0x0A00
@@ -2204,7 +2240,7 @@ typedef HKEY *PHKEY;
 #else
 #define WINCOMMDLGAPI
 #endif
-#endif // WINCOMMDLGAPI
+#endif /* WINCOMMDLGAPI */
 
 #ifndef WINADVAPI
 #define WINADVAPI
@@ -2220,7 +2256,7 @@ typedef HKEY *PHKEY;
 
 #if defined(_WIN32) || defined(_MPPC_)
 
-// Win32 doesn't support __export
+/* Win32 doesn't support __export */
 
 #ifdef _68K_
 #define STDMETHODCALLTYPE       __cdecl
@@ -2250,7 +2286,7 @@ typedef HKEY *PHKEY;
 #define SHSTDAPI          STDAPI
 #define SHSTDAPI_(type)   STDAPI_(type)
 #endif
-#endif // SHSTDAPI
+#endif /* SHSTDAPI */
 
 #ifdef _MAC
 #define CALLBACK    PASCAL
@@ -2367,15 +2403,18 @@ typedef HKEY *PHKEY;
 #endif /* WINVER >= 0x0500 */
 #define WM_DROPFILES                    0x0233
 
+#define WM_WINDOWPOSCHANGING            0x0046
+#define WM_WINDOWPOSCHANGED             0x0047
+#define WM_ACTIVATEAPP                  0x001C
 
 #define CW_USEDEFAULT       ((int)0x80000000)
 #define GMEM_MOVEABLE       0x0002
 #define CF_TEXT             1
 #define CF_UNICODETEXT      13
-#define INFINITE            0xFFFFFFFF  // Infinite timeout
-#define STATUS_WAIT_0                           ((DWORD   )0x00000000L) 
+#define INFINITE            0xFFFFFFFF 
+#define STATUS_WAIT_0       ((DWORD   )0x00000000L) 
 #define WAIT_OBJECT_0       ((STATUS_WAIT_0 ) + 0 )
-#define CREATE_SUSPENDED                  0x00000004
+#define CREATE_SUSPENDED    0x00000004
 
 #define SW_HIDE 0
 #define SW_SHOWNORMAL 1
@@ -2397,10 +2436,6 @@ typedef HKEY *PHKEY;
 
 #define PM_REMOVE           0x0001
 
-#define WM_WINDOWPOSCHANGING            0x0046
-#define WM_WINDOWPOSCHANGED             0x0047
-#define WM_ACTIVATEAPP                  0x001C
-
 #define IS_INTRESOURCE(_r) ((((ULONG_PTR)(_r)) >> 16) == 0)
 #define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
 #define MAKEINTRESOURCEW(i) ((LPWSTR)((ULONG_PTR)((WORD)(i))))
@@ -2408,8 +2443,7 @@ typedef HKEY *PHKEY;
 #define MAKEINTRESOURCE  MAKEINTRESOURCEW
 #else
 #define MAKEINTRESOURCE  MAKEINTRESOURCEA
-#endif // !UNICODE
-
+#endif /* !UNICODE */
 
 #define IDC_ARROW           MAKEINTRESOURCEW(32512)
 
@@ -2444,9 +2478,6 @@ typedef  HDEVNOTIFY     *PHDEVNOTIFY;
 #endif /* _WIN32_WINNT >= 0x0501 */
 #endif
 
-//
-// macros to extract various version fields from the NTDDI version
-//
 #define OSVER(Version)  ((Version) & OSVERSION_MASK)
 #define SPVER(Version)  (((Version) & SPVERSION_MASK) >> 8)
 #define SUBVER(Version) (((Version) & SUBVERSION_MASK) )
@@ -2481,7 +2512,7 @@ typedef  HDEVNOTIFY     *PHDEVNOTIFY;
 #define DUMMYUNIONNAME8
 #define DUMMYUNIONNAME9
 #endif
-#endif // DUMMYUNIONNAME
+#endif /* DUMMYUNIONNAME */
 
 #ifndef DUMMYSTRUCTNAME
 #if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
@@ -2499,7 +2530,7 @@ typedef  HDEVNOTIFY     *PHDEVNOTIFY;
 #define DUMMYSTRUCTNAME5
 #define DUMMYSTRUCTNAME6
 #endif
-#endif // DUMMYSTRUCTNAME
+#endif /* DUMMYSTRUCTNAME */
 
 
 /* Special handles */
@@ -2514,7 +2545,6 @@ typedef HANDLE    LOCALHANDLE;
 typedef __int64 (WINAPI FAR *FARPROC)();
 typedef __int64 (WINAPI NEAR *NEARPROC)();
 typedef __int64 (WINAPI *PROC)();
-
 
 /* Function pointer types */
 typedef LRESULT (CALLBACK *WNDPROC)(HWND, UINT, WPARAM, LPARAM);
@@ -2648,7 +2678,7 @@ typedef DEVMODEA DEVMODE;
 typedef PDEVMODEA PDEVMODE;
 typedef NPDEVMODEA NPDEVMODE;
 typedef LPDEVMODEA LPDEVMODE;
-#endif // UNICODE
+#endif /* UNICODE */
 #else
 typedef struct _devicemodeA {
     BYTE   dmDeviceName[CCHDEVICENAME];
@@ -2756,8 +2786,8 @@ typedef DEVMODEA DEVMODE;
 typedef PDEVMODEA PDEVMODE;
 typedef NPDEVMODEA NPDEVMODE;
 typedef LPDEVMODEA LPDEVMODE;
-#endif // UNICODE
-#endif // (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
+#endif /* UNICODE */
+#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINXP) */
 
 #endif /* WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP | WINAPI_PARTITION_SYSTEM) */
 
@@ -2792,8 +2822,8 @@ typedef LPMONITORINFOEXW LPMONITORINFOEX;
 #else
 typedef MONITORINFOEXA MONITORINFOEX;
 typedef LPMONITORINFOEXA LPMONITORINFOEX;
-#endif // UNICODE
-#else // ndef __cplusplus
+#endif /* UNICODE */
+#else /* ndef __cplusplus */
 typedef struct tagMONITORINFOEXA
 {
     MONITORINFO DUMMYSTRUCTNAME;
@@ -2810,7 +2840,7 @@ typedef LPMONITORINFOEXW LPMONITORINFOEX;
 #else
 typedef MONITORINFOEXA MONITORINFOEX;
 typedef LPMONITORINFOEXA LPMONITORINFOEX;
-#endif // UNICODE
+#endif /* UNICODE */
 #endif
 
 typedef struct _FILETIME {
@@ -3015,10 +3045,10 @@ typedef struct tagRAWINPUT {
 } RAWINPUT, *PRAWINPUT, *LPRAWINPUT;
 
 typedef struct tagRAWINPUTDEVICE {
-    USHORT usUsagePage; // Toplevel collection UsagePage
-    USHORT usUsage;     // Toplevel collection Usage
+    USHORT usUsagePage; /* Toplevel collection UsagePage */
+    USHORT usUsage;     /* Toplevel collection Usage */
     DWORD dwFlags;
-    HWND hwndTarget;    // Target hwnd. NULL = follows keyboard focus
+    HWND hwndTarget;    /* Target hwnd. NULL = follows keyboard focus */
 } RAWINPUTDEVICE, *PRAWINPUTDEVICE, *LPRAWINPUTDEVICE;
 
 typedef struct tagMOUSEINPUT {
@@ -3118,7 +3148,7 @@ typedef WNDCLASSEXA WNDCLASSEX;
 typedef PWNDCLASSEXA PWNDCLASSEX;
 typedef NPWNDCLASSEXA NPWNDCLASSEX;
 typedef LPWNDCLASSEXA LPWNDCLASSEX;
-#endif // UNICODE
+#endif /* UNICODE */
 #endif /* WINVER >= 0x0400 */
 
 typedef CONST RAWINPUTDEVICE* PCRAWINPUTDEVICE;
@@ -3144,20 +3174,20 @@ typedef struct tagRAWINPUTDEVICELIST {
 
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t idReserved; // Must be 0
-    uint16_t idType;     // Must be 1 for icons
-    uint16_t idCount;    // Number of images
+    uint16_t idReserved; /* Must be 0 */
+    uint16_t idType;     /* Must be 1 for icons */
+    uint16_t idCount;    /* Number of images */
 } ICONDIR;
 
 typedef struct {
-    uint8_t bWidth;         // Width in pixels
-    uint8_t bHeight;        // Height in pixels
-    uint8_t bColorCount;    // 0 if >= 8bpp
-    uint8_t bReserved;      // Must be 0
-    uint16_t wPlanes;       // Should be 1
-    uint16_t wBitCount;     // Usually 32
-    uint32_t dwBytesInRes;  // Size of PNG data
-    uint32_t dwImageOffset; // Offset to PNG data (after header)
+    uint8_t bWidth;         /* Width in pixels */
+    uint8_t bHeight;        /* Height in pixels */
+    uint8_t bColorCount;    /* 0 if >= 8bpp */
+    uint8_t bReserved;      /* Must be 0 */
+    uint16_t wPlanes;       /* Should be 1 */
+    uint16_t wBitCount;     /* Usually 32 */
+    uint32_t dwBytesInRes;  /* Size of PNG data */
+    uint32_t dwImageOffset; /* Offset to PNG data (after header) */
 } ICONDIRENTRY;
 #pragma pack(pop)
 
@@ -3174,7 +3204,7 @@ typedef ICONINFO *PICONINFO;
 typedef struct _LARGE_INTEGER {
     LONGLONG QuadPart;
 } LARGE_INTEGER;
-#else // MIDL_PASS
+#else /* MIDL_PASS */
 typedef union _LARGE_INTEGER {
     struct {
         DWORD LowPart;
@@ -3186,7 +3216,7 @@ typedef union _LARGE_INTEGER {
     } u;
     LONGLONG QuadPart;
 } LARGE_INTEGER;
-#endif //MIDL_PASS
+#endif /*MIDL_PASS */
 
 typedef LARGE_INTEGER *PLARGE_INTEGER;
 
@@ -3365,7 +3395,7 @@ typedef struct tagOFNA {
    void *        pvReserved;
    DWORD        dwReserved;
    DWORD        FlagsEx;
-#endif // (_WIN32_WINNT >= 0x0500)
+#endif /* (_WIN32_WINNT >= 0x0500) */
 } OPENFILENAMEA, *LPOPENFILENAMEA;
 typedef struct tagOFNW {
    DWORD        lStructSize;
@@ -3396,7 +3426,7 @@ typedef struct tagOFNW {
    void *        pvReserved;
    DWORD        dwReserved;
    DWORD        FlagsEx;
-#endif // (_WIN32_WINNT >= 0x0500)
+#endif /* (_WIN32_WINNT >= 0x0500) */
 } OPENFILENAMEW, *LPOPENFILENAMEW;
 #ifdef UNICODE
 typedef OPENFILENAMEW OPENFILENAME;
@@ -3404,7 +3434,7 @@ typedef LPOPENFILENAMEW LPOPENFILENAME;
 #else
 typedef OPENFILENAMEA OPENFILENAME;
 typedef LPOPENFILENAMEA LPOPENFILENAME;
-#endif // UNICODE
+#endif /* UNICODE */
 
 typedef DWORD (WINAPI *PTHREAD_START_ROUTINE)(
     LPVOID lpThreadParameter
@@ -3439,16 +3469,16 @@ typedef struct _RTL_CRITICAL_SECTION_DEBUG {
 typedef struct _RTL_CRITICAL_SECTION {
 PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
 
-//
-//  The following three fields control entering and exiting the critical
-//  section for the resource
-//
+/* */
+/*  The following three fields control entering and exiting the critical */
+/*  section for the resource */
+/* */
 
 LONG LockCount;
 LONG RecursionCount;
-HANDLE OwningThread;        // from the thread's ClientId->UniqueThread
+HANDLE OwningThread;        /* from the thread's ClientId->UniqueThread */
 HANDLE LockSemaphore;
-ULONG_PTR SpinCount;        // force size on 64-bit systems when packed
+ULONG_PTR SpinCount;        /* force size on 64-bit systems when packed */
 } RTL_CRITICAL_SECTION, *PRTL_CRITICAL_SECTION;
 
 #pragma pack(pop)
@@ -3495,14 +3525,14 @@ struct pal_mutex {
 #define STANDARD_RIGHTS_READ             (READ_CONTROL)
 #define STANDARD_RIGHTS_WRITE            (READ_CONTROL)
 #define STANDARD_RIGHTS_EXECUTE          (READ_CONTROL)
-#define FILE_READ_DATA            ( 0x0001 )    // file & pipe
-#define FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
-#define FILE_READ_EA              ( 0x0008 )    // file & directory
-#define FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
-#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
-#define FILE_WRITE_EA             ( 0x0010 )    // file & directory
-#define FILE_APPEND_DATA          ( 0x0004 )    // file
-#define FILE_EXECUTE              ( 0x0020 )    // file
+#define FILE_READ_DATA            ( 0x0001 )    /* file & pipe */
+#define FILE_READ_ATTRIBUTES      ( 0x0080 )    /* all */
+#define FILE_READ_EA              ( 0x0008 )    /* file & directory */
+#define FILE_WRITE_DATA           ( 0x0002 )    /* file & pipe */
+#define FILE_WRITE_ATTRIBUTES     ( 0x0100 )    /* all */
+#define FILE_WRITE_EA             ( 0x0010 )    /* file & directory */
+#define FILE_APPEND_DATA          ( 0x0004 )    /* file */
+#define FILE_EXECUTE              ( 0x0020 )    /* file */
 
 #define FILE_GENERIC_READ (STANDARD_RIGHTS_READ | FILE_READ_DATA | FILE_READ_ATTRIBUTES | FILE_READ_EA  | SYNCHRONIZE)
 
@@ -3570,7 +3600,7 @@ typedef enum _TOKEN_INFORMATION_CLASS {
     TokenIsSandboxed,
     TokenIsAppSilo,
     TokenLoggingInformation,
-    MaxTokenInfoClass  // MaxTokenInfoClass should always be the last enum
+    MaxTokenInfoClass  /* MaxTokenInfoClass should always be the last enum */
 } TOKEN_INFORMATION_CLASS, *PTOKEN_INFORMATION_CLASS;
 
 #define TOKEN_QUERY             (0x0008)
@@ -3619,8 +3649,8 @@ typedef enum _TOKEN_INFORMATION_CLASS {
 #define SWP_NOREPOSITION    SWP_NOOWNERZORDER
 
 #if(WINVER >= 0x0400)
-#define SWP_DEFERERASE      0x2000 // same as SWP_DEFERDRAWING
-#define SWP_ASYNCWINDOWPOS  0x4000 // same as SWP_CREATESPB
+#define SWP_DEFERERASE      0x2000 /* same as SWP_DEFERDRAWING */
+#define SWP_ASYNCWINDOWPOS  0x4000 /* same as SWP_CREATESPB */
 #endif /* WINVER >= 0x0400 */
 #define MONITOR_DEFAULTTOPRIMARY    0x00000001
 #define MONITOR_DEFAULTTONEAREST    0x00000002
@@ -3723,7 +3753,7 @@ WINUSERAPI BOOL WINAPI GetMonitorInfoW(HMONITOR hMonitor,  LPMONITORINFO lpmi);
 #define GetMonitorInfo  GetMonitorInfoW
 #else
 #define GetMonitorInfo  GetMonitorInfoA
-#endif // !UNICODE
+#endif /* !UNICODE */
 WINUSERAPI UINT WINAPI SendInput(UINT cInputs,LPINPUT pInputs, int cbSize);
 WINUSERAPI HANDLE WINAPI SetClipboardData(UINT uFormat,  HANDLE hMem);
 WINUSERAPI HANDLE WINAPI GetClipboardData( UINT uFormat);
@@ -3754,7 +3784,7 @@ WINUSERAPI UINT WINAPI GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LP
 #define GetRawInputDeviceInfo  GetRawInputDeviceInfoW
 #else
 #define GetRawInputDeviceInfo  GetRawInputDeviceInfoA
-#endif // !UNICODE
+#endif /* !UNICODE */
 
 WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationA(HANDLE hRecipient, LPVOID NotificationFilter, DWORD Flags);
 WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationW(HANDLE hRecipient, LPVOID NotificationFilter, DWORD Flags);
@@ -3762,7 +3792,7 @@ WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationW(HANDLE hRecipient, LPVO
 #define RegisterDeviceNotification  RegisterDeviceNotificationW
 #else
 #define RegisterDeviceNotification  RegisterDeviceNotificationA
-#endif // !UNICODE
+#endif /* !UNICODE */
 WINBASEAPI BOOL WINAPI CloseHandle(HANDLE hObject);
 WINBASEAPI HANDLE WINAPI CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
 WINBASEAPI BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
@@ -3790,6 +3820,7 @@ WINBASEAPI VOID WINAPI EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection
 WINBASEAPI BOOL WINAPI TryEnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
 WINBASEAPI VOID WINAPI LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
 WINBASEAPI VOID WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
+WINUSERAPI BOOL WINAPI DestroyIcon(HICON hIcon);
 
 /*
 * windows.h END
@@ -3805,11 +3836,11 @@ WINBASEAPI VOID WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSectio
 #define DBTFAR  far
 #endif
 
-#define DBT_DEVICEARRIVAL               0x8000  // system detected a new device
-#define DBT_DEVICEREMOVECOMPLETE        0x8004  // device is gone
+#define DBT_DEVICEARRIVAL               0x8000  /* system detected a new device */
+#define DBT_DEVICEREMOVECOMPLETE        0x8004  /* device is gone */
 
 #if(WINVER >= 0x040A)
-#define DBT_DEVTYP_DEVICEINTERFACE      0x00000005  // device interface class
+#define DBT_DEVTYP_DEVICEINTERFACE      0x00000005  /* device interface class */
 #endif /* WINVER >= 0x040A */
 
 struct _DEV_BROADCAST_HDR {     /* */
@@ -3851,22 +3882,22 @@ typedef struct _DEV_BROADCAST_HANDLE {
     DWORD       dbch_size;
     DWORD       dbch_devicetype;
     DWORD       dbch_reserved;
-    HANDLE      dbch_handle;     // file handle used in call to RegisterDeviceNotification
-    HDEVNOTIFY  dbch_hdevnotify; // returned from RegisterDeviceNotification
-    //
-    // The following 3 fields are only valid if wParam is DBT_CUSTOMEVENT.
-    //
+    HANDLE      dbch_handle;     /* file handle used in call to RegisterDeviceNotification */
+    HDEVNOTIFY  dbch_hdevnotify; /* returned from RegisterDeviceNotification */
+    /* */
+    /* The following 3 fields are only valid if wParam is DBT_CUSTOMEVENT. */
+    /* */
     GUID        dbch_eventguid;
-    LONG        dbch_nameoffset; // offset (bytes) of variable-length string buffer (-1 if none)
-    BYTE        dbch_data[1];    // variable-sized buffer, potentially containing binary and/or text data
+    LONG        dbch_nameoffset; /* offset (bytes) of variable-length string buffer (-1 if none) */
+    BYTE        dbch_data[1];    /* variable-sized buffer, potentially containing binary and/or text data */
 } DEV_BROADCAST_HANDLE, *PDEV_BROADCAST_HANDLE;
 
 #if(WINVER >= 0x0501)
 
-//
-// Define 32-bit and 64-bit versions of the DEV_BROADCAST_HANDLE structure
-// for WOW64.  These must be kept in sync with the above structure.
-//
+/* */
+/* Define 32-bit and 64-bit versions of the DEV_BROADCAST_HANDLE structure */
+/* for WOW64.  These must be kept in sync with the above structure. */
+/* */
 
 typedef struct _DEV_BROADCAST_HANDLE32 {
     DWORD       dbch_size;
@@ -4013,8 +4044,8 @@ typedef struct _TRUSTEE_A
         OBJECTS_AND_NAME_A     *pObjectsAndName;
     };
 #else
-    // This member is not null-terminated as it may be used to hold strings, which are null-terminated or 
-    // SIDs, which are not null-terminated.
+    /* This member is not null-terminated as it may be used to hold strings, which are null-terminated or  */
+    /* SIDs, which are not null-terminated. */
     LPCH                        ptstrName;
 #endif
 } TRUSTEE_A, *PTRUSTEE_A, TRUSTEEA, *PTRUSTEEA;
@@ -4038,8 +4069,8 @@ typedef struct _TRUSTEE_W
         OBJECTS_AND_NAME_W     *pObjectsAndName;
     };
 #else
-    // This member is not null-terminated as it may be used to hold strings, which are null-terminated or 
-    // SID, which are not null-terminated.
+    /* This member is not null-terminated as it may be used to hold strings, which are null-terminated or  */
+    /* SID, which are not null-terminated. */
     LPWCH                       ptstrName;
 #endif
 } TRUSTEE_W, *PTRUSTEE_W, TRUSTEEW, *PTRUSTEEW;
@@ -4053,7 +4084,7 @@ typedef TRUSTEE_A TRUSTEE_;
 typedef PTRUSTEE_A PTRUSTEE_;
 typedef TRUSTEEA TRUSTEE;
 typedef PTRUSTEEA PTRUSTEE;
-#endif // UNICODE
+#endif /* UNICODE */
 
 typedef struct _EXPLICIT_ACCESS_A
 {
@@ -4079,7 +4110,7 @@ typedef EXPLICIT_ACCESS_A EXPLICIT_ACCESS_;
 typedef PEXPLICIT_ACCESS_A PEXPLICIT_ACCESS_;
 typedef EXPLICIT_ACCESSA EXPLICIT_ACCESS;
 typedef PEXPLICIT_ACCESSA PEXPLICIT_ACCESS;
-#endif // UNICODE
+#endif /* UNICODE */
 
 typedef DWORD SECURITY_INFORMATION, *PSECURITY_INFORMATION;
 typedef PVOID PSID;
@@ -4090,9 +4121,9 @@ typedef PVOID PCLAIMS_BLOB;
 typedef struct _SID_AND_ATTRIBUTES {
 #ifdef MIDL_PASS
     PISID Sid;
-#else // MIDL_PASS
+#else /* MIDL_PASS */
     PSID Sid;
-#endif // MIDL_PASS
+#endif /* MIDL_PASS */
     DWORD Attributes;
 } SID_AND_ATTRIBUTES, * PSID_AND_ATTRIBUTES;
 
@@ -4127,7 +4158,7 @@ WINADVAPI DWORD WINAPI SetNamedSecurityInfoW( LPWSTR pObjectName, SE_OBJECT_TYPE
 #define SetNamedSecurityInfo  SetNamedSecurityInfoW
 #else
 #define SetNamedSecurityInfo  SetNamedSecurityInfoA
-#endif // !UNICODE
+#endif /* !UNICODE */
 
 WINADVAPI DWORD WINAPI GetNamedSecurityInfoA(  LPCSTR  pObjectName,  SE_OBJECT_TYPE ObjectType,  SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR   *ppSecurityDescriptor );
 WINADVAPI DWORD WINAPI GetNamedSecurityInfoW(  LPCWSTR pObjectName,  SE_OBJECT_TYPE ObjectType,  SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR   *ppSecurityDescriptor );
@@ -4135,7 +4166,7 @@ WINADVAPI DWORD WINAPI GetNamedSecurityInfoW(  LPCWSTR pObjectName,  SE_OBJECT_T
 #define GetNamedSecurityInfo  GetNamedSecurityInfoW
 #else
 #define GetNamedSecurityInfo  GetNamedSecurityInfoA
-#endif // !UNICODE
+#endif /* !UNICODE */
 
 WINADVAPI DWORD WINAPI SetEntriesInAclA( ULONG cCountOfExplicitEntries,  PEXPLICIT_ACCESS_A  pListOfExplicitEntries, PACL OldAcl, PACL *NewAcl );
 WINADVAPI DWORD WINAPI SetEntriesInAclW( ULONG cCountOfExplicitEntries,  PEXPLICIT_ACCESS_W  pListOfExplicitEntries, PACL OldAcl, PACL *NewAcl );
@@ -4143,7 +4174,7 @@ WINADVAPI DWORD WINAPI SetEntriesInAclW( ULONG cCountOfExplicitEntries,  PEXPLIC
 #define SetEntriesInAcl  SetEntriesInAclW
 #else
 #define SetEntriesInAcl  SetEntriesInAclA
-#endif // !UNICODE
+#endif /* !UNICODE */
 
 WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclA(  PACL pacl, PTRUSTEE_A pTrustee, PACCESS_MASK  pAccessRights );
 WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(  PACL pacl, PTRUSTEE_W pTrustee, PACCESS_MASK  pAccessRights );
@@ -4151,7 +4182,7 @@ WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(  PACL pacl, PTRUSTEE_W pTrust
 #define GetEffectiveRightsFromAcl  GetEffectiveRightsFromAclW
 #else
 #define GetEffectiveRightsFromAcl  GetEffectiveRightsFromAclA
-#endif // !UNICODE
+#endif /* !UNICODE */
 
 #define FILE_SHARE_READ                 0x00000001  
 #define OPEN_EXISTING       3
@@ -4169,15 +4200,15 @@ WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(  PACL pacl, PTRUSTEE_W pTrust
 *
 */
 
-// Global function pointers
+/* Global function pointers */
 static DWORD(WINAPI* XinputGetstate_fn)(DWORD dwUserIndex, XINPUT_STATE *pState) = NULL;
 static DWORD(WINAPI* XInputSetState_fn)(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration) = NULL;
-//static DWORD(WINAPI* XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL;
+/*static DWORD(WINAPI* XInputGetCapabilities_fn)(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES* pCapabilities) = NULL; */
 static void(WINAPI* XInputEnable_fn)(BOOL enable) = NULL;
 
 typedef unsigned __int64 QWORD;
 
-// Global state
+/* Global state */
 static HMODULE g_xinput_dll = NULL;
 static pal_bool g_has_trigger_motors = pal_false;
 
@@ -4194,6 +4225,8 @@ struct pal_window {
     float width;
     float height;
     uint32_t id;
+    HCURSOR cursor;
+    HICON icon;
 };
 
 struct pal_monitor {
@@ -4216,151 +4249,151 @@ static const uint8_t win32_button_to_pal_button[] = {
 };
 
 static int win32_makecode_to_pal_scancode[256] = {
-    [0x00] = 0,                       // Invalid
-    [0x01] = PAL_SCAN_ESCAPE,         // Escape
-    [0x02] = PAL_SCAN_1,              // 1
-    [0x03] = PAL_SCAN_2,              // 2
-    [0x04] = PAL_SCAN_3,              // 3
-    [0x05] = PAL_SCAN_4,              // 4
-    [0x06] = PAL_SCAN_5,              // 5
-    [0x07] = PAL_SCAN_6,              // 6
-    [0x08] = PAL_SCAN_7,              // 7
-    [0x09] = PAL_SCAN_8,              // 8
-    [0x0A] = PAL_SCAN_9,              // 9
-    [0x0B] = PAL_SCAN_0,              // 0
-    [0x0C] = PAL_SCAN_MINUS,          // -
-    [0x0D] = PAL_SCAN_EQUALS,         // =
-    [0x0E] = PAL_SCAN_BACKSPACE,      // Backspace
-    [0x0F] = PAL_SCAN_TAB,            // Tab
-    [0x10] = PAL_SCAN_Q,              // Q
-    [0x11] = PAL_SCAN_W,              // W
-    [0x12] = PAL_SCAN_E,              // E
-    [0x13] = PAL_SCAN_R,              // R
-    [0x14] = PAL_SCAN_T,              // T
-    [0x15] = PAL_SCAN_Y,              // Y
-    [0x16] = PAL_SCAN_U,              // U
-    [0x17] = PAL_SCAN_I,              // I
-    [0x18] = PAL_SCAN_O,              // O
-    [0x19] = PAL_SCAN_P,              // P
-    [0x1A] = PAL_SCAN_LEFTBRACKET,    // [
-    [0x1B] = PAL_SCAN_RIGHTBRACKET,   // ]
-    [0x1C] = PAL_SCAN_RETURN,         // Enter
-    [0x1D] = PAL_SCAN_LCTRL,          // Left Ctrl
-    [0x1E] = PAL_SCAN_A,              // A
-    [0x1F] = PAL_SCAN_S,              // S
-    [0x20] = PAL_SCAN_D,              // D
-    [0x21] = PAL_SCAN_F,              // F
-    [0x22] = PAL_SCAN_G,              // G
-    [0x23] = PAL_SCAN_H,              // H
-    [0x24] = PAL_SCAN_J,              // J
-    [0x25] = PAL_SCAN_K,              // K
-    [0x26] = PAL_SCAN_L,              // L
-    [0x27] = PAL_SCAN_SEMICOLON,      // ;
-    [0x28] = PAL_SCAN_APOSTROPHE,     // '
-    [0x29] = PAL_SCAN_GRAVE,          // `
-    [0x2A] = PAL_SCAN_LSHIFT,         // Left Shift
-    [0x2B] = PAL_SCAN_BACKSLASH,      // \ (backslash)
-    [0x2C] = PAL_SCAN_Z,              // Z
-    [0x2D] = PAL_SCAN_X,              // X
-    [0x2E] = PAL_SCAN_C,              // C
-    [0x2F] = PAL_SCAN_V,              // V
-    [0x30] = PAL_SCAN_B,              // B
-    [0x31] = PAL_SCAN_N,              // N
-    [0x32] = PAL_SCAN_M,              // M
-    [0x33] = PAL_SCAN_COMMA,          // ,
-    [0x34] = PAL_SCAN_PERIOD,         // .
-    [0x35] = PAL_SCAN_SLASH,          // /
-    [0x36] = PAL_SCAN_RSHIFT,         // Right Shift
-    [0x37] = PAL_SCAN_KP_MULTIPLY,    // Keypad *
-    [0x38] = PAL_SCAN_LALT,           // Left Alt
-    [0x39] = PAL_SCAN_SPACE,          // Space
-    [0x3A] = PAL_SCAN_CAPSLOCK,       // Caps Lock
-    [0x3B] = PAL_SCAN_F1,             // F1
-    [0x3C] = PAL_SCAN_F2,             // F2
-    [0x3D] = PAL_SCAN_F3,             // F3
-    [0x3E] = PAL_SCAN_F4,             // F4
-    [0x3F] = PAL_SCAN_F5,             // F5
-    [0x40] = PAL_SCAN_F6,             // F6
-    [0x41] = PAL_SCAN_F7,             // F7
-    [0x42] = PAL_SCAN_F8,             // F8
-    [0x43] = PAL_SCAN_F9,             // F9
-    [0x44] = PAL_SCAN_F10,            // F10
-    [0x45] = PAL_SCAN_NUMCLEAR,       // Num Lock
-    [0x46] = PAL_SCAN_SCROLLLOCK,     // Scroll Lock
-    [0x47] = PAL_SCAN_KP_7,           // Keypad 7 / Home
-    [0x48] = PAL_SCAN_KP_8,           // Keypad 8 / Up
-    [0x49] = PAL_SCAN_KP_9,           // Keypad 9 / Page Up
-    [0x4A] = PAL_SCAN_KP_MINUS,       // Keypad -
-    [0x4B] = PAL_SCAN_KP_4,           // Keypad 4 / Left
-    [0x4C] = PAL_SCAN_KP_5,           // Keypad 5
-    [0x4D] = PAL_SCAN_KP_6,           // Keypad 6 / Right
-    [0x4E] = PAL_SCAN_KP_PLUS,        // Keypad +
-    [0x4F] = PAL_SCAN_KP_1,           // Keypad 1 / End
-    [0x50] = PAL_SCAN_KP_2,           // Keypad 2 / Down
-    [0x51] = PAL_SCAN_KP_3,           // Keypad 3 / Page Down
-    [0x52] = PAL_SCAN_KP_0,           // Keypad 0 / Insert
-    [0x53] = PAL_SCAN_KP_PERIOD,      // Keypad . / Delete
-    [0x56] = PAL_SCAN_NONUSBACKSLASH, // Non-US backslash (ISO layout)
-    [0x57] = PAL_SCAN_F11,            // F11
-    [0x58] = PAL_SCAN_F12,            // F12
-    [0x64] = PAL_SCAN_F13,            // F13
-    [0x65] = PAL_SCAN_F14,            // F14
-    [0x66] = PAL_SCAN_F15,            // F15
-    [0x67] = PAL_SCAN_F16,            // F16
-    [0x68] = PAL_SCAN_F17,            // F17
-    [0x69] = PAL_SCAN_F18,            // F18
-    [0x6A] = PAL_SCAN_F19,            // F19
-    [0x6B] = PAL_SCAN_F20,            // F20
-    [0x6C] = PAL_SCAN_F21,            // F21
-    [0x6D] = PAL_SCAN_F22,            // F22
-    [0x6E] = PAL_SCAN_F23,            // F23
-    [0x6F] = PAL_SCAN_F24,            // F24
-    [0x70] = PAL_SCAN_INTERNATIONAL2, // Katakana/Hiragana
-    [0x73] = PAL_SCAN_INTERNATIONAL1, // Ro
-    [0x79] = PAL_SCAN_INTERNATIONAL4, // Henkan
-    [0x7B] = PAL_SCAN_INTERNATIONAL5, // Muhenkan
-    [0x7D] = PAL_SCAN_INTERNATIONAL3, // Yen
+    [0x00] = 0,                       /* Invalid */
+    [0x01] = PAL_SCAN_ESCAPE,         /* Escape */
+    [0x02] = PAL_SCAN_1,              /* 1 */
+    [0x03] = PAL_SCAN_2,              /* 2 */
+    [0x04] = PAL_SCAN_3,              /* 3 */
+    [0x05] = PAL_SCAN_4,              /* 4 */
+    [0x06] = PAL_SCAN_5,              /* 5 */
+    [0x07] = PAL_SCAN_6,              /* 6 */
+    [0x08] = PAL_SCAN_7,              /* 7 */
+    [0x09] = PAL_SCAN_8,              /* 8 */
+    [0x0A] = PAL_SCAN_9,              /* 9 */
+    [0x0B] = PAL_SCAN_0,              /* 0 */
+    [0x0C] = PAL_SCAN_MINUS,          /* - */
+    [0x0D] = PAL_SCAN_EQUALS,         /* = */
+    [0x0E] = PAL_SCAN_BACKSPACE,      /* Backspace */
+    [0x0F] = PAL_SCAN_TAB,            /* Tab */
+    [0x10] = PAL_SCAN_Q,              /* Q */
+    [0x11] = PAL_SCAN_W,              /* W */
+    [0x12] = PAL_SCAN_E,              /* E */
+    [0x13] = PAL_SCAN_R,              /* R */
+    [0x14] = PAL_SCAN_T,              /* T */
+    [0x15] = PAL_SCAN_Y,              /* Y */
+    [0x16] = PAL_SCAN_U,              /* U */
+    [0x17] = PAL_SCAN_I,              /* I */
+    [0x18] = PAL_SCAN_O,              /* O */
+    [0x19] = PAL_SCAN_P,              /* P */
+    [0x1A] = PAL_SCAN_LEFTBRACKET,    /* [ */
+    [0x1B] = PAL_SCAN_RIGHTBRACKET,   /* ] */
+    [0x1C] = PAL_SCAN_RETURN,         /* Enter */
+    [0x1D] = PAL_SCAN_LCTRL,          /* Left Ctrl */
+    [0x1E] = PAL_SCAN_A,              /* A */
+    [0x1F] = PAL_SCAN_S,              /* S */
+    [0x20] = PAL_SCAN_D,              /* D */
+    [0x21] = PAL_SCAN_F,              /* F */
+    [0x22] = PAL_SCAN_G,              /* G */
+    [0x23] = PAL_SCAN_H,              /* H */
+    [0x24] = PAL_SCAN_J,              /* J */
+    [0x25] = PAL_SCAN_K,              /* K */
+    [0x26] = PAL_SCAN_L,              /* L */
+    [0x27] = PAL_SCAN_SEMICOLON,      /* ; */
+    [0x28] = PAL_SCAN_APOSTROPHE,     /* ' */
+    [0x29] = PAL_SCAN_GRAVE,          /* ` */
+    [0x2A] = PAL_SCAN_LSHIFT,         /* Left Shift */
+    [0x2B] = PAL_SCAN_BACKSLASH,      /* \ (backslash) */
+    [0x2C] = PAL_SCAN_Z,              /* Z */
+    [0x2D] = PAL_SCAN_X,              /* X */
+    [0x2E] = PAL_SCAN_C,              /* C */
+    [0x2F] = PAL_SCAN_V,              /* V */
+    [0x30] = PAL_SCAN_B,              /* B */
+    [0x31] = PAL_SCAN_N,              /* N */
+    [0x32] = PAL_SCAN_M,              /* M */
+    [0x33] = PAL_SCAN_COMMA,          /* , */
+    [0x34] = PAL_SCAN_PERIOD,         /* . */
+    [0x35] = PAL_SCAN_SLASH,          /* / */
+    [0x36] = PAL_SCAN_RSHIFT,         /* Right Shift */
+    [0x37] = PAL_SCAN_KP_MULTIPLY,    /* Keypad * */
+    [0x38] = PAL_SCAN_LALT,           /* Left Alt */
+    [0x39] = PAL_SCAN_SPACE,          /* Space */
+    [0x3A] = PAL_SCAN_CAPSLOCK,       /* Caps Lock */
+    [0x3B] = PAL_SCAN_F1,             /* F1 */
+    [0x3C] = PAL_SCAN_F2,             /* F2 */
+    [0x3D] = PAL_SCAN_F3,             /* F3 */
+    [0x3E] = PAL_SCAN_F4,             /* F4 */
+    [0x3F] = PAL_SCAN_F5,             /* F5 */
+    [0x40] = PAL_SCAN_F6,             /* F6 */
+    [0x41] = PAL_SCAN_F7,             /* F7 */
+    [0x42] = PAL_SCAN_F8,             /* F8 */
+    [0x43] = PAL_SCAN_F9,             /* F9 */
+    [0x44] = PAL_SCAN_F10,            /* F10 */
+    [0x45] = PAL_SCAN_NUMCLEAR,       /* Num Lock */
+    [0x46] = PAL_SCAN_SCROLLLOCK,     /* Scroll Lock */
+    [0x47] = PAL_SCAN_KP_7,           /* Keypad 7 / Home */
+    [0x48] = PAL_SCAN_KP_8,           /* Keypad 8 / Up */
+    [0x49] = PAL_SCAN_KP_9,           /* Keypad 9 / Page Up */
+    [0x4A] = PAL_SCAN_KP_MINUS,       /* Keypad - */
+    [0x4B] = PAL_SCAN_KP_4,           /* Keypad 4 / Left */
+    [0x4C] = PAL_SCAN_KP_5,           /* Keypad 5 */
+    [0x4D] = PAL_SCAN_KP_6,           /* Keypad 6 / Right */
+    [0x4E] = PAL_SCAN_KP_PLUS,        /* Keypad + */
+    [0x4F] = PAL_SCAN_KP_1,           /* Keypad 1 / End */
+    [0x50] = PAL_SCAN_KP_2,           /* Keypad 2 / Down */
+    [0x51] = PAL_SCAN_KP_3,           /* Keypad 3 / Page Down */
+    [0x52] = PAL_SCAN_KP_0,           /* Keypad 0 / Insert */
+    [0x53] = PAL_SCAN_KP_PERIOD,      /* Keypad . / Delete */
+    [0x56] = PAL_SCAN_NONUSBACKSLASH, /* Non-US backslash (ISO layout) */
+    [0x57] = PAL_SCAN_F11,            /* F11 */
+    [0x58] = PAL_SCAN_F12,            /* F12 */
+    [0x64] = PAL_SCAN_F13,            /* F13 */
+    [0x65] = PAL_SCAN_F14,            /* F14 */
+    [0x66] = PAL_SCAN_F15,            /* F15 */
+    [0x67] = PAL_SCAN_F16,            /* F16 */
+    [0x68] = PAL_SCAN_F17,            /* F17 */
+    [0x69] = PAL_SCAN_F18,            /* F18 */
+    [0x6A] = PAL_SCAN_F19,            /* F19 */
+    [0x6B] = PAL_SCAN_F20,            /* F20 */
+    [0x6C] = PAL_SCAN_F21,            /* F21 */
+    [0x6D] = PAL_SCAN_F22,            /* F22 */
+    [0x6E] = PAL_SCAN_F23,            /* F23 */
+    [0x6F] = PAL_SCAN_F24,            /* F24 */
+    [0x70] = PAL_SCAN_INTERNATIONAL2, /* Katakana/Hiragana */
+    [0x73] = PAL_SCAN_INTERNATIONAL1, /* Ro */
+    [0x79] = PAL_SCAN_INTERNATIONAL4, /* Henkan */
+    [0x7B] = PAL_SCAN_INTERNATIONAL5, /* Muhenkan */
+    [0x7D] = PAL_SCAN_INTERNATIONAL3, /* Yen */
 
 };
 
-// Translation table for extended makecodes (E0 prefix keys)
+/* Translation table for extended makecodes (E0 prefix keys) */
 static int win32_extended_makecode_to_pal_scancode[256] = {
-    [0x1C] = PAL_SCAN_KP_ENTER,     // Keypad Enter
-    [0x1D] = PAL_SCAN_RCTRL,        // Right Ctrl
-    [0x35] = PAL_SCAN_KP_DIVIDE,    // Keypad /
-    [0x37] = PAL_SCAN_PRINTSCREEN,  // Print Screen
-    [0x38] = PAL_SCAN_RALT,         // Right Alt / AltGr
-    [0x46] = PAL_SCAN_PAUSE,        // Pause/Break
-    [0x47] = PAL_SCAN_HOME,         // Home
-    [0x48] = PAL_SCAN_UP,           // Up Arrow
-    [0x49] = PAL_SCAN_PAGEUP,       // Page Up
-    [0x4B] = PAL_SCAN_LEFT,         // Left Arrow
-    [0x4D] = PAL_SCAN_RIGHT,        // Right Arrow
-    [0x4F] = PAL_SCAN_END,          // End
-    [0x50] = PAL_SCAN_DOWN,         // Down Arrow
-    [0x51] = PAL_SCAN_PAGEDOWN,     // Page Down
-    [0x52] = PAL_SCAN_INSERT,       // Insert
-    [0x53] = PAL_SCAN_DELETE,       // Delete
-    [0x5B] = PAL_SCAN_LGUI,         // Left Windows/Super
-    [0x5C] = PAL_SCAN_RGUI,         // Right Windows/Super
-    [0x5D] = PAL_SCAN_APPLICATION,  // Menu/Application
-    [0x5F] = PAL_SCAN_SLEEP,        // Sleep
-    [0x63] = PAL_SCAN_WAKE,         // Wake
-    [0x65] = PAL_SCAN_AC_SEARCH,    // Search
-    [0x66] = PAL_SCAN_AC_BOOKMARKS, // Favorites
-    [0x67] = PAL_SCAN_AC_REFRESH,   // Refresh
-    [0x68] = PAL_SCAN_AC_STOP,      // Stop
-    [0x69] = PAL_SCAN_AC_FORWARD,   // Forward
-    [0x6A] = PAL_SCAN_AC_BACK,      // Back
-    [0x6B] = PAL_SCAN_AC_HOME,      // My Computer
-    [0x6C] = PAL_SCAN_AC_OPEN,      // Mail
-    [0x6D] = PAL_SCAN_MEDIA_SELECT, // Media Select
+    [0x1C] = PAL_SCAN_KP_ENTER,     /* Keypad Enter */
+    [0x1D] = PAL_SCAN_RCTRL,        /* Right Ctrl */
+    [0x35] = PAL_SCAN_KP_DIVIDE,    /* Keypad / */
+    [0x37] = PAL_SCAN_PRINTSCREEN,  /* Print Screen */
+    [0x38] = PAL_SCAN_RALT,         /* Right Alt / AltGr */
+    [0x46] = PAL_SCAN_PAUSE,        /* Pause/Break */
+    [0x47] = PAL_SCAN_HOME,         /* Home */
+    [0x48] = PAL_SCAN_UP,           /* Up Arrow */
+    [0x49] = PAL_SCAN_PAGEUP,       /* Page Up */
+    [0x4B] = PAL_SCAN_LEFT,         /* Left Arrow */
+    [0x4D] = PAL_SCAN_RIGHT,        /* Right Arrow */
+    [0x4F] = PAL_SCAN_END,          /* End */
+    [0x50] = PAL_SCAN_DOWN,         /* Down Arrow */
+    [0x51] = PAL_SCAN_PAGEDOWN,     /* Page Down */
+    [0x52] = PAL_SCAN_INSERT,       /* Insert */
+    [0x53] = PAL_SCAN_DELETE,       /* Delete */
+    [0x5B] = PAL_SCAN_LGUI,         /* Left Windows/Super */
+    [0x5C] = PAL_SCAN_RGUI,         /* Right Windows/Super */
+    [0x5D] = PAL_SCAN_APPLICATION,  /* Menu/Application */
+    [0x5F] = PAL_SCAN_SLEEP,        /* Sleep */
+    [0x63] = PAL_SCAN_WAKE,         /* Wake */
+    [0x65] = PAL_SCAN_AC_SEARCH,    /* Search */
+    [0x66] = PAL_SCAN_AC_BOOKMARKS, /* Favorites */
+    [0x67] = PAL_SCAN_AC_REFRESH,   /* Refresh */
+    [0x68] = PAL_SCAN_AC_STOP,      /* Stop */
+    [0x69] = PAL_SCAN_AC_FORWARD,   /* Forward */
+    [0x6A] = PAL_SCAN_AC_BACK,      /* Back */
+    [0x6B] = PAL_SCAN_AC_HOME,      /* My Computer */
+    [0x6C] = PAL_SCAN_AC_OPEN,      /* Mail */
+    [0x6D] = PAL_SCAN_MEDIA_SELECT, /* Media Select */
 };
 
 static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_NONE] = PAL_KEY_NONE,
     
-    // Letters
+    /* Letters */
     [PAL_SCAN_A] = PAL_KEY_A,
     [PAL_SCAN_B] = PAL_KEY_B,
     [PAL_SCAN_C] = PAL_KEY_C,
@@ -4388,7 +4421,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_Y] = PAL_KEY_Y,
     [PAL_SCAN_Z] = PAL_KEY_Z,
     
-    // Numbers
+    /* Numbers */
     [PAL_SCAN_1] = PAL_KEY_1,
     [PAL_SCAN_2] = PAL_KEY_2,
     [PAL_SCAN_3] = PAL_KEY_3,
@@ -4400,7 +4433,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_9] = PAL_KEY_9,
     [PAL_SCAN_0] = PAL_KEY_0,
     
-    // Function keys
+    /* Function keys */
     [PAL_SCAN_F1] = PAL_KEY_F1,
     [PAL_SCAN_F2] = PAL_KEY_F2,
     [PAL_SCAN_F3] = PAL_KEY_F3,
@@ -4426,7 +4459,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_F23] = PAL_KEY_F23,
     [PAL_SCAN_F24] = PAL_KEY_F24,
     
-    // Special keys
+    /* Special keys */
     [PAL_SCAN_ESCAPE] = PAL_KEY_ESCAPE,
     [PAL_SCAN_RETURN] = PAL_KEY_RETURN,
     [PAL_SCAN_TAB] = PAL_KEY_TAB,
@@ -4443,7 +4476,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_LEFT] = PAL_KEY_LEFT,
     [PAL_SCAN_RIGHT] = PAL_KEY_RIGHT,
     
-    // Punctuation
+    /* Punctuation */
     [PAL_SCAN_MINUS] = PAL_KEY_MINUS,
     [PAL_SCAN_EQUALS] = PAL_KEY_EQUALS,
     [PAL_SCAN_LEFTBRACKET] = PAL_KEY_LEFTBRACKET,
@@ -4456,12 +4489,12 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_PERIOD] = PAL_KEY_PERIOD,
     [PAL_SCAN_SLASH] = PAL_KEY_SLASH,
     
-    // Lock keys
+    /* Lock keys */
     [PAL_SCAN_CAPSLOCK] = PAL_KEY_CAPSLOCK,
     [PAL_SCAN_SCROLLLOCK] = PAL_KEY_SCROLLLOCK,
     [PAL_SCAN_NUMCLEAR] = PAL_KEY_NUMLOCKCLEAR,
     
-    // Modifier keys
+    /* Modifier keys */
     [PAL_SCAN_LSHIFT] = PAL_KEY_LSHIFT,
     [PAL_SCAN_RSHIFT] = PAL_KEY_RSHIFT,
     [PAL_SCAN_LCTRL] = PAL_KEY_LCTRL,
@@ -4471,7 +4504,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_LGUI] = PAL_KEY_LGUI,
     [PAL_SCAN_RGUI] = PAL_KEY_RGUI,
     
-    // Numpad
+    /* Numpad */
     [PAL_SCAN_KP_0] = PAL_KEY_NUMPAD_0,
     [PAL_SCAN_KP_1] = PAL_KEY_NUMPAD_1,
     [PAL_SCAN_KP_2] = PAL_KEY_NUMPAD_2,
@@ -4491,7 +4524,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_KP_EQUALS] = PAL_KEY_NUMPAD_EQUALS,
     [PAL_SCAN_KP_COMMA] = PAL_KEY_NUMPAD_COMMA,
     
-    // Media keys
+    /* Media keys */
     [PAL_SCAN_MUTE] = PAL_KEY_MUTE,
     [PAL_SCAN_VOLUMEUP] = PAL_KEY_VOLUMEUP,
     [PAL_SCAN_VOLUMEDOWN] = PAL_KEY_VOLUMEDOWN,
@@ -4504,7 +4537,7 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_MEDIA_EJECT] = PAL_KEY_MEDIA_EJECT,
     [PAL_SCAN_MEDIA_SELECT] = PAL_KEY_MEDIA_SELECT,
     
-    // Misc
+    /* Misc */
     [PAL_SCAN_PRINTSCREEN] = PAL_KEY_PRINTSCREEN,
     [PAL_SCAN_PAUSE] = PAL_KEY_PAUSE,
     [PAL_SCAN_APPLICATION] = PAL_KEY_APPLICATION,
@@ -4523,11 +4556,11 @@ static const uint32_t pal_scancode_to_keycode[PAL_SCAN_COUNT] = {
     [PAL_SCAN_PASTE] = PAL_KEY_PASTE,
     [PAL_SCAN_FIND] = PAL_KEY_FIND,
     
-    // Non-US keys
+    /* Non-US keys */
     [PAL_SCAN_NONUSBACKSLASH] = PAL_KEY_BACKSLASH,
     [PAL_SCAN_NONUSHASH] = PAL_KEY_BACKSLASH,
     
-    // Browser/App control keys
+    /* Browser/App control keys */
     [PAL_SCAN_AC_SEARCH] = PAL_KEY_AC_SEARCH,
     [PAL_SCAN_AC_HOME] = PAL_KEY_AC_HOME,
     [PAL_SCAN_AC_BACK] = PAL_KEY_AC_BACK,
@@ -4564,9 +4597,9 @@ typedef struct {
 #define XINPUT_GAMEPAD_X                0x4000
 #define XINPUT_GAMEPAD_Y                0x8000
 
-//
-// Gamepad thresholds
-//
+/* */
+/* Gamepad thresholds */
+/* */
 #define XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE  7849
 #define XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE 8689
 #define XINPUT_GAMEPAD_TRIGGER_THRESHOLD    30
@@ -4575,7 +4608,7 @@ typedef struct win32_gamepad_context {
     uint8_t xinput_connected[MAX_XINPUT_CONTROLLERS];
     XINPUT_STATE xinput_state[MAX_XINPUT_CONTROLLERS];
 
-    uint8_t raw_input_buffer[1024]; // <-- THIS IS THE BUFFER
+    uint8_t raw_input_buffer[1024]; /* <-- THIS IS THE BUFFER */
 
     int mapping_count;
     pal_bool initialized;
@@ -4628,15 +4661,13 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
     HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
     MONITORINFO mi = {.cbSize = sizeof(mi)};
 
-    // Save the current window style and rect
     window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
 
-    // Get the monitor bounds
     if (!GetMonitorInfo(monitor, &mi)) {
         return pal_false;
     }
 
-    // Set the window to borderless fullscreen
+    /* Set the window to borderless fullscreen */
     SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
     if (!SetWindowPos(window->hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
         return pal_false;
@@ -4647,15 +4678,15 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
 
 PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
     RECT rect;
-    // Restore display mode (in case exclusive mode was used)
+    /* Restore display mode (in case exclusive mode was used) */
     ChangeDisplaySettingsW(NULL, 0);
 
-    // Restore the window style
+    /* Restore the window style */
     if (SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle) == 0) {
         return pal_false;
     }
     GetWindowRect(window->hwnd, &rect);
-    // Restore the window's size and position
+    /* Restore the window's size and position */
     if (!SetWindowPos(window->hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED)) {
         return pal_false;
     }
@@ -4663,224 +4694,90 @@ PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
     return pal_true;
 }
 
-PALAPI void pal_set_cursor(pal_window* window, const char* filepath, int size, int hotspot_x, int hotspot_y) {
-    FILE* f = fopen(filepath, "rb");
-    unsigned char header[12] = {0};
-    HCURSOR hCursor = NULL;
-    int width, height, channels;
-    unsigned char *pixels = NULL, *resized = NULL;
-    HDC hdc = GetDC(NULL);
-    BITMAPV5HEADER bi = {0};
-    void* bitmapData = NULL;
-    HBITMAP hBitmap = NULL;
-    ICONINFO ii = {0};
+PALAPI void pal_set_cursor(pal_window* window, unsigned char *image, int size, int hotspot_x, int hotspot_y) {
+    BITMAPV5HEADER header = {0};
+    ICONINFO icon;
+    HCURSOR cursor;
+    HDC hdc;
+    unsigned char *dibPixels = NULL;
+    HBITMAP hBitmap;
     int x, y;
+    size_t maskBytes;
+    unsigned char *maskBits;
 
-    if (size <= 0)
-        size = 32;
-    if (size > 256)
-        size = 256;
+    header.bV5Size = sizeof(BITMAPV5HEADER);
+    header.bV5Width = size;
+    header.bV5Height = -size;
+    header.bV5Planes = 1;
+    header.bV5BitCount = 32;
+    header.bV5Compression = BI_BITFIELDS;
+    header.bV5RedMask   = 0x00FF0000;
+    header.bV5GreenMask = 0x0000FF00;
+    header.bV5BlueMask  = 0x000000FF;
+    header.bV5AlphaMask = 0xFF000000;
 
-    if (!f) {
+    hdc = GetDC(window->hwnd);
+    hBitmap = CreateDIBSection(hdc, (BITMAPINFO*)&header, DIB_RGB_COLORS, (void**)&dibPixels, NULL, 0);
+    ReleaseDC(window->hwnd, hdc);
+
+    if (!hBitmap || !dibPixels) {
         return;
     }
 
-    fread(header, 1, sizeof(header), f);
-    fclose(f);
-
-
-    if (pal_memcmp(header, "RIFF", 4) == 0 && pal_memcmp(header + 8, "ACON", 4) == 0) {
-        hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
-        if (!hCursor) {
-            return;
-        }
-    } else if (header[0] == 0x00 && header[1] == 0x00 && header[2] == 0x02 && header[3] == 0x00) {
-        hCursor = (HCURSOR)LoadImageA(NULL, filepath, IMAGE_CURSOR, 0, 0, LR_LOADFROMFILE);
-        if (!hCursor) {
-            return;
-        }
-    } else {
-        pixels = stbi_load(filepath, &width, &height, &channels, 4);
-        if (!pixels) {
-            return;
-        }
-
-        resized = malloc(size * size * 4);
-        if (!resized) {
-            stbi_image_free(pixels);
-            return;
-        }
-
-        stbir_resize_uint8_srgb(
-            pixels, width, height, width * 4, resized, size, size, size * 4, STBIR_RGBA);
-        stbi_image_free(pixels);
-
-        bi.bV5Size = sizeof(BITMAPV5HEADER);
-        bi.bV5Width = size;
-        bi.bV5Height = -size;
-        bi.bV5Planes = 1;
-        bi.bV5BitCount = 32;
-        bi.bV5Compression = BI_BITFIELDS;
-        bi.bV5RedMask = 0x00FF0000;
-        bi.bV5GreenMask = 0x0000FF00;
-        bi.bV5BlueMask = 0x000000FF;
-        bi.bV5AlphaMask = 0xFF000000;
-
-        hBitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
-        ReleaseDC(NULL, hdc);
-
-        if (!hBitmap || !bitmapData) {
-            free(resized);
-            return;
-        }
-
-        for (y = 0; y < size; ++y) {
-            for (x = 0; x < size; ++x) {
-                unsigned char* src = &resized[(y * size + x) * 4];
-                unsigned char* dst = (unsigned char*)bitmapData + (y * size + x) * 4;
-                dst[0] = src[2]; // B
-                dst[1] = src[1]; // G
-                dst[2] = src[0]; // R
-                dst[3] = src[3]; // A
-            }
-        }
-
-        free(resized);
-
-        ii.fIcon = pal_false;
-        ii.xHotspot = hotspot_x;
-        ii.yHotspot = hotspot_y;
-        ii.hbmColor = hBitmap;
-        ii.hbmMask = CreateBitmap(size, size, 1, 1, NULL);
-
-        hCursor = CreateIconIndirect(&ii);
-
-        DeleteObject((HGDIOBJ)ii.hbmMask);
-        DeleteObject((HGDIOBJ)hBitmap);
-
-        if (!hCursor) {
-            return;
+    unsigned char *src = image;
+    unsigned char *dst = dibPixels;
+    for (y = 0; y < size; ++y) {
+        for (x = 0; x < size; ++x) {
+            dst[0] = src[2];
+            dst[1] = src[1];
+            dst[2] = src[0];
+            dst[3] = src[3];
+            src += 4;
+            dst += 4;
         }
     }
 
-    SetClassLongPtrA(window->hwnd, GCLP_HCURSOR, (LONG_PTR)hCursor);
-    SetCursor(hCursor);
+    maskBytes = ((size + 15) / 16) * 2 * size;
+    maskBits = (unsigned char *)calloc(maskBytes, 1);
+    if (!maskBits) {
+        DeleteObject((HGDIOBJ)hBitmap);
+        return;
+    }
+
+    icon.fIcon = FALSE;
+    icon.xHotspot = hotspot_x;
+    icon.yHotspot = hotspot_y;
+    icon.hbmColor = hBitmap;
+    icon.hbmMask = CreateBitmap(size, size, 1, 1, maskBits);
+    free(maskBits);
+
+    cursor = CreateIconIndirect(&icon);
+    DeleteObject((HGDIOBJ)icon.hbmMask);
+    DeleteObject((HGDIOBJ)hBitmap);
+
+    if (!cursor) {
+        return;
+    }
+
+    if (window->cursor) {
+        DestroyCursor(window->cursor);
+    }
+    window->cursor = cursor;
+
+    SetClassLongPtrA(window->hwnd, GCLP_HCURSOR, (LONG_PTR)cursor);
+    SetCursor(cursor);
 }
-// older windows versions do not support pngs being embedded in .ico
-// files directly, therefore, we have to decode the .png with stb_image
-// and only then can we use it.
-static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
-    FILE* file = fopen(image_path, "rb");
-    uint8_t header[8];
-    const unsigned char png_sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-    BOOL is_png;
-    uint8_t* png_data = NULL;
-    long size = 0;
-    size_t header_size, total_size = 0;
-    uint8_t* ico_data = NULL;
-    ICONDIR* icon_dir;
-    ICONDIRENTRY* entry;
-    HICON hIcon = NULL;
-    int width, height, channels;
-    uint8_t* rgba = NULL;
+static HICON g_app_icon = NULL;
+static HICON g_app_icon_sm = NULL;
+
+static HICON win32_create_icon_from_rgba(unsigned char *image, int width, int height) {
     BITMAPV5HEADER bi = {0};
-    void* dib_pixels = NULL;
-    HDC hdc = GetDC(NULL);
+    void *dib_pixels = NULL;
+    HDC hdc;
     HBITMAP color_bitmap, mask_bitmap;
     ICONINFO ii = {0};
+    HICON hIcon;
     int i;
-
-    if (!file)
-        return NULL;
-
-    if (fread(header, 1, sizeof(header), file) < sizeof(header)) {
-        fclose(file);
-        return NULL;
-    }
-
-    // Check for ICO header
-    if (header[0] == 0x00 && header[1] == 0x00 &&
-        header[2] == 0x01 && header[3] == 0x00) {
-        fclose(file);
-        return (HICON)LoadImageA(NULL, image_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE | LR_SHARED);
-    }
-
-    // Check for PNG header
-    is_png = (pal_memcmp(header, png_sig, 8) == 0);
-    fseek(file, 0, SEEK_SET);
-
-    if (is_png && !legacy) {
-        fseek(file, 0, SEEK_END);
-        size = ftell(file);
-        rewind(file);
-        if (size <= 0) {
-            fclose(file);
-            return NULL;
-        }
-
-        png_data = (uint8_t*)malloc(size);
-        if (!png_data) {
-            fclose(file);
-            return NULL;
-        }
-        fread(png_data, 1, size, file);
-        fclose(file);
-
-        header_size = sizeof(ICONDIR) + sizeof(ICONDIRENTRY);
-        total_size = header_size + size;
-        ico_data = (uint8_t*)malloc(total_size);
-        if (!ico_data) {
-            free(png_data);
-            return NULL;
-        }
-
-        icon_dir = (ICONDIR*)ico_data;
-        icon_dir->idReserved = 0;
-        icon_dir->idType = 1;
-        icon_dir->idCount = 1;
-
-        entry = (ICONDIRENTRY*)(ico_data + sizeof(ICONDIR));
-        entry->bWidth = 0;
-        entry->bHeight = 0;
-        entry->bColorCount = 0;
-        entry->bReserved = 0;
-        entry->wPlanes = 1;
-        entry->wBitCount = 32;
-        entry->dwBytesInRes = (uint32_t)size;
-        entry->dwImageOffset = (uint32_t)header_size;
-
-        pal_memcpy(ico_data + header_size, png_data, size);
-        free(png_data);
-        hIcon = CreateIconFromResourceEx(
-            ico_data + entry->dwImageOffset,
-            entry->dwBytesInRes,
-            pal_true,
-            0x00030000,
-            0,
-            0,
-            LR_DEFAULTCOLOR);
-
-        free(ico_data);
-        return hIcon;
-    }
-
-    // Fallback: decode image with stb_image (PNG in legacy mode, JPEG, BMP)
-    fclose(file);
-    rgba = stbi_load(image_path, &width, &height, &channels, 4);
-    if (!rgba)
-        return NULL;
-
-    // Convert RGBA to BGRA
-    for (i = 0; i < width * height; ++i) {
-        uint8_t r = rgba[i * 4 + 0];
-        uint8_t g = rgba[i * 4 + 1];
-        uint8_t b = rgba[i * 4 + 2];
-        uint8_t a = rgba[i * 4 + 3];
-        rgba[i * 4 + 0] = b;
-        rgba[i * 4 + 1] = g;
-        rgba[i * 4 + 2] = r;
-        rgba[i * 4 + 3] = a;
-    }
 
     bi.bV5Size = sizeof(BITMAPV5HEADER);
     bi.bV5Width = width;
@@ -4888,24 +4785,33 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     bi.bV5Planes = 1;
     bi.bV5BitCount = 32;
     bi.bV5Compression = BI_BITFIELDS;
-    bi.bV5RedMask = 0x00FF0000;
+    bi.bV5RedMask   = 0x00FF0000;
     bi.bV5GreenMask = 0x0000FF00;
-    bi.bV5BlueMask = 0x000000FF;
+    bi.bV5BlueMask  = 0x000000FF;
     bi.bV5AlphaMask = 0xFF000000;
 
+    hdc = GetDC(NULL);
     color_bitmap = CreateDIBSection(hdc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &dib_pixels, NULL, 0);
     ReleaseDC(NULL, hdc);
 
     if (!color_bitmap || !dib_pixels) {
-        stbi_image_free(rgba);
         return NULL;
     }
 
-    pal_memcpy(dib_pixels, rgba, width * height * 4);
-    stbi_image_free(rgba);
+    unsigned char *src = image;
+    unsigned char *dst = dib_pixels;
+    for (i = 0; i < width * height; ++i) {
+        dst[0] = src[2];
+        dst[1] = src[1];
+        dst[2] = src[0];
+        dst[3] = src[3];
+        src += 4;
+        dst += 4;
+    }
+
     mask_bitmap = CreateBitmap(width, height, 1, 1, NULL);
 
-    ii.fIcon = pal_true;
+    ii.fIcon = TRUE;
     ii.hbmMask = mask_bitmap;
     ii.hbmColor = color_bitmap;
 
@@ -4917,40 +4823,71 @@ static HICON win32_load_icon_from_file(const char* image_path, BOOL legacy) {
     return hIcon;
 }
 
+/* Helper to find window by HWND */
+static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
+    int i;
+    for (i = 0; i < g_windows.count; i++) {
+        if (g_windows.windows[i] && g_windows.windows[i]->hwnd == hwnd) {
+            return g_windows.windows[i];
+        }
+    }
+    return NULL;
+}
 
-PALAPI void pal_set_window_icon(pal_window* window, const char* image_path) {
-    HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
+static pal_window* win32_get_focused_window(void) {
+    HWND focused = GetFocus();
+    if (!focused) {
+        focused = GetForegroundWindow();
+    }
+    return win32_find_window_by_hwnd(focused);
+}
+
+/* Helper to find window by ID */
+/* currently unused, let's keep it for now.*/
+static pal_window* win32_find_window_by_id(uint32_t id) {
+    int i = 0;
+    for (; i < g_windows.count; i++) {
+        if (g_windows.windows[i] && g_windows.windows[i]->id == id) {
+            return g_windows.windows[i];
+        }
+    }
+    return NULL;
+}
+
+PALAPI void pal_set_taskbar_icon(unsigned char *image, int size) {
+    if (g_app_icon) {
+        DestroyIcon(g_app_icon);
+    }
+
+    g_app_icon = win32_create_icon_from_rgba(image, size, size);
+
+    if (g_app_icon) {
+        pal_window *window = win32_get_focused_window();
+        SetClassLongPtrA(window->hwnd, GCLP_HICON, (LONG_PTR)g_app_icon);
+        SetClassLongPtrA(window->hwnd, GCLP_HICONSM, (LONG_PTR)g_app_icon);
+    }
+}
+
+PALAPI void pal_set_window_icon(pal_window* window, unsigned char *image, int size) {
+    HICON hIcon = win32_create_icon_from_rgba(image, size, size);
     if (hIcon) {
-        SendMessageA(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        if (window->icon) {
+            DestroyIcon(window->icon);
+        }
+        window->icon = hIcon;
         SendMessageA(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-    } else {
-    }
-}
-
-PALAPI void pal_set_window_icon_legacy(pal_window* window, const char* image_path) {
-    HICON hIcon = win32_load_icon_from_file(image_path, pal_true);
-    if (hIcon) {
         SendMessageA(window->hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-        SendMessageA(window->hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-    } else {
     }
 }
 
-PALAPI void pal_set_taskbar_icon(pal_window* window, const char* image_path) {
-    HICON hIcon = win32_load_icon_from_file(image_path, pal_false);
-    if (hIcon) {
-        SetClassLongPtrA(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
-        SetClassLongPtrA(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
-    } else {
+PALAPI void pal_cleanup_icons(void) {
+    if (g_app_icon) {
+        DestroyIcon(g_app_icon);
+        g_app_icon = NULL;
     }
-}
-
-PALAPI void pal_set_taskbar_icon_legacy(pal_window* window, const char* image_path) {
-    HICON hIcon = win32_load_icon_from_file(image_path, pal_true);
-    if (hIcon) {
-        SetClassLongPtrA(window->hwnd, GCLP_HICONSM, (LONG_PTR)hIcon);
-        SetClassLongPtrA(window->hwnd, GCLP_HICON, (LONG_PTR)hIcon);
-    } else {
+    if (g_app_icon_sm) {
+        DestroyIcon(g_app_icon_sm);
+        g_app_icon_sm = NULL;
     }
 }
 
@@ -4959,15 +4896,15 @@ LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 }
 
 void win32_handle_raw_input(HRAWINPUT raw_input) {
-    // currently unused. This is for GetRawInputData().
-    // we currently use GetRawInputBuffer(), because it's better for high-polling rate mice.
+    /* currently unused. This is for GetRawInputData(). */
+    /* we currently use GetRawInputBuffer(), because it's better for high-polling rate mice. */
 }
 
-// --- pal_get_gamepad_count ---
+/* --- pal_get_gamepad_count --- */
 
 #define ERROR_SUCCESS                    0L
 PALAPI int pal_get_gamepad_count(void) {
-    // Poll remaining XInput slots
+    /* Poll remaining XInput slots */
     DWORD it = 0;
     int total_count = 0;
     int i = 0;
@@ -4992,19 +4929,19 @@ PALAPI int pal_get_gamepad_count(void) {
 }
 
 int win32_init_gamepads() {
-    //---------------
-    //     Xinput
-    //---------------
+    /*--------------- */
+    /*     Xinput */
+    /*--------------- */
 
-    // Try XInput 1.4 first (Windows 8+, has trigger motors)
+    /* Try XInput 1.4 first (Windows 8+, has trigger motors) */
     g_xinput_dll = LoadLibraryW(L"xinput1_4.dll");
     if (g_xinput_dll) {
         g_has_trigger_motors = pal_true;
     } else {
-        // Fallback to XInput 1.3 (Windows Vista/7)
+        /* Fallback to XInput 1.3 (Windows Vista/7) */
         g_xinput_dll = LoadLibraryW(L"xinput1_3.dll");
         if (!g_xinput_dll) {
-            // Last resort: XInput 9.1.0 (Windows 7 compatibility)
+            /* Last resort: XInput 9.1.0 (Windows 7 compatibility) */
             g_xinput_dll = LoadLibraryW(L"xinput9_1_0.dll");
         }
         g_has_trigger_motors = pal_false;
@@ -5013,13 +4950,13 @@ int win32_init_gamepads() {
     if (!g_xinput_dll) {
         return pal_false;
     }
-    // Load function pointers
+    /* Load function pointers */
     XinputGetstate_fn = (DWORD(WINAPI*)(DWORD, XINPUT_STATE*))GetProcAddress(g_xinput_dll, "XInputGetState");
     XInputSetState_fn = (DWORD(WINAPI*)(DWORD, XINPUT_VIBRATION*))GetProcAddress(g_xinput_dll, "XInputSetState");
-    //XInputGetCapabilities_fn = (DWORD(WINAPI*)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities");
+    /*XInputGetCapabilities_fn = (DWORD(WINAPI*)(DWORD, DWORD, XINPUT_CAPABILITIES*))GetProcAddress(g_xinput_dll, "XInputGetCapabilities"); */
     XInputEnable_fn = (void(WINAPI*)(BOOL))GetProcAddress(g_xinput_dll, "XInputEnable");
 
-    // Check if we got the essential functions
+    /* Check if we got the essential functions */
     if (!XinputGetstate_fn || !XInputSetState_fn) {
         FreeLibrary(g_xinput_dll);
         g_xinput_dll = NULL;
@@ -5037,7 +4974,7 @@ void win32_shutdown_gamepads(void) {
 
     XinputGetstate_fn = NULL;
     XInputSetState_fn = NULL;
-    //XInputGetCapabilities_fn = NULL;
+    /*XInputGetCapabilities_fn = NULL; */
     XInputEnable_fn = NULL;
     g_has_trigger_motors = pal_false;
 }
@@ -5046,7 +4983,7 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
 
     const XINPUT_GAMEPAD* pad;
 
-    // Process analog sticks with proper deadzone handling
+    /* Process analog sticks with proper deadzone handling */
     float lx;
     float ly;
     float rx;
@@ -5058,12 +4995,12 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
 
     pal_memset(out_state, 0, sizeof(pal_gamepad_state));
 
-    // XInput controllers only
+    /* XInput controllers only */
     if (index >= MAX_XINPUT_CONTROLLERS) {
         return pal_false;
     }
 
-    // Check if this specific controller slot is connected
+    /* Check if this specific controller slot is connected */
     if (!win32_gamepad_ctx.xinput_connected[index]) {
         return pal_false;
     }
@@ -5075,23 +5012,23 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
 	ry = (float)pad->sThumbRY;
 	left_magnitude = sqrtf(lx * lx + ly * ly);
 
-    // Apply circular deadzone for left stick
+    /* Apply circular deadzone for left stick */
     if (left_magnitude < XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
         lx = ly = 0;
     } else {
-        // Normalize to remove deadzone
+        /* Normalize to remove deadzone */
         normalized = (left_magnitude - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) /
                            (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
         lx = (lx / left_magnitude) * normalized;
         ly = (ly / left_magnitude) * normalized;
     }
 
-    // Apply circular deadzone for right stick
+    /* Apply circular deadzone for right stick */
     right_magnitude = sqrtf(rx * rx + ry * ry);
     if (right_magnitude < XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
         rx = ry = 0;
     } else {
-        // Normalize to remove deadzone
+        /* Normalize to remove deadzone */
         normalized = (right_magnitude - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) /
                            (32767.0f - XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
         rx = (rx / right_magnitude) * normalized;
@@ -5103,11 +5040,11 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
     out_state->axes.right_x = fmaxf(-1.0f, fminf(1.0f, rx));
     out_state->axes.right_y = fmaxf(-1.0f, fminf(1.0f, ry));
 
-    // Process triggers with deadzone
+    /* Process triggers with deadzone */
     out_state->axes.left_trigger = (pad->bLeftTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bLeftTrigger / 255.0f);
     out_state->axes.right_trigger = (pad->bRightTrigger < XINPUT_GAMEPAD_TRIGGER_THRESHOLD) ? 0.0f : (pad->bRightTrigger / 255.0f);
 
-    // Process buttons
+    /* Process buttons */
     buttons = pad->wButtons;
     out_state->buttons.a = (buttons & XINPUT_GAMEPAD_A) != 0;
     out_state->buttons.b = (buttons & XINPUT_GAMEPAD_B) != 0;
@@ -5124,11 +5061,11 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state* out_state) {
     out_state->buttons.dpad_left = (buttons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
     out_state->buttons.dpad_right = (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
 
-    // Set controller info
+    /* Set controller info */
     pal_strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
     out_state->name[sizeof(out_state->name) - 1] = '\0';
-    out_state->vendor_id = 0x045E;                // Microsoft
-    out_state->product_id = (uint16_t)0xDEAD; // Since xinput supports xbox360 and various Xbone controllers, we don't know this.
+    out_state->vendor_id = 0x045E;                /* Microsoft */
+    out_state->product_id = (uint16_t)0xDEAD; /* Since xinput supports xbox360 and various Xbone controllers, we don't know this. */
     out_state->connected = pal_true;
     out_state->is_xinput = pal_true;
 
@@ -5140,13 +5077,13 @@ PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float
         return;
 
     if (g_has_trigger_motors) {
-        // Extended vibration structure with trigger motors (XInput 1.4+)
+        /* Extended vibration structure with trigger motors (XInput 1.4+) */
         struct {
             WORD wLeftMotorSpeed;
             WORD wRightMotorSpeed;
             WORD wLeftTriggerMotor;
             WORD wRightTriggerMotor;
-        } vibration_ex; // we call it this to avoid potential naming conflicts.
+        } vibration_ex; /* we call it this to avoid potential naming conflicts. */
 
         vibration_ex.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
         vibration_ex.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
@@ -5155,7 +5092,7 @@ PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float
 
         XInputSetState_fn(controller_id, (XINPUT_VIBRATION*)&vibration_ex);
     } else {
-        // Standard vibration (XInput 9.1.0/1.3)
+        /* Standard vibration (XInput 9.1.0/1.3) */
         XINPUT_VIBRATION vibration;
         vibration.wLeftMotorSpeed = (WORD)(left_motor * 65535.0f);
         vibration.wRightMotorSpeed = (WORD)(right_motor * 65535.0f);
@@ -5174,7 +5111,7 @@ PALAPI void pal_stop_gamepad_vibration(int controller_id) {
 #define RIM_TYPEMAX         2
 
 #define RIDI_PREPARSEDDATA      0x20000005
-#define RIDI_DEVICENAME         0x20000007  // the return valus is the character length, not the byte size
+#define RIDI_DEVICENAME         0x20000007  /* the return valus is the character length, not the byte size */
 #define RIDI_DEVICEINFO         0x2000000b
 
 void win32_enumerate_keyboards(void) {
@@ -5185,7 +5122,7 @@ void win32_enumerate_keyboards(void) {
 	int idx = 0;
 
     GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
-    deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    deviceList = (PRAWINPUTDEVICELIST)malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
 
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
 
@@ -5202,7 +5139,7 @@ void win32_enumerate_keyboards(void) {
                                     g_keyboards.names[idx], &size);
             }
 
-            // Initialize state arrays for this keyboard
+            /* Initialize state arrays for this keyboard */
             pal_memset(g_keyboards.keys[idx], 0, MAX_SCANCODES);
             pal_memset(g_keyboards.keys_toggled[idx], 0, MAX_SCANCODES);
 
@@ -5221,7 +5158,7 @@ void win32_enumerate_mice(void) {
 	UINT size = 0;
 
     GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
-    deviceList = malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
+    deviceList = (PRAWINPUTDEVICELIST)malloc(numDevices * sizeof(RAWINPUTDEVICELIST));
     GetRawInputDeviceList(deviceList, &numDevices, sizeof(RAWINPUTDEVICELIST));
 
     g_mice.count = 0;
@@ -5237,7 +5174,7 @@ void win32_enumerate_mice(void) {
                                     g_mice.names[idx], &size);
             }
 
-            // Initialize state arrays for this mouse
+            /* Initialize state arrays for this mouse */
             pal_memset(g_mice.buttons[idx], 0, MAX_MOUSE_BUTTONS * sizeof(int));
             pal_memset(g_mice.buttons_toggled[idx], 0, MAX_MOUSE_BUTTONS * sizeof(int));
             g_mice.dx[idx] = 0;
@@ -5251,38 +5188,9 @@ void win32_enumerate_mice(void) {
     free(deviceList);
 }
 
-// Helper to find window by HWND
-static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
-    int i = 0;
-    for (; i < g_windows.count; i++) {
-        if (g_windows.windows[i] && g_windows.windows[i]->hwnd == hwnd) {
-            return g_windows.windows[i];
-        }
-    }
-    return NULL;
-}
+/* Get the window that currently has keyboard focus */
 
-// Helper to find window by ID
-static pal_window* win32_find_window_by_id(uint32_t id) {
-    int i = 0;
-    for (; i < g_windows.count; i++) {
-        if (g_windows.windows[i] && g_windows.windows[i]->id == id) {
-            return g_windows.windows[i];
-        }
-    }
-    return NULL;
-}
-
-// Get the window that currently has keyboard focus
-static pal_window* win32_get_focused_window(void) {
-    HWND focused = GetFocus();
-    if (!focused) {
-        focused = GetForegroundWindow();
-    }
-    return win32_find_window_by_hwnd(focused);
-}
-
-// Get the window under the mouse cursor
+/* Get the window under the mouse cursor */
 static pal_window* win32_get_window_under_cursor(void) {
     POINT pt;
     HWND hwnd;
@@ -5290,7 +5198,7 @@ static pal_window* win32_get_window_under_cursor(void) {
 
     GetCursorPos(&pt);
     hwnd = WindowFromPoint(pt);
-    // Walk up parent chain to find our window
+    /* Walk up parent chain to find our window */
     while (hwnd) {
         window = win32_find_window_by_hwnd(hwnd);
         if (window) {
@@ -5322,7 +5230,7 @@ static void update_modifier_state(int pal_scancode, pal_bool is_key_released, in
             break;
         case PAL_SCAN_RALT:
             modifier_flag = PAL_MOD_RALT;
-            // AltGr is typically Right Alt
+            /* AltGr is typically Right Alt */
             if (is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] &= ~PAL_MOD_ALTGR;
             } else {
@@ -5336,19 +5244,19 @@ static void update_modifier_state(int pal_scancode, pal_bool is_key_released, in
             modifier_flag = PAL_MOD_RSUPER;
             break;
         case PAL_SCAN_CAPSLOCK:
-            // Toggle on key press only
+            /* Toggle on key press only */
             if (!is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_CAPS;
             }
             return;
         case PAL_SCAN_NUMCLEAR:
-            // Toggle on key press only
+            /* Toggle on key press only */
             if (!is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_NUM;
             }
             return;
         case PAL_SCAN_SCROLLLOCK:
-            // Toggle on key press only
+            /* Toggle on key press only */
             if (!is_key_released) {
                 g_keyboards.cached_modifiers[keyboard_index] ^= PAL_MOD_SCROLL;
             }
@@ -5364,10 +5272,10 @@ static void update_modifier_state(int pal_scancode, pal_bool is_key_released, in
     }
 }
 #define MAPVK_VK_TO_VSC     (0)
-#define CP_UTF8                   65001       // UTF-8 translation
+#define CP_UTF8                   65001       /* UTF-8 translation */
 
 void win32_handle_keyboard(const RAWINPUT* raw) {
-    // Find keyboard index
+    /* Find keyboard index */
     int kb_index = 0;
     int i;
     USHORT vk, makecode, flags;
@@ -5399,17 +5307,17 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     is_key_released = (flags & RI_KEY_BREAK) != 0;
     is_extended = (flags & RI_KEY_E0) != 0;
 
-    // *** COMPUTE pal_scancode FIRST (from makecode) ***
+    /* *** COMPUTE pal_scancode FIRST (from makecode) *** */
     if (is_extended) {
         if (makecode < 256) pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
     } else {
         if (makecode < 256) pal_scancode = win32_makecode_to_pal_scancode[makecode];
     }
 
-    // *** DERIVE pal_key FROM pal_scancode (preserves left/right modifier distinction) ***
+    /* *** DERIVE pal_key FROM pal_scancode (preserves left/right modifier distinction) *** */
     pal_key = (pal_scancode < PAL_SCAN_COUNT) ? pal_scancode_to_keycode[pal_scancode] : 0;
 
-    // Track key repeat state using scancode (not vk)
+    /* Track key repeat state using scancode (not vk) */
 	is_repeat = pal_false;
 
     if (pal_scancode > 0 && pal_scancode < PAL_SCAN_COUNT) {
@@ -5419,10 +5327,10 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         key_is_down[kb_index][pal_scancode] = !is_key_released;
     }
 
-    // *** UPDATE MODIFIER STATE USING SCANCODE (after pal_scancode is computed) ***
+    /* *** UPDATE MODIFIER STATE USING SCANCODE (after pal_scancode is computed) *** */
     update_modifier_state(pal_scancode, is_key_released, kb_index);
 
-    // Determine which window should receive this keyboard event
+    /* Determine which window should receive this keyboard event */
     target_window = win32_get_focused_window();
     target_window_id = target_window ? target_window->id : 0;
 
@@ -5450,7 +5358,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         event.key.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
 
-        // Text input event
+        /* Text input event */
         GetKeyboardState(keyboard_state);
         
         scan_code = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
@@ -5481,7 +5389,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
 }
 
 void win32_handle_mouse(const RAWINPUT* raw) {
-    // Find mouse index
+    /* Find mouse index */
     int mouse_index = 0;
     pal_event event = {0};
     int32_t dx, dy;
@@ -5505,23 +5413,23 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     dx = raw->data.mouse.lLastX;
     dy = raw->data.mouse.lLastY;
 
-    // Update per-mouse delta
+    /* Update per-mouse delta */
     g_mice.dx[mouse_index] += dx;
     g_mice.dy[mouse_index] += dy;
 
      buttons = raw->data.mouse.usButtonFlags;
     
-    // Determine which window the mouse is interacting with
+    /* Determine which window the mouse is interacting with */
     target_window = win32_get_window_under_cursor();
     target_window_id = target_window ? target_window->id : 0;
     
-    // Get cursor position relative to the target window
+    /* Get cursor position relative to the target window */
     GetCursorPos(&point);
     if (target_window) {
         ScreenToClient(target_window->hwnd, &point);
     }
 
-    // Handle motion
+    /* Handle motion */
     if (dx || dy) {
         event.motion.type = PAL_EVENT_MOUSE_MOTION;
         event.motion.x = point.x;
@@ -5534,7 +5442,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         pal__eventq_push(&g_event_queue, event);
     }
 
-    // Handle mouse wheel
+    /* Handle mouse wheel */
     if (buttons & RI_MOUSE_WHEEL) {
         wheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
         g_mice.wheel[mouse_index] += wheel_delta / WHEEL_DELTA;
@@ -5550,7 +5458,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         pal__eventq_push(&g_event_queue, event);
     }
 
-    // Handle horizontal wheel
+    /* Handle horizontal wheel */
     if (buttons & RI_MOUSE_HWHEEL) {
         hwheel_delta = (SHORT)HIWORD(raw->data.mouse.usButtonData);
 
@@ -5565,7 +5473,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         pal__eventq_push(&g_event_queue, event);
     }
 
-    // Handle button events
+    /* Handle button events */
     for (i = 0; i < 5; i++) {
         down = (buttons >> (i * 2)) & 1;
         up = (buttons >> (i * 2 + 1)) & 1;
@@ -5575,7 +5483,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             old_state = g_mice.buttons[mouse_index][pal_button];
             g_mice.buttons[mouse_index][pal_button] = 1;
             
-            // Mark as toggled if state changed
+            /* Mark as toggled if state changed */
             if (old_state != 1) {
                 g_mice.buttons_toggled[mouse_index][pal_button] = 1;
             }
@@ -5620,12 +5528,12 @@ void win32_handle_mouse(const RAWINPUT* raw) {
     }
 }
 
-// Input window proc - handles device change notifications for the message-only window
+/* Input window proc - handles device change notifications for the message-only window */
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
         case WM_INPUT: {
-            // Raw input is handled via GetRawInputBuffer() in poll,
-            // but we still receive WM_INPUT here
+            /* Raw input is handled via GetRawInputBuffer() in poll, */
+            /* but we still receive WM_INPUT here */
         } break;
 
         case WM_DEVICECHANGE: {
@@ -5656,9 +5564,9 @@ static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wpar
 #define RIDEV_PAGEONLY          0x00000020
 #define RIDEV_NOLEGACY          0x00000030
 #define RIDEV_INPUTSINK         0x00000100
-#define RIDEV_CAPTUREMOUSE      0x00000200  // effective when mouse nolegacy is specified, otherwise it would be an error
-#define RIDEV_NOHOTKEYS         0x00000200  // effective for keyboard.
-#define RIDEV_APPKEYS           0x00000400  // effective for keyboard.
+#define RIDEV_CAPTUREMOUSE      0x00000200  /* effective when mouse nolegacy is specified, otherwise it would be an error */
+#define RIDEV_NOHOTKEYS         0x00000200  /* effective for keyboard. */
+#define RIDEV_APPKEYS           0x00000400  /* effective for keyboard. */
 #if(_WIN32_WINNT >= 0x0501)
 #define RIDEV_EXINPUTSINK       0x00001000
 #define RIDEV_DEVNOTIFY         0x00002000
@@ -5678,7 +5586,7 @@ static pal_bool win32_create_input_window(void) {
         }
     }
 
-    // HWND_MESSAGE creates a message-only window (invisible, no taskbar entry)
+    /* HWND_MESSAGE creates a message-only window (invisible, no taskbar entry) */
     g_input_window = CreateWindowExW(
         0,
         wc.lpszClassName,
@@ -5695,21 +5603,21 @@ static pal_bool win32_create_input_window(void) {
         return pal_false;
     }
 
-    // Register raw input devices targeting the message-only window
+    /* Register raw input devices targeting the message-only window */
     RAWINPUTDEVICE rid[3];
 
     rid[0].usUsagePage = 0x01;
-    rid[0].usUsage = 0x06;  // Keyboard
+    rid[0].usUsage = 0x06;  /* Keyboard */
     rid[0].dwFlags = RIDEV_INPUTSINK;
     rid[0].hwndTarget = g_input_window;
 
     rid[1].usUsagePage = 0x01;
-    rid[1].usUsage = 0x02;  // Mouse
+    rid[1].usUsage = 0x02;  /* Mouse */
     rid[1].dwFlags = RIDEV_INPUTSINK;
     rid[1].hwndTarget = g_input_window;
 
     rid[2].usUsagePage = 0x01;
-    rid[2].usUsage = 0x04;  // Joystick
+    rid[2].usUsage = 0x04;  /* Joystick */
     rid[2].dwFlags = RIDEV_INPUTSINK;
     rid[2].hwndTarget = g_input_window;
 
@@ -5719,11 +5627,11 @@ static pal_bool win32_create_input_window(void) {
         return pal_false;
     }
 
-    // Register for device hotplug notifications (XP-compatible)
+    /* Register for device hotplug notifications (XP-compatible) */
     DEV_BROADCAST_DEVICEINTERFACE filter = {0};
     filter.dbcc_size = sizeof(filter);
     filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
-    //filter.dbcc_classguid = GUID_DEVINTERFACE_HID;
+    /*filter.dbcc_classguid = GUID_DEVINTERFACE_HID; */
 
     g_hDevNotify_HID = RegisterDeviceNotification(
         g_input_window,
@@ -5732,7 +5640,7 @@ static pal_bool win32_create_input_window(void) {
     );
 
     if (!g_hDevNotify_HID) {
-        // Non-fatal - continue without hotplug support
+        /* Non-fatal - continue without hotplug support */
     }
 
     return pal_true;
@@ -5799,7 +5707,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.focused = 0;
             event.window.visible = 0;
             break;
-        case WM_QUIT: // we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing.
+        case WM_QUIT: /* we only get this when we call PostQuitMessage. This is fucking retarted. If we want to kill the app, we just break from the main loop. I think we should just make this event do nothing. */
             event.quit.type = PAL_EVENT_QUIT;
             event.quit.code = 0;
             break;
@@ -5858,8 +5766,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         } break;
 
         case WM_MOUSELEAVE:
-            ClipCursor(NULL); // we unclip the cursor to the window in case it was clipped before.
-            // Mouse just left the window
+            ClipCursor(NULL); /* we unclip the cursor to the window in case it was clipped before. */
+            /* Mouse just left the window */
             break;
         case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
@@ -5871,7 +5779,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.window.y = pos->y;
             event.window.width = pos->cx;
             event.window.height = pos->cy;
-            event.window.focused = 1; // This is wrong; fixevent.window.
+            event.window.focused = 1; /* This is wrong; fixevent.window. */
             event.window.visible = 1;
             break;
 
@@ -5888,11 +5796,11 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
         case WM_DROPFILES: {
             hDrop = (HDROP)wparam;
             count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
-            paths = malloc(sizeof(char*) * count);
-            for (i = 0; i < count; ++i) {
+            paths = (const char**)malloc(sizeof(char*) * count);
+            for (i = 0; i < (int)count; ++i) {
                 DragQueryFileW(hDrop, (UINT)i, buffer, MAX_PATH);
                 len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
-                utf8 = malloc(len);
+                utf8 = (char*)malloc(len);
                 WideCharToMultiByte(CP_UTF8, 0, buffer, -1, utf8, len, NULL, NULL);
                 paths[i] = utf8;
             }
@@ -5919,7 +5827,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 event.window.focused = 1;
             }
         }; break;
-            // TODO: Make this return a pal_event of some kind.
+            /* TODO: Make this return a pal_event of some kind. */
         case WM_DEVICECHANGE: {
             switch (wparam) {
                 case DBT_DEVICEARRIVAL: {
@@ -5927,7 +5835,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
                         
-                        // Re-enumerate all input devices
+                        /* Re-enumerate all input devices */
                         win32_enumerate_keyboards();
                         win32_enumerate_mice();
                     }
@@ -5938,13 +5846,13 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
                         
-                        // Re-enumerate all input devices
+                        /* Re-enumerate all input devices */
                         win32_enumerate_keyboards();
                         win32_enumerate_mice();
                     }
                 } break;
             }
-            return TRUE;  // Return TRUE to indicate we handled the message
+            return TRUE;  /* Return TRUE to indicate we handled the message */
         } break;
         default:
             event.type = PAL_EVENT_NONE;
@@ -6130,7 +6038,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	pal_window* window = NULL;
 
     HKEY key;
-    DWORD is_light_mode = 1;  // Default to light mode
+    DWORD is_light_mode = 1;  /* Default to light mode */
     DWORD size = sizeof(is_light_mode);
 	HMODULE dwmapi = NULL;
 
@@ -6178,7 +6086,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         window_style = WS_POPUP;
     }
 
-    // we default to opengl.
+    /* we default to opengl. */
     if (!(window_flags & PAL_WINDOW_OPENGL) || !(window_flags & PAL_WINDOW_VULKAN) || !(window_flags & PAL_WINDOW_METAL)) {
         window_flags |= PAL_WINDOW_OPENGL;
     }
@@ -6197,7 +6105,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     window->hwnd = CreateWindowExW(
         ext_window_style,
         wc.lpszClassName,
-        wtitle ? wtitle : L"",  // Use converted title
+        wtitle ? wtitle : L"",  /* Use converted title */
         window_style,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -6209,7 +6117,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         NULL
     );
 
-    free(wtitle);  // Safe to free after CreateWindowExW (it copies the string)
+    free(wtitle);  /* Safe to free after CreateWindowExW (it copies the string) */
 
     if (window->hwnd == NULL) {
         return window;
@@ -6225,7 +6133,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     if (!is_light_mode) {
 		dwmapi = LoadLibraryW(L"dwmapi.dll");
 		if (!dwmapi) {
-			return NULL;  // Windows XP or dwmapi not available
+			return NULL;  /* Windows XP or dwmapi not available */
 		}
 		
 		DwmSetWindowAttributePtr = (PFN_DwmSetWindowAttribute)GetProcAddress(dwmapi, "DwmSetWindowAttribute");
@@ -6234,7 +6142,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 			BOOL dark_mode = TRUE;
 			HRESULT hr = DwmSetWindowAttributePtr(window->hwnd, 20, &dark_mode, sizeof(dark_mode));
 			
-			// Fallback for older Windows 10 builds
+			/* Fallback for older Windows 10 builds */
 			if (FAILED(hr)) {
 				DwmSetWindowAttributePtr(window->hwnd, 19, &dark_mode, sizeof(dark_mode));
 			}
@@ -6243,7 +6151,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 		FreeLibrary(dwmapi);
 	}
 
-    // Register window in global registry with unique ID
+    /* Register window in global registry with unique ID */
     if (g_windows.count < MAX_WINDOWS) {
         window->id = g_next_window_id++;
         g_windows.windows[g_windows.count] = window;
@@ -6251,8 +6159,8 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     } else {
     }
     
-    // Raw input and device notification registration is now done in pal_init()
-    // via the message-only input window, so we don't need to do it here.
+    /* Raw input and device notification registration is now done in pal_init() */
+    /* via the message-only input window, so we don't need to do it here. */
     
 	if (!(window_flags & PAL_WINDOW_HIDDEN)) {
 		if (window_flags & PAL_WINDOW_FULLSCREEN) {
@@ -6285,12 +6193,13 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	}
 	SetForegroundWindow(window->hwnd);
 	SetFocus(window->hwnd);
-	// save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen.
-	// The fullscreen function is supposed to save this state whenever the user calls it,
-	// but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes,
-	// so we have to save it here. - Abdelrahman june 13, 2024
+	/* save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen. */
+	/* The fullscreen function is supposed to save this state whenever the user calls it, */
+	/* but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes, */
+	/* so we have to save it here. - Abdelrahman june 13, 2024 */
 
     window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
+	window->cursor = (HCURSOR)GetClassLongPtrA(window->hwnd, GCLP_HCURSOR);
 	return window;
 }
 
@@ -6305,10 +6214,10 @@ PALAPI void pal_close_window(pal_window *window) {
     event.window.window_id = window->id;
     pal__eventq_push(&g_event_queue, event);
 
-    // Remove from window registry
+    /* Remove from window registry */
     for (i = 0; i < g_windows.count; i++) {
         if (g_windows.windows[i] == window) {
-            // Shift remaining windows down
+            /* Shift remaining windows down */
             for (j = i; j < g_windows.count - 1; j++) {
                 g_windows.windows[j] = g_windows.windows[j + 1];
             }
@@ -6340,7 +6249,7 @@ PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
     dpi_y = GetDeviceCaps(hdc, LOGPIXELSY);
     ReleaseDC(window->hwnd, hdc);
 
-    // Convert logical pixels to physical pixels
+    /* Convert logical pixels to physical pixels */
     scale_x = dpi_x / 96.0f;
     scale_y = dpi_y / 96.0f;
 
@@ -6396,7 +6305,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
     if (!g_message_pump_drained) {
         pal__reset_mouse_deltas();
         
-        // Reset toggle flags for all keyboards/mice
+        /* Reset toggle flags for all keyboards/mice */
         for (i = 0; i < g_keyboards.count; i++) {
             pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
         }
@@ -6404,10 +6313,10 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
             pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
         }
         
-        // Process raw input buffer
+        /* Process raw input buffer */
         win32_get_raw_input_buffer();
         
-        // Pump messages for the input window (device change notifications)
+        /* Pump messages for the input window (device change notifications) */
         if (g_input_window) {
             while (PeekMessageA(&msg, g_input_window, 0, 0, PM_REMOVE)) {
                 TranslateMessage(&msg);
@@ -6415,7 +6324,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
             }
         }
         
-        // Pump messages for all application windows
+        /* Pump messages for all application windows */
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
@@ -6423,12 +6332,12 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
         g_message_pump_drained = pal_true;
     }
 
-    if (queue->size) { // if queue is not empty,
+    if (queue->size) { /* if queue is not empty, */
 
-        // peek
+        /* peek */
         *event = queue->events[queue->front];
 
-        // dequeue
+        /* dequeue */
         queue->front = (queue->front + 1) % queue->capacity;
         queue->size--;
         return 1;
@@ -6455,8 +6364,8 @@ PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
 }
 
 PALAPI pal_monitor* pal_get_primary_monitor(void) {
-    // The point (0, 0) is guaranteed to be on the primary monitor
-    pal_monitor* monitor = malloc(sizeof(pal_monitor));
+    /* The point (0, 0) is guaranteed to be on the primary monitor */
+    pal_monitor* monitor = (pal_monitor*)malloc(sizeof(pal_monitor));
     POINT pt = {0, 0};
     monitor->handle = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
     return monitor;
@@ -6506,11 +6415,11 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode* mode) {
 }
 
 PALAPI void* pal_gl_get_proc_address(const char* proc) {
-    static HMODULE opengl_module = NULL; // Cached across all calls
+    static HMODULE opengl_module = NULL; /* Cached across all calls */
     void* p = (void*)p_wglGetProcAddress(proc);
 
     if (p == NULL || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1) {
-        // Load opengl32.dll once on first call, reuse handle afterwards
+        /* Load opengl32.dll once on first call, reuse handle afterwards */
         if (opengl_module == NULL) {
             opengl_module = LoadLibraryW(L"opengl32.dll");
         }
@@ -6538,18 +6447,18 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
 
     GetCursorPos(&cursor_pos);
 
-    ScreenToClient(window->hwnd, &cursor_pos); // Convert to client-area coordinates
+    ScreenToClient(window->hwnd, &cursor_pos); /* Convert to client-area coordinates */
     returned_pos.x = (float)cursor_pos.x;
     returned_pos.x = (float)cursor_pos.y;
     return returned_pos;
 }
 
-// Handles Gamepads, Joysticks, Steering wheels, etc...
+/* Handles Gamepads, Joysticks, Steering wheels, etc... */
 void win32_handle_hid(const RAWINPUT* raw) {
     printf("%d", raw->data.hid.dwCount);
 }
 
-// Handler function signatures
+/* Handler function signatures */
 typedef void (*RawInputHandler)(const RAWINPUT*);
 
 RawInputHandler Win32InputHandlers[3] = {
@@ -6558,13 +6467,13 @@ RawInputHandler Win32InputHandlers[3] = {
     win32_handle_hid
 };
 
-#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) // 64 KB
+#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) /* 64 KB */
 
 #ifdef _WIN64
 #define RAWINPUT_ALIGN(x)   (((x) + sizeof(QWORD) - 1) & ~(sizeof(QWORD) - 1))
-#else   // _WIN64
+#else   /* _WIN64 */
 #define RAWINPUT_ALIGN(x)   (((x) + sizeof(DWORD) - 1) & ~(sizeof(DWORD) - 1))
-#endif  // _WIN64
+#endif  /* _WIN64 */
 
 #define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
 
@@ -6590,11 +6499,11 @@ static int win32_get_raw_input_buffer(void) {
     return 0;
 }
 
-//----------------------------------------------------------------------------------
-// File Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* File Functions. */
+/*---------------------------------------------------------------------------------- */
 
-// Helper function to convert UTF-8 to UTF-16
+/* Helper function to convert UTF-8 to UTF-16 */
 
 #define INVALID_FILE_ATTRIBUTES ((DWORD)-1)
 #define FILE_ATTRIBUTE_DIRECTORY            0x00000010  
@@ -7048,9 +6957,9 @@ PALAPI pal_bool pal_close_open_file(pal_file *file) {
     return 1;
 }
 
-//----------------------------------------------------------------------------------
-// Directory Listing.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Directory Listing. */
+/*---------------------------------------------------------------------------------- */
 PALAPI pal_bool pal_path_is_dir(const char *path) {
     wchar_t *wide_path = win32_utf8_to_utf16(path);
     if (!wide_path)
@@ -7065,48 +6974,48 @@ PALAPI pal_bool pal_path_is_dir(const char *path) {
     return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? pal_true : pal_false;
 }
 
-//----------------------------------------------------------------------------------
-// Random Number Generator.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Random Number Generator. */
+/*---------------------------------------------------------------------------------- */
 
 PALAPI void pal_srand(uint64_t* state, uint64_t seed) {
     if (seed == 0) {
-        seed = 1; // Avoid zero state which would produce all zeros
+        seed = 1; /* Avoid zero state which would produce all zeros */
     }
     *state = seed;
 }
 
 PALAPI uint32_t pal_rand(uint64_t* state) {
-    // SDL's well-tested LCG constants:
-    // - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs)
-    // - Increment: 0x05 (small odd number, generates smaller ARM code)
-    // - These constants passed extensive testing with PractRand and TestU01
+    /* SDL's well-tested LCG constants: */
+    /* - Multiplier: 0xff1cd035 (32-bit for better performance on 32-bit archs) */
+    /* - Increment: 0x05 (small odd number, generates smaller ARM code) */
+    /* - These constants passed extensive testing with PractRand and TestU01 */
     *state = *state * 0xff1cd035ul + 0x05;
 
-    // Return upper 32 bits - they have better statistical properties
-    // and longer period than lower bits in an LCG
+    /* Return upper 32 bits - they have better statistical properties */
+    /* and longer period than lower bits in an LCG */
     return (uint32_t)(*state >> 32);
 }
 
-//----------------------------------------------------------------------------------
-// Time Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Time Functions. */
+/*---------------------------------------------------------------------------------- */
 typedef struct _KSYSTEM_TIME {
-    ULONG LowPart;  // Low 32 bits of the 64-bit time value
-    LONG High1Time; // High 32 bits (first copy)
-    LONG High2Time; // High 32 bits (second copy)
+    ULONG LowPart;  /* Low 32 bits of the 64-bit time value */
+    LONG High1Time; /* High 32 bits (first copy) */
+    LONG High2Time; /* High 32 bits (second copy) */
 } KSYSTEM_TIME, *PKSYSTEM_TIME;
 
 typedef struct _KUSER_SHARED_DATA {
-    ULONG TickCountLowDeprecated;                   // 0x000
-    ULONG TickCountMultiplier;                      // 0x004
-    KSYSTEM_TIME InterruptTime;                     // 0x008
-    KSYSTEM_TIME SystemTime;                        // 0x014
-    KSYSTEM_TIME TimeZoneBias;                      // 0x020
-    UCHAR Padding0[0x300 - 0x02C];                  // padding to 0x300
-    LONGLONG QpcFrequency;                          // 0x300
-    UCHAR Padding1[0x320 - 0x308];                  // padding to 0x320
-    union {                                         // 0x320
+    ULONG TickCountLowDeprecated;                   /* 0x000 */
+    ULONG TickCountMultiplier;                      /* 0x004 */
+    KSYSTEM_TIME InterruptTime;                     /* 0x008 */
+    KSYSTEM_TIME SystemTime;                        /* 0x014 */
+    KSYSTEM_TIME TimeZoneBias;                      /* 0x020 */
+    UCHAR Padding0[0x300 - 0x02C];                  /* padding to 0x300 */
+    LONGLONG QpcFrequency;                          /* 0x300 */
+    UCHAR Padding1[0x320 - 0x308];                  /* padding to 0x320 */
+    union {                                         /* 0x320 */
         KSYSTEM_TIME TickCount;
         UINT64 TickCountQuad;
     }tick;
@@ -7124,7 +7033,7 @@ PALAPI pal_time pal_get_date_and_time_utc(void) {
     } while (time.HighPart != kuser->SystemTime.High2Time);
 
     uint64_t total_100ns = time.QuadPart;
-    uint64_t total_days = total_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
+    uint64_t total_days = total_100ns / (10000000ULL * 60 * 60 * 24); /* 100ns to days */
     uint64_t remaining_100ns = total_100ns % (10000000ULL * 60 * 60 * 24);
 
     uint32_t year = 1601 + (uint32_t)(total_days / 365.25);
@@ -7167,7 +7076,7 @@ PALAPI pal_time pal_get_date_and_time_utc(void) {
     result.year = year;
     result.month = month;
     result.day = day;
-    result.weeks = 0; // Unused for system time
+    result.weeks = 0; /* Unused for system time */
     result.hours = hours;
     result.minutes = minutes;
     result.seconds = seconds;
@@ -7200,7 +7109,7 @@ PALAPI pal_time pal_get_date_and_time_local(void) {
 
     local_time_100ns = system_time.QuadPart - timezone_bias.QuadPart;
 
-    total_days = local_time_100ns / (10000000ULL * 60 * 60 * 24); // 100ns to days
+    total_days = local_time_100ns / (10000000ULL * 60 * 60 * 24); /* 100ns to days */
     remaining_100ns = local_time_100ns % (10000000ULL * 60 * 60 * 24);
 
     year = 1601 + (uint32_t)(total_days / 365.25);
@@ -7240,7 +7149,7 @@ PALAPI pal_time pal_get_date_and_time_local(void) {
     result.year = year;
     result.month = month;
     result.day = day;
-    result.weeks = 0; // Unused for system time
+    result.weeks = 0; /* Unused for system time */
     result.hours = hours;
     result.minutes = minutes;
     result.seconds = seconds;
@@ -7315,16 +7224,16 @@ PALAPI uint64_t pal_get_ticks(void) {
     return counter.QuadPart;
 }
 
-// Gets the frequency of the raw timer that is used by pal, not including any time the computer
-// is sleeping while pal is running.
+/* Gets the frequency of the raw timer that is used by pal, not including any time the computer */
+/* is sleeping while pal is running. */
 PALAPI uint64_t pal_get_timer_frequency(void) {
     volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
     return (uint64_t)kuser->QpcFrequency;
 }
 
-//----------------------------------------------------------------------------------
-// Clip Board Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Clip Board Functions. */
+/*---------------------------------------------------------------------------------- */
 PALAPI char* pal_clipboard_get(void) {
     HANDLE hData;
     wchar_t* wtext = NULL;
@@ -7346,7 +7255,7 @@ PALAPI char* pal_clipboard_get(void) {
         return NULL;
     }
 
-    // Convert wide char text to UTF-8
+    /* Convert wide char text to UTF-8 */
     size_needed = WideCharToMultiByte(CP_UTF8, 0, wtext, -1, NULL, 0, NULL, NULL);
     text = (char*)malloc(size_needed);
     if (text)
@@ -7355,7 +7264,7 @@ PALAPI char* pal_clipboard_get(void) {
     GlobalUnlock(hData);
     CloseClipboard();
 
-    return text; // caller must free()
+    return text; /* caller must free() */
 }
 
 PALAPI void pal_clipboard_set(const char* text) {
@@ -7365,17 +7274,17 @@ PALAPI void pal_clipboard_set(const char* text) {
     if (text == NULL || *text == '\0')
         return;
 
-    // Calculate the size of the text, including the null terminator
+    /* Calculate the size of the text, including the null terminator */
     len = pal_strlen(text) + 1;
     hMem = GlobalAlloc(GMEM_MOVEABLE, len);
     if (!hMem)
         return;
 
-    // Copy the text into the allocated memory
+    /* Copy the text into the allocated memory */
     pal_memcpy(GlobalLock(hMem), text, len);
     GlobalUnlock(hMem);
 
-    // Open the clipboard and set the data
+    /* Open the clipboard and set the data */
     if (OpenClipboard(NULL)) {
         EmptyClipboard();
         SetClipboardData(CF_TEXT, hMem);
@@ -7385,9 +7294,9 @@ PALAPI void pal_clipboard_set(const char* text) {
     }
 }
 
-//----------------------------------------------------------------------------------
-// Mouse Warp Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Mouse Warp Functions. */
+/*---------------------------------------------------------------------------------- */
 
 void pal_mouse_warp(int x, int y) {
     SetCursorPos(x, y);
@@ -7402,12 +7311,11 @@ void pal_mouse_warp_relative(int dx, int dy) {
     SendInput(1, &input, sizeof(INPUT));
 }
 
-//----------------------------------------------------------------------------------
-// Url Launch Function.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Url Launch Function. */
+/*---------------------------------------------------------------------------------- */
 PALAPI void pal_url_launch(char* url) {
 	HINSTANCE result;
-	int wlen;
 	WCHAR* wurl;
 
 	if (!url || !*url) return;
@@ -7415,21 +7323,21 @@ PALAPI void pal_url_launch(char* url) {
 	wurl = win32_utf8_to_utf16(url);
 	if (!wurl) free(wurl);
 
-	// ShellExecuteW opens the URL with the default app (e.g., browser)
+	/* ShellExecuteW opens the URL with the default app (e.g., browser) */
 	result = ShellExecuteW(NULL, L"open", wurl, NULL, NULL, SW_SHOWNORMAL);
 
 	free(wurl);
 }
 
-//----------------------------------------------------------------------------------
-// File Requester Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* File Requester Functions. */
+/*---------------------------------------------------------------------------------- */
 
 typedef struct PalRequester {
     char path[MAX_PATH];
 } PalRequester;
 
-static PalRequester g_requesters[16]; // simple static pool, indexed by `id`
+static PalRequester g_requesters[16]; /* simple static pool, indexed by `id` */
 
 static PalRequester* win32_get_requester(void* id) {
     uintptr_t index = (uintptr_t)id;
@@ -7450,26 +7358,26 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
     for (i = 0; i < type_count; i++) {
         const char* ext = types[i];
         remaining = out_size - pos;
-        if (remaining <= 1) break;  // Need room for final null
+        if (remaining <= 1) break;  /* Need room for final null */
         
         int written = snprintf(out + pos, remaining, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
         
-        if (written < 0) break;  // snprintf error
+        if (written < 0) break;  /* snprintf error */
         if ((size_t)written >= remaining) {
-            // Truncation occurred, stop here
+            /* Truncation occurred, stop here */
             pos = out_size - 1;
             break;
         }
         pos += written;
     }
     
-    // Add final double-null terminator
+    /* Add final double-null terminator */
     if (pos < out_size) {
         out[pos] = '\0';
     }
 }
 
-void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
+void pal_create_save_dialog(char** types, int type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
     OPENFILENAMEW ofn = {0};
     LPWSTR filter[512];
@@ -7495,7 +7403,7 @@ void pal_create_save_dialog(char** types, uint32_t type_count, void* id) {
     }
 }
 
-void pal_create_load_dialog(char** types, uint32_t type_count, void* id) {
+void pal_create_load_dialog(char** types, int type_count, void* id) {
     PalRequester* req = win32_get_requester(id);
     OPENFILENAMEW ofn = {0};
     char filter[512];
@@ -7531,12 +7439,12 @@ char* pal_show_load_dialog(void* id) {
     return (req && req->path[0]) ? req->path : NULL;
 }
 
-//----------------------------------------------------------------------------------
-// Multi-threadding functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Multi-threadding functions. */
+/*---------------------------------------------------------------------------------- */
 
 PALAPI pal_mutex *pal_create_mutex() {
-    pal_mutex *mutex = malloc(sizeof(*mutex));
+    pal_mutex *mutex = (pal_mutex*)malloc(sizeof(*mutex));
     if (!mutex) return NULL;
     InitializeCriticalSection(&mutex->cs);
     return mutex;
@@ -7560,7 +7468,7 @@ PALAPI void pal_destroy_mutex(pal_mutex *mutex) {
 }
 
 PALAPI pal_signal *pal_create_signal(void) {
-    // Manual-reset event, initially non-signaled
+    /* Manual-reset event, initially non-signaled */
     return (pal_signal *)CreateEventW(NULL, TRUE, FALSE, NULL);
 }
 
@@ -7568,14 +7476,14 @@ PALAPI pal_bool pal_wait_for_signal(pal_signal *signal, pal_mutex *mutex) {
     if (!signal)
         return pal_false;
 
-    // Release the mutex so other threads can activate the signal
+    /* Release the mutex so other threads can activate the signal */
     if (mutex)
         pal_unlock_mutex(mutex);
 
-    // Wait for the signal to be activated
+    /* Wait for the signal to be activated */
     DWORD result = WaitForSingleObject((HANDLE)signal, INFINITE);
 
-    // Reacquire the mutex before returning
+    /* Reacquire the mutex before returning */
     if (mutex)
         pal_lock_mutex(mutex);
 
@@ -7606,7 +7514,7 @@ typedef struct {
     void *arg;
 } thread_wrapper_arg;
 
-// Wrapper to adapt pal_thread_func to Windows signature
+/* Wrapper to adapt pal_thread_func to Windows signature */
 DWORD WINAPI thread_wrapper(LPVOID param) {
     thread_wrapper_arg *wrapper = (thread_wrapper_arg *)param;
     wrapper->func(wrapper->arg);
@@ -7640,9 +7548,9 @@ PALAPI void pal_destroy_thread(pal_thread *thread) {
     if (thread) CloseHandle((HANDLE)thread);
 }
 
-//----------------------------------------------------------------------------------
-// Dynamic Library Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Dynamic Library Functions. */
+/*---------------------------------------------------------------------------------- */
 PALAPI void* pal_load_dynamic_library(const char* dll) {
     HMODULE result = LoadLibraryW((LPCWSTR)dll);
     if (result) return (void*)result;
@@ -7665,7 +7573,7 @@ PALAPI void pal_init(void) {
     pal__init_eventq();
     win32_init_timer();
     
-    // Create message-only window for raw input (before enumerating devices)
+    /* Create message-only window for raw input (before enumerating devices) */
     if (!win32_create_input_window()) {
         printf("ERROR: Failed to create input window\n");
     }
@@ -7682,9 +7590,10 @@ PALAPI void pal_shutdown(void) {
     int i = 0;
     win32_shutdown_gamepads();
     win32_destroy_input_window();
+    pal_cleanup_icons();
     pal__eventq_free(g_event_queue);
     
-    // Clear window registry
+    /* Clear window registry */
     for (; i < g_windows.count; i++) {
         g_windows.windows[i] = NULL;
     }
@@ -7706,9 +7615,9 @@ PALAPI void pal_shutdown(void) {
 #include <errno.h>
 #include <sys/stat.h>
 
-//----------------------------------------------------------------------------------
-// File I/O
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* File I/O */
+/*---------------------------------------------------------------------------------- */
 
 PALAPI pal_bool pal_does_file_exist(const char *file_path) {
     return access(file_path, F_OK) == 0;
@@ -7790,7 +7699,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
         return NULL;
     }
 
-    unsigned char *file = malloc(file_size + 1);
+    unsigned char *file = (unsigned char *)malloc(file_size + 1);
     if (!file) {
         return NULL;
     }
@@ -7805,7 +7714,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 
     while (total_read < file_size) {
         ssize_t result = read(fd, file + total_read, file_size - total_read);
-        if (result <= 0) {  // error or unexpected EOF
+        if (result <= 0) {  /* error or unexpected EOF */
             close(fd);
             free(file);
             return NULL;
@@ -7815,7 +7724,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
 
     close(fd);
 
-    file[file_size] = '\0'; // optional for text files
+    file[file_size] = '\0'; /* optional for text files */
     *bytes_read = file_size;
     return file;
 }
@@ -7855,7 +7764,7 @@ PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) 
         return pal_false;
     }
 
-    char buffer[65536];  // 64KB buffer
+    char buffer[65536];  /* 64KB buffer */
     size_t bytes_read = 0;
 
     while ((bytes_read = read(src, buffer, sizeof(buffer))) > 0) {
@@ -7902,7 +7811,7 @@ PALAPI pal_file *pal_open_file(const char *file_path) {
 PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer) {
     int fd = *(int*)file;
     
-    // Seek to the specified offset
+    /* Seek to the specified offset */
     if (lseek(fd, offset, SEEK_SET) == -1) {
         return pal_false;
     }
@@ -7911,11 +7820,11 @@ PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t by
     while (total_read < bytes_to_read) {
         ssize_t result = read(fd, buffer + total_read, bytes_to_read - total_read);
         if (result < 0) {
-            // Error occurred
+            /* Error occurred */
             return pal_false;
         }
         if (result == 0) {
-            // EOF reached before reading all requested bytes
+            /* EOF reached before reading all requested bytes */
             return pal_false;
         }
         total_read += result;
@@ -7940,9 +7849,9 @@ PALAPI pal_bool pal_close_open_file(pal_file *file) {
     return err == 0 ? pal_true : pal_false;
 }
 
-//----------------------------------------------------------------------------------
-// Dynamic Library Functions.
-//----------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------- */
+/* Dynamic Library Functions. */
+/*---------------------------------------------------------------------------------- */
 PALAPI void *pal_load_dynamic_library(const char *dll) {
     void *lib = dlopen(dll, RTLD_NOW | RTLD_LOCAL);
     if (!lib) {
@@ -7979,7 +7888,6 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll) {
 
 /* C standard lib */
 #include <stdlib.h>
-#include <stdint.h>
 #include <assert.h>
 #include <string.h>
 
@@ -10003,7 +9911,7 @@ PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
         }
     }
 
-    pal_video_mode *mode = malloc(sizeof(pal_video_mode));
+    pal_video_mode *mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
     if (!mode) {
         XRRFreeCrtcInfo(crtcInfo);
         XRRFreeOutputInfo(outputInfo);
@@ -10069,7 +9977,7 @@ PALAPI void *pal_gl_get_proc_address(const char *procname) {
 #define cstring_len(s) (sizeof(s) - 1)
 #define roundup_4(n) (((n) + 3) & -4)
 
-// Wayland protocol constants
+/* Wayland protocol constants */
 static const uint32_t wayland_display_object_id = 1;
 static const uint16_t wayland_wl_registry_event_global = 0;
 static const uint16_t wayland_shm_pool_event_format = 0;
@@ -10124,7 +10032,7 @@ typedef struct pal_window {
     int should_close;
 } pal_window;
 
-// Global state
+/* Global state */
 static int g_wayland_fd = -1;
 static uint32_t g_wayland_current_id = 1;
 static uint32_t g_next_window_id = 1;
@@ -10132,7 +10040,7 @@ static pal_window **g_windows = NULL;
 static size_t g_window_count = 0;
 static size_t g_window_capacity = 0;
 
-// Buffer utility functions
+/* Buffer utility functions */
 static void buf_write_u32(char *buf, uint64_t *buf_size, uint64_t buf_cap, uint32_t x) {
     assert(*buf_size + sizeof(x) <= buf_cap);
     assert(((size_t)buf + *buf_size) % sizeof(x) == 0);
@@ -10183,7 +10091,7 @@ static void buf_read_n(char **buf, uint64_t *buf_size, char *dst, uint64_t n) {
     *buf_size -= n;
 }
 
-// Window registry functions
+/* Window registry functions */
 static void register_window(pal_window *window) {
     if (g_window_count >= g_window_capacity) {
         size_t new_capacity = g_window_capacity == 0 ? 4 : g_window_capacity * 2;
@@ -10231,7 +10139,7 @@ static pal_window *wayland_find_window_by_id(uint32_t id) {
     return NULL;
 }
 
-// Wayland protocol functions
+/* Wayland protocol functions */
 static int wayland_display_connect() {
     char *xdg_runtime_dir = getenv("XDG_RUNTIME_DIR");
     if (xdg_runtime_dir == NULL) {
@@ -10512,7 +10420,7 @@ static uint32_t wayland_xdg_surface_get_toplevel(int fd, uint32_t xdg_surface) {
 }
 
 static void wayland_xdg_toplevel_set_title(int fd, uint32_t xdg_toplevel, const char *title) {
-    uint32_t title_len = pal_strlen(title) + 1; // Include null terminator
+    uint32_t title_len = pal_strlen(title) + 1; /* Include null terminator */
     
     uint64_t msg_size = 0;
     char msg[512] = "";
@@ -10571,9 +10479,9 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
         buf_read_n(msg, msg_len, error, roundup_4(error_len));
         fprintf(stderr, "Wayland error: object=%u code=%u error=%s\n", target_object_id, code, error);
     } else if (object_id == window->wl_shm && opcode == wayland_shm_pool_event_format) {
-        buf_read_u32(msg, msg_len); // format
+        buf_read_u32(msg, msg_len); /* format */
     } else if (object_id == window->wl_buffer && opcode == wayland_wl_buffer_event_release) {
-        // Buffer released
+        /* Buffer released */
     } else if (object_id == window->xdg_wm_base && opcode == wayland_xdg_wm_base_event_ping) {
         uint32_t ping = buf_read_u32(msg, msg_len);
         wayland_xdg_wm_base_pong(fd, window->xdg_wm_base, ping);
@@ -10586,7 +10494,7 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
             buf_read_n(msg, msg_len, buf, len);
         }
         
-        // Queue resize event if dimensions changed
+        /* Queue resize event if dimensions changed */
         if ((w > 0 && w != window->width) || (h > 0 && h != window->height)) {
             pal_event event = {0};
             event.window.type = PAL_EVENT_WINDOW_RESIZED;
@@ -10602,7 +10510,7 @@ static void wayland_handle_message(int fd, pal_window *window, char **msg, uint6
     } else if (object_id == window->xdg_toplevel && opcode == wayland_xdg_toplevel_event_close) {
         window->should_close = 1;
         
-        // Queue close event
+        /* Queue close event */
         pal_event event = {0};
         event.window.type = PAL_EVENT_WINDOW_CLOSE_REQUESTED;
         event.window.window_id = window->id;
@@ -10638,18 +10546,18 @@ static void process_all_events() {
     uint64_t msg_len = (uint64_t)read_bytes;
 
     while (msg_len >= 8) {
-        // Peek at object_id to find the right window
+        /* Peek at object_id to find the right window */
         uint32_t object_id = *(uint32_t *)msg;
         pal_window *window = find_window_by_object_id(object_id);
         
         if (!window && g_window_count > 0) {
-            window = g_windows[0]; // Fallback to first window
+            window = g_windows[0]; /* Fallback to first window */
         }
         
         if (window) {
             wayland_handle_message(g_wayland_fd, window, &msg, &msg_len);
         } else {
-            break; // Can't process without a window
+            break; /* Can't process without a window */
         }
     }
 }
@@ -10688,7 +10596,7 @@ PALAPI void pal_shutdown() {
 }
 
 PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
-    (void)window_flags; // Unused for now
+    (void)window_flags; /* Unused for now */
 
     if (g_wayland_fd == -1) {
         fprintf(stderr, "pal_init() must be called before creating windows\n");
@@ -10708,10 +10616,10 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
     window->state = WINDOW_STATE_NONE;
     window->should_close = 0;
 
-    // Register window early so it can receive events
+    /* Register window early so it can receive events */
     register_window(window);
 
-    // Get registry
+    /* Get registry */
     window->wl_registry = wayland_wl_display_get_registry(g_wayland_fd);
     if (window->wl_registry == 0) {
         unregister_window(window);
@@ -10719,12 +10627,12 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         return NULL;
     }
 
-    // Wait for registry events to bind interfaces
+    /* Wait for registry events to bind interfaces */
     int attempts = 0;
     while ((window->wl_compositor == 0 || window->wl_shm == 0 || window->xdg_wm_base == 0) && attempts < 100) {
         process_events(window);
         attempts++;
-        sleep(1000); // 1ms
+        sleep(1000); /* 1ms */
     }
 
     if (window->wl_compositor == 0 || window->wl_shm == 0 || window->xdg_wm_base == 0) {
@@ -10734,7 +10642,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         return NULL;
     }
 
-    // Create shared memory
+    /* Create shared memory */
     create_shared_memory_file(window->shm_pool_size, window);
     if (window->shm_pool_data == NULL) {
         fprintf(stderr, "Failed to create shared memory\n");
@@ -10743,7 +10651,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         return NULL;
     }
 
-    // Create surface and configure window
+    /* Create surface and configure window */
     window->wl_surface = wayland_wl_compositor_create_surface(g_wayland_fd, window->wl_compositor);
     if (window->wl_surface == 0) {
         munmap(window->shm_pool_data, window->shm_pool_size);
@@ -10764,7 +10672,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
     
     window->state = WINDOW_STATE_CREATED;
 
-    // Wait for configure event
+    /* Wait for configure event */
     attempts = 0;
     while (window->state != WINDOW_STATE_CONFIGURED && attempts < 100) {
         process_events(window);
@@ -10773,11 +10681,11 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
     }
 
     if (window->state == WINDOW_STATE_CONFIGURED) {
-        // Create buffer pool
+        /* Create buffer pool */
         window->wl_shm_pool = wayland_wl_shm_create_pool(g_wayland_fd, window);
         window->wl_buffer = wayland_wl_shm_pool_create_buffer(g_wayland_fd, window);
         
-        // Clear to black initially
+        /* Clear to black initially */
         memset(window->shm_pool_data, 0, window->shm_pool_size);
         
         wayland_wl_surface_attach(g_wayland_fd, window->wl_surface, window->wl_buffer);
@@ -10785,7 +10693,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
         
         window->state = WINDOW_STATE_READY;
         
-        // Queue window shown event
+        /* Queue window shown event */
         pal_event event = {0};
         event.window.type = PAL_EVENT_WINDOW_SHOWN;
         event.window.window_id = window->id;
@@ -10802,7 +10710,7 @@ PALAPI void pal_close_window(pal_window *window) {
         return;
     }
 
-    // Queue window closed event
+    /* Queue window closed event */
     pal_event event = {0};
     event.window.type = PAL_EVENT_WINDOW_CLOSED;
     event.window.window_id = window->id;
@@ -10827,17 +10735,17 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
         return pal_false;
     }
 
-    // Process any pending Wayland events first
+    /* Process any pending Wayland events first */
     process_all_events();
 
-    // Check if queue has events
+    /* Check if queue has events */
     if (g_event_queue.size == 0) {
         return pal_false;
     }
 
-    // Peek
+    /* Peek */
     *event = g_event_queue.events[g_event_queue.front];
-    // Dequeue
+    /* Dequeue */
     g_event_queue.front = (g_event_queue.front + 1) % g_event_queue.capacity;
     g_event_queue.size--;
 

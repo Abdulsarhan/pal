@@ -1,11 +1,11 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
-#include <assert.h>
 
 #define PAL_IMPLEMENTATION
 #include "pal_single_header.h"
 
 #include <glad/glad.h>
+#include <string.h>
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -43,7 +43,7 @@ static OpenglInfo get_opengl_info(void) {
 }
 
 int main() {
-    // int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
+    /* int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE  hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) { */
 
     pal_init();
 
@@ -57,10 +57,10 @@ int main() {
         fprintf(stderr, "ERROR: Failed to initialize glad!\n");
     }
 
-    // OpenglInfo openglInfo = get_opengl_info();
+    /* OpenglInfo openglInfo = get_opengl_info(); */
 #ifdef _WIN32
-    // pal_set_window_icon_legacy(window, "icon.ico");
-    // pal_set_taskbar_icon(window, "png.png");
+    /* pal_set_window_icon_legacy(window, "icon.ico"); */
+    /* pal_set_taskbar_icon(window, "png.png"); */
 #endif
     uint8_t running = pal_true;
     pal_event event;
@@ -97,7 +97,7 @@ int main() {
                     break;
                 case PAL_EVENT_MOUSE_MOTION:
                     printf("X: %d, Y: %d\n", event.motion.delta_x, event.motion.delta_y);
-                    // printf("mouse moved!\n");
+                    /* printf("mouse moved!\n"); */
                     break;
                 case PAL_EVENT_WINDOW_LOST_FOCUS:
                     if (is_fullscreen) {
@@ -111,12 +111,12 @@ int main() {
                     }
                     break;
                 default:
-                    // printf("%d\n", event.type);
+                    /* printf("%d\n", event.type); */
                     break;
             }
         }
-        // The is_* functions only work after all the events have been polled.
-        // do not call this in the message loop.
+        /* The is_* functions only work after all the events have been polled. */
+        /* do not call this in the message loop. */
         if (pal_is_key_down(3, PAL_KEY_W)) {
             printf("PRESSED W!\n");
         }
@@ -150,7 +150,7 @@ int main() {
                                       state.buttons.a, state.buttons.b,
                                       state.buttons.x, state.buttons.y);
                 */
-                // 6. Example vibration (Xbox controllers only)
+                /* 6. Example vibration (Xbox controllers only) */
                 if (state.buttons.a && state.is_xinput) {
                     pal_set_gamepad_vibration(i, 0.5f, 0.5f, 0, 0);
                 } else {
