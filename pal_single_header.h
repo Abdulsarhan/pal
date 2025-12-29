@@ -1557,6 +1557,11 @@ PALAPI void *pal_load_dynamic_library(const char *dll);
 PALAPI void *pal_load_dynamic_function(void *dll, char *func_name);
 PALAPI pal_bool pal_free_dynamic_library(void *dll);
 
+/* error handling */
+PALAPI void pal_set_error(const char *error);
+PALAPI const char *pal_get_error(void);
+PALAPI void pal_clear_error(void);
+
 #ifdef __cplusplus
 }
 #endif
@@ -3205,6 +3210,7 @@ typedef struct _LARGE_INTEGER {
     LONGLONG QuadPart;
 } LARGE_INTEGER;
 #else /* MIDL_PASS */
+
 typedef union _LARGE_INTEGER {
     struct {
         DWORD LowPart;
@@ -3677,6 +3683,24 @@ typedef enum _TOKEN_INFORMATION_CLASS {
 #define OFN_PATHMUSTEXIST            0x00000800
 #define OFN_NOCHANGEDIR              0x00000008
 
+
+#define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
+#define RTL_RUN_ONCE_INIT {0}   // Static initializer
+#define INIT_ONCE_STATIC_INIT   RTL_RUN_ONCE_INIT
+
+#define HEAP_ZERO_MEMORY                0x00000008  
+
+typedef union _RTL_RUN_ONCE {       
+    PVOID Ptr;                      
+} RTL_RUN_ONCE, *PRTL_RUN_ONCE;     
+
+typedef RTL_RUN_ONCE INIT_ONCE;
+typedef PRTL_RUN_ONCE PINIT_ONCE;
+typedef PRTL_RUN_ONCE LPINIT_ONCE;
+
+static DWORD tls_index = TLS_OUT_OF_INDEXES;
+static INIT_ONCE tls_init_once = INIT_ONCE_STATIC_INIT;
+
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPCWSTR lpszDeviceName,  DEVMODEW* lpDevMode, HWND hwnd,  DWORD dwflags,  LPVOID lParam);
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsW(DEVMODEW* lpDevMode,  DWORD dwFlags);
 WINUSERAPI BOOL WINAPI EnumDisplaySettingsW(LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
@@ -3690,6 +3714,7 @@ WINUSERAPI LONG WINAPI SetWindowLongA(HWND hWnd,  int nIndex,  LONG dwNewLong);
 WINUSERAPI BOOL WINAPI SetWindowPos(HWND hWnd,  HWND hWndInsertAfter,  int X,  int Y,  int cx,  int cy,  UINT uFlags);
 WINUSERAPI int WINAPI ToUnicode(UINT wVirtKey,  UINT wScanCode, CONST BYTE *lpKeyState, LPWSTR pwszBuff,  int cchBuff,  UINT wFlags);
 WINUSERAPI HCURSOR WINAPI SetCursor(HCURSOR hCursor);
+WINUSERAPI BOOL WINAPI DestroyCursor(HCURSOR hCursor);
 WINUSERAPI BOOL WINAPI SetCursorPos(int X,  int Y);
 WINUSERAPI ULONG_PTR WINAPI SetClassLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 WINUSERAPI int WINAPI ReleaseDC(HWND hWnd,  HDC hDC);
@@ -3812,7 +3837,7 @@ WINBASEAPI BOOL WINAPI ResetEvent(HANDLE hEvent);
 WINBASEAPI BOOL WINAPI SetEvent(HANDLE hEvent);
 WINCOMMDLGAPI BOOL APIENTRY GetSaveFileNameW(LPOPENFILENAMEW);
 WINCOMMDLGAPI BOOL  APIENTRY GetOpenFileNameW(LPOPENFILENAMEW);
-WINBASEAPI DECLSPEC_ALLOCATOR LPVOID WINAPI HeapAlloc(HANDLE hHeap,  DWORD dwFlags,  SIZE_T dwBytes );
+WINBASEAPI DECLSPEC_ALLOCATOR LPVOID WINAPI HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes );
 WINBASEAPI HANDLE WINAPI GetProcessHeap(VOID);
 WINBASEAPI BOOL WINAPI HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem);
 WINBASEAPI VOID WINAPI InitializeCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
@@ -3821,6 +3846,12 @@ WINBASEAPI BOOL WINAPI TryEnterCriticalSection(LPCRITICAL_SECTION lpCriticalSect
 WINBASEAPI VOID WINAPI LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
 WINBASEAPI VOID WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
 WINUSERAPI BOOL WINAPI DestroyIcon(HICON hIcon);
+ULONG_PTR GetClassLongPtrW(HWND hWnd, int nIndex);
+WINBASEAPI DWORD WINAPI TlsAlloc(VOID);
+WINBASEAPI LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex);
+WINBASEAPI BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue);
+typedef BOOL (WINAPI *PINIT_ONCE_FN) (PINIT_ONCE InitOnce, PVOID Parameter, PVOID *Context);
+WINBASEAPI BOOL WINAPI InitOnceExecuteOnce(PINIT_ONCE InitOnce, PINIT_ONCE_FN InitFn, PVOID Parameter, LPVOID* Context);
 
 /*
 * windows.h END
@@ -5833,8 +5864,9 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 case DBT_DEVICEARRIVAL: {
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
+#if 0
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-                        
+#endif
                         /* Re-enumerate all input devices */
                         win32_enumerate_keyboards();
                         win32_enumerate_mice();
@@ -5844,7 +5876,9 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
                 case DBT_DEVICEREMOVECOMPLETE: {
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
+#if 0
                         PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
+#endif
                         
                         /* Re-enumerate all input devices */
                         win32_enumerate_keyboards();
@@ -6199,14 +6233,13 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	/* so we have to save it here. - Abdelrahman june 13, 2024 */
 
     window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
-	window->cursor = (HCURSOR)GetClassLongPtrA(window->hwnd, GCLP_HCURSOR);
+	window->cursor = (HCURSOR)GetClassLongPtrW(window->hwnd, GCLP_HCURSOR);
 	return window;
 }
 
 PALAPI void pal_close_window(pal_window *window) {
     pal_event event = {0};
-    int i;
-    int j;
+    int i, j;
     if (!window || !window->hwnd)
         return;
 
@@ -6348,7 +6381,6 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 }
 
 PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
-    int wlen;
     WCHAR* wstring;
     BOOL result;
 
@@ -6781,7 +6813,7 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
         return NULL;
     }
 
-    if (file_size.QuadPart > SIZE_MAX) {
+    if (file_size.QuadPart > LLONG_MAX) {
         CloseHandle(file);
         return NULL;
     }
@@ -7325,7 +7357,11 @@ PALAPI void pal_url_launch(char* url) {
 
 	/* ShellExecuteW opens the URL with the default app (e.g., browser) */
 	result = ShellExecuteW(NULL, L"open", wurl, NULL, NULL, SW_SHOWNORMAL);
-
+    if(result > (HINSTANCE)32) {
+        /* success ! */
+    } else {
+        /* failed! */
+    }
 	free(wurl);
 }
 
@@ -7333,17 +7369,17 @@ PALAPI void pal_url_launch(char* url) {
 /* File Requester Functions. */
 /*---------------------------------------------------------------------------------- */
 
-typedef struct PalRequester {
+typedef struct pal_dialog {
     char path[MAX_PATH];
-} PalRequester;
+} pal_dialog;
 
-static PalRequester g_requesters[16]; /* simple static pool, indexed by `id` */
+static pal_dialog g_dialogs[16]; /* simple static pool, indexed by `id` */
 
-static PalRequester* win32_get_requester(void* id) {
+static pal_dialog* win32_get_dialog(void* id) {
     uintptr_t index = (uintptr_t)id;
     if (index >= 16)
         return NULL;
-    return &g_requesters[index];
+    return &g_dialogs[index];
 }
 
 static void win32_build_filter_string(char** types, uint32_t type_count, char* out, size_t out_size) {
@@ -7378,12 +7414,12 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
 }
 
 void pal_create_save_dialog(char** types, int type_count, void* id) {
-    PalRequester* req = win32_get_requester(id);
+    pal_dialog* dialog = win32_get_dialog(id);
     OPENFILENAMEW ofn = {0};
     LPWSTR filter[512];
     LPWSTR path[MAX_PATH] = {0};
 
-    if (!req)
+    if (!dialog)
         return;
 
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
@@ -7397,19 +7433,19 @@ void pal_create_save_dialog(char** types, int type_count, void* id) {
     ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
 
     if (GetSaveFileNameW(&ofn)) {
-        pal_strcpy(req->path, path);
+        pal_strcpy(dialog->path, path);
     } else {
-        req->path[0] = '\0';
+        dialog->path[0] = '\0';
     }
 }
 
 void pal_create_load_dialog(char** types, int type_count, void* id) {
-    PalRequester* req = win32_get_requester(id);
+    pal_dialog* dialog = win32_get_dialog(id);
     OPENFILENAMEW ofn = {0};
     char filter[512];
     char path[MAX_PATH] = {0};
 
-    if (!req)
+    if (!dialog)
         return;
 
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
@@ -7423,20 +7459,20 @@ void pal_create_load_dialog(char** types, int type_count, void* id) {
     ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
 
     if (GetOpenFileNameW(&ofn)) {
-        pal_strcpy(req->path, path);
+        pal_strcpy(dialog->path, path);
     } else {
-        req->path[0] = '\0';
+        dialog->path[0] = '\0';
     }
 }
 
 char* pal_show_save_dialog(void* id) {
-    PalRequester* req = win32_get_requester(id);
-    return (req && req->path[0]) ? req->path : NULL;
+    pal_dialog* dialog = win32_get_dialog(id);
+    return (dialog && dialog->path[0]) ? dialog->path : NULL;
 }
 
 char* pal_show_load_dialog(void* id) {
-    PalRequester* req = win32_get_requester(id);
-    return (req && req->path[0]) ? req->path : NULL;
+    pal_dialog* dialog = win32_get_dialog(id);
+    return (dialog && dialog->path[0]) ? dialog->path : NULL;
 }
 
 /*---------------------------------------------------------------------------------- */
@@ -7568,7 +7604,99 @@ PALAPI pal_bool pal_free_dynamic_library(void* dll) {
     if(free_result) return (pal_bool)free_result;
     return 0;
 }
+/*---------------------------------------------------------------------------------- */
+/* Error Handling Functions */
+/*---------------------------------------------------------------------------------- */
 
+#define PAL_ERROR_BUFFER_SIZE 1024
+
+static BOOL CALLBACK tls_init(PINIT_ONCE init_once, PVOID param, PVOID *context)
+{
+    (void)init_once;
+    (void)param;
+    (void)context;
+
+    tls_index = TlsAlloc();
+    return (tls_index != TLS_OUT_OF_INDEXES);
+}
+
+static char *get_thread_buffer(void)
+{
+    if (!InitOnceExecuteOnce(&tls_init_once, tls_init, NULL, NULL)) {
+        return NULL;
+    }
+
+    char *buffer = (char *)TlsGetValue(tls_index);
+    if (buffer == NULL) {
+        buffer = (char *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, PAL_ERROR_BUFFER_SIZE);
+        if (buffer != NULL) {
+            TlsSetValue(tls_index, buffer);
+        }
+    }
+    return buffer;
+}
+
+void pal_set_error(const char *error)
+{
+    char *buffer = get_thread_buffer();
+    if (buffer == NULL) {
+        return;
+    }
+
+    if (error == NULL) {
+        buffer[0] = '\0';
+        return;
+    }
+
+    size_t len = pal_strlen(error);
+    if (len >= PAL_ERROR_BUFFER_SIZE) {
+        len = PAL_ERROR_BUFFER_SIZE - 1;
+    }
+
+    pal_memcpy(buffer, error, len);
+    buffer[len] = '\0';
+}
+
+const char *pal_get_error(void)
+{
+    char *buffer = get_thread_buffer();
+    if (buffer == NULL) {
+        return "";
+    }
+    return buffer;
+}
+
+void pal_clear_error(void)
+{
+    char *buffer = get_thread_buffer();
+    if (buffer != NULL) {
+        buffer[0] = '\0';
+    }
+}
+
+/*
+ * Optional cleanup - call from DllMain or application shutdown.
+ * Note: Per-thread buffers should be freed when threads exit.
+ * If using this in a DLL, handle DLL_THREAD_DETACH in DllMain:
+ *
+ * case DLL_THREAD_DETACH:
+ *     pal_error_thread_cleanup();
+ *     break;
+ */
+void pal_error_thread_cleanup(void)
+{
+    if (tls_index != TLS_OUT_OF_INDEXES) {
+        char *buffer = (char *)TlsGetValue(tls_index);
+        if (buffer != NULL) {
+            HeapFree(GetProcessHeap(), 0, buffer);
+            TlsSetValue(tls_index, NULL);
+        }
+    }
+}
+
+/*---------------------------------------------------------------------------------- */
+/* Init and Shutdown */
+/*---------------------------------------------------------------------------------- */
 PALAPI void pal_init(void) {
     pal__init_eventq();
     win32_init_timer();
@@ -7592,6 +7720,7 @@ PALAPI void pal_shutdown(void) {
     win32_destroy_input_window();
     pal_cleanup_icons();
     pal__eventq_free(g_event_queue);
+    pal_error_thread_cleanup();
     
     /* Clear window registry */
     for (; i < g_windows.count; i++) {
@@ -7872,6 +8001,77 @@ PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
     return symbol;
 }
 
+/*---------------------------------------------------------------------------------- */
+/* Error Handling Functions */
+/*---------------------------------------------------------------------------------- */
+
+#define PAL_ERROR_BUFFER_SIZE 1024
+
+static pthread_key_t tls_key;
+static pthread_once_t tls_init_once = PTHREAD_ONCE_INIT;
+
+static void tls_destructor(void *ptr)
+{
+    free(ptr);
+}
+
+static void tls_init(void)
+{
+    pthread_key_create(&tls_key, tls_destructor);
+}
+
+static char *get_thread_buffer(void)
+{
+    pthread_once(&tls_init_once, tls_init);
+
+    char *buffer = (char *)pthread_getspecific(tls_key);
+    if (buffer == NULL) {
+        buffer = (char *)malloc(PAL_ERROR_BUFFER_SIZE);
+        if (buffer != NULL) {
+            buffer[0] = '\0';
+            pthread_setspecific(tls_key, buffer);
+        }
+    }
+    return buffer;
+}
+
+void pal_set_error(const char *error)
+{
+    char *buffer = get_thread_buffer();
+    if (buffer == NULL) {
+        return;
+    }
+
+    if (error == NULL) {
+        buffer[0] = '\0';
+        return;
+    }
+
+    size_t len = strlen(error);
+    if (len >= PAL_ERROR_BUFFER_SIZE) {
+        len = PAL_ERROR_BUFFER_SIZE - 1;
+    }
+
+    memcpy(buffer, error, len);
+    buffer[len] = '\0';
+}
+
+const char *pal_get_error(void)
+{
+    char *buffer = get_thread_buffer();
+    if (buffer == NULL) {
+        return "";
+    }
+    return buffer;
+}
+
+void pal_clear_error(void)
+{
+    char *buffer = get_thread_buffer();
+    if (buffer != NULL) {
+        buffer[0] = '\0';
+    }
+}
 PALAPI pal_bool pal_free_dynamic_library(void *dll) {
     int result = dlclose(dll);
     if (result != 0) {
