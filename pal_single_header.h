@@ -3685,21 +3685,7 @@ typedef enum _TOKEN_INFORMATION_CLASS {
 
 
 #define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
-#define RTL_RUN_ONCE_INIT {0}   // Static initializer
-#define INIT_ONCE_STATIC_INIT   RTL_RUN_ONCE_INIT
-
-#define HEAP_ZERO_MEMORY                0x00000008  
-
-typedef union _RTL_RUN_ONCE {       
-    PVOID Ptr;                      
-} RTL_RUN_ONCE, *PRTL_RUN_ONCE;     
-
-typedef RTL_RUN_ONCE INIT_ONCE;
-typedef PRTL_RUN_ONCE PINIT_ONCE;
-typedef PRTL_RUN_ONCE LPINIT_ONCE;
-
-static DWORD tls_index = TLS_OUT_OF_INDEXES;
-static INIT_ONCE tls_init_once = INIT_ONCE_STATIC_INIT;
+#define HEAP_ZERO_MEMORY 0x00000008
 
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPCWSTR lpszDeviceName,  DEVMODEW* lpDevMode, HWND hwnd,  DWORD dwflags,  LPVOID lParam);
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsW(DEVMODEW* lpDevMode,  DWORD dwFlags);
@@ -3850,8 +3836,6 @@ ULONG_PTR GetClassLongPtrW(HWND hWnd, int nIndex);
 WINBASEAPI DWORD WINAPI TlsAlloc(VOID);
 WINBASEAPI LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex);
 WINBASEAPI BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue);
-typedef BOOL (WINAPI *PINIT_ONCE_FN) (PINIT_ONCE InitOnce, PVOID Parameter, PVOID *Context);
-WINBASEAPI BOOL WINAPI InitOnceExecuteOnce(PINIT_ONCE InitOnce, PINIT_ONCE_FN InitFn, PVOID Parameter, LPVOID* Context);
 
 /*
 * windows.h END
@@ -7607,22 +7591,13 @@ PALAPI pal_bool pal_free_dynamic_library(void* dll) {
 /*---------------------------------------------------------------------------------- */
 /* Error Handling Functions */
 /*---------------------------------------------------------------------------------- */
-
 #define PAL_ERROR_BUFFER_SIZE 1024
 
-static BOOL CALLBACK tls_init(PINIT_ONCE init_once, PVOID param, PVOID *context)
-{
-    (void)init_once;
-    (void)param;
-    (void)context;
-
-    tls_index = TlsAlloc();
-    return (tls_index != TLS_OUT_OF_INDEXES);
-}
+static DWORD tls_index = TLS_OUT_OF_INDEXES;
 
 static char *get_thread_buffer(void)
 {
-    if (!InitOnceExecuteOnce(&tls_init_once, tls_init, NULL, NULL)) {
+    if (tls_index == TLS_OUT_OF_INDEXES) {
         return NULL;
     }
 
@@ -7693,7 +7668,6 @@ void pal_error_thread_cleanup(void)
         }
     }
 }
-
 /*---------------------------------------------------------------------------------- */
 /* Init and Shutdown */
 /*---------------------------------------------------------------------------------- */
@@ -7712,6 +7686,9 @@ PALAPI void pal_init(void) {
     if (!win32_init_gamepads()) {
         printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
     }
+
+    /* init tls for error handling */
+    tls_index = TlsAlloc();
 }
 
 PALAPI void pal_shutdown(void) {
@@ -8001,29 +7978,27 @@ PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
     return symbol;
 }
 
+PALAPI pal_bool pal_free_dynamic_library(void *dll) {
+    int result = dlclose(dll);
+    if (result != 0) {
+        fprintf(stderr, "dlclose failed: %s\n", dlerror());
+        assert(0 && "Failed to unload shared library");
+    }
+    return (uint8_t)(result == 0);
+}
+
 /*---------------------------------------------------------------------------------- */
 /* Error Handling Functions */
 /*---------------------------------------------------------------------------------- */
-
 #define PAL_ERROR_BUFFER_SIZE 1024
 
 static pthread_key_t tls_key;
-static pthread_once_t tls_init_once = PTHREAD_ONCE_INIT;
 
-static void tls_destructor(void *ptr)
-{
+static void tls_destructor(void *ptr) {
     free(ptr);
 }
 
-static void tls_init(void)
-{
-    pthread_key_create(&tls_key, tls_destructor);
-}
-
-static char *get_thread_buffer(void)
-{
-    pthread_once(&tls_init_once, tls_init);
-
+static char *get_thread_buffer(void) {
     char *buffer = (char *)pthread_getspecific(tls_key);
     if (buffer == NULL) {
         buffer = (char *)malloc(PAL_ERROR_BUFFER_SIZE);
@@ -8035,8 +8010,7 @@ static char *get_thread_buffer(void)
     return buffer;
 }
 
-void pal_set_error(const char *error)
-{
+void pal_set_error(const char *error) {
     char *buffer = get_thread_buffer();
     if (buffer == NULL) {
         return;
@@ -8047,17 +8021,16 @@ void pal_set_error(const char *error)
         return;
     }
 
-    size_t len = strlen(error);
+    size_t len = pal_strlen(error);
     if (len >= PAL_ERROR_BUFFER_SIZE) {
         len = PAL_ERROR_BUFFER_SIZE - 1;
     }
 
-    memcpy(buffer, error, len);
+    pal_memcpy(buffer, error, len);
     buffer[len] = '\0';
 }
 
-const char *pal_get_error(void)
-{
+const char *pal_get_error(void) {
     char *buffer = get_thread_buffer();
     if (buffer == NULL) {
         return "";
@@ -8065,20 +8038,11 @@ const char *pal_get_error(void)
     return buffer;
 }
 
-void pal_clear_error(void)
-{
+void pal_clear_error(void) {
     char *buffer = get_thread_buffer();
     if (buffer != NULL) {
         buffer[0] = '\0';
     }
-}
-PALAPI pal_bool pal_free_dynamic_library(void *dll) {
-    int result = dlclose(dll);
-    if (result != 0) {
-        fprintf(stderr, "dlclose failed: %s\n", dlerror());
-        assert(0 && "Failed to unload shared library");
-    }
-    return (uint8_t)(result == 0);
 }
 
 /* Check if the platform is PAL_PLATFORM_LINUX_X11 */
@@ -8383,6 +8347,9 @@ PALAPI void pal_init(void) {
     }
     linux_x11_init_raw_input();
     g_wm_delete = XInternAtom(g_display, "WM_DELETE_WINDOW", False);
+
+    /* initialize tls for error handling */
+    pthread_key_create(&tls_key, tls_destructor);
 }
 
 void linux_x11_cleanup_raw_input();
@@ -10258,7 +10225,7 @@ static void buf_write_u16(char *buf, uint64_t *buf_size, uint64_t buf_cap, uint1
 static void buf_write_string(char *buf, uint64_t *buf_size, uint64_t buf_cap, const char *src, uint32_t src_len) {
     assert(*buf_size + src_len <= buf_cap);
     buf_write_u32(buf, buf_size, buf_cap, src_len);
-    memcpy(buf + *buf_size, src, src_len);
+    pal_memcpy(buf + *buf_size, src, src_len);
     uint32_t padded = roundup_4(src_len);
     if (padded > src_len) {
         memset(buf + *buf_size + src_len, 0, padded - src_len);
@@ -10286,7 +10253,7 @@ static uint16_t buf_read_u16(char **buf, uint64_t *buf_size) {
 
 static void buf_read_n(char **buf, uint64_t *buf_size, char *dst, uint64_t n) {
     assert(*buf_size >= n);
-    memcpy(dst, *buf, n);
+    pal_memcpy(dst, *buf, n);
     *buf += n;
     *buf_size -= n;
 }
@@ -10354,7 +10321,7 @@ static int wayland_display_connect() {
     }
 
     uint64_t socket_path_len = 0;
-    memcpy(addr.sun_path, xdg_runtime_dir, xdg_runtime_dir_len);
+    pal_memcpy(addr.sun_path, xdg_runtime_dir, xdg_runtime_dir_len);
     socket_path_len += xdg_runtime_dir_len;
     addr.sun_path[socket_path_len++] = '/';
 
@@ -10362,11 +10329,11 @@ static int wayland_display_connect() {
     if (wayland_display == NULL) {
         char wayland_display_default[] = "wayland-0";
         uint64_t wayland_display_default_len = cstring_len(wayland_display_default);
-        memcpy(addr.sun_path + socket_path_len, wayland_display_default, wayland_display_default_len);
+        pal_memcpy(addr.sun_path + socket_path_len, wayland_display_default, wayland_display_default_len);
         socket_path_len += wayland_display_default_len;
     } else {
         uint64_t wayland_display_len = pal_strlen(wayland_display);
-        memcpy(addr.sun_path + socket_path_len, wayland_display, wayland_display_len);
+        pal_memcpy(addr.sun_path + socket_path_len, wayland_display, wayland_display_len);
         socket_path_len += wayland_display_len;
     }
 
