@@ -1,6 +1,6 @@
 Now:
 
-Create a replacement for all cstdlib functions that we use.
+Make a replacement for snprintf()
 Finish implementing all the events and window flags.
 Integrate gamepad system into the window events.
 

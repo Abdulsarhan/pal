@@ -39,7 +39,7 @@ typedef signed   long  int32_t;
 #endif /* 32 bit types */
 
 #if ULONG_MAX == 0xFFFFFFFFFFFFFFFFUL
-typedef unsigned long uint64_t;
+ypedef unsigned long uint64_t;
 typedef signed   long int64_t;
 #elif defined(ULLONG_MAX) && ULLONG_MAX == 0xFFFFFFFFFFFFFFFFULL
 typedef unsigned long long uint64_t;
@@ -1582,7 +1582,7 @@ pal_bool pal__init_eventq() {
     pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
 
     if (events == NULL) {
-        fprintf(stderr, "ERROR: %s: failed to allocate memory for events!\n", __func__);
+        pal_set_error("pal__init_eventq(): failed to allocate memory for events!");
         return 0;
     }
 
@@ -1598,7 +1598,7 @@ pal_bool pal__init_eventq() {
 /* push / enqueue */
 void pal__eventq_push(pal_event_queue* queue, pal_event event) {
 	if (queue->size == queue->capacity) {
-		fprintf(stderr, "ERROR: %s(): Event queue->size has reached capacity. Not going to enqueue->\n", __func__);
+        pal_set_error("pal__eventq_push(): Event queue->size has reached capacity. Not going to enqueue!");
 	}
 	queue->events[queue->back] = event;
 	queue->back = (queue->back + 1) % queue->capacity;
@@ -1610,7 +1610,7 @@ pal_bool pal__eventq_free(pal_event_queue queue) {
         free(queue.events);
         return 1;
     } else {
-        fprintf(stderr, "ERROR: %s(): Tried to free a queue that was already freed!\n", __func__);
+        pal_set_error("pal__eventq_free(): tried to free a queue that was already freed!");
         queue.events = NULL;
         return 0;
     }
@@ -1681,10 +1681,14 @@ PALAPI const char *pal_get_keyboard_name(int keyboard_id) {
 PALAPI int pal_get_keyboard_indices(int scan_code, int *keyboard_indices) {
     int count = 0;
     int i;
-
-    if (!keyboard_indices || scan_code < 0 || scan_code >= MAX_SCANCODES) {
+    if (!keyboard_indices) {
+        pal_set_error("pal_get_keyboard_indices(): pointer to keyboard_indices is null");
         return 0;
     }
+    if (scan_code < 0 || scan_code >= MAX_SCANCODES) {
+        pal_set_error("pal_get_keyboard_indices(): invalid scan code");
+        return 0;
+	}
 
     for (i = 0; i < g_keyboards.count; ++i) {
         if (g_keyboards.keys[i][scan_code]) {
@@ -1697,6 +1701,7 @@ PALAPI int pal_get_keyboard_indices(int scan_code, int *keyboard_indices) {
 PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
     int i;
     if (scan_code < 0 || scan_code >= MAX_SCANCODES) {
+        pal_set_error("pal_is_key_pressed(): scan_code is invalid");
         return pal_false;
     }
 
@@ -1711,6 +1716,7 @@ PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
     }
 
     if (keyboard_id < 0 || keyboard_id >= g_keyboards.count) {
+        pal_set_error("pal_is_key_pressed(): keyboard_id is not valid.");
         return pal_false;
     }
 
@@ -1721,6 +1727,7 @@ PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
 PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
     int i;
     if (scan_code < 0 || scan_code >= MAX_SCANCODES) {
+        pal_set_error("pal_is_key_down(): scan_code is invalid");
         return pal_false;
     }
 
@@ -1735,6 +1742,7 @@ PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
     }
 
     if (keyboard_id < 0 || keyboard_id >= g_keyboards.count) {
+        pal_set_error("pal_is_key_down(): keyboard_id is invalid");
         return pal_false;
     }
 
@@ -1750,6 +1758,7 @@ PALAPI int pal_get_mouse_count(void) {
 
 PALAPI const char *pal_get_mouse_name(int mouse_id) {
     if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        pal_set_error("pal_get_mouse_name(): mouse_id is invalid");
         return NULL;
     }
     return g_mice.names[mouse_id];
@@ -1758,6 +1767,7 @@ PALAPI const char *pal_get_mouse_name(int mouse_id) {
 PALAPI int pal_get_mouse_indices(int *mouse_indices) {
     int i;
     if (!mouse_indices) {
+        pal_set_error("pal_get_mouse_indices(): mouse_indices is null");
         return 0;
     }
 
@@ -1770,6 +1780,7 @@ PALAPI int pal_get_mouse_indices(int *mouse_indices) {
 PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
     int i;
     if (button < 0 || button >= MAX_MOUSE_BUTTONS) {
+        pal_set_error("pal_is_mouse_down(): button is invalid");
         return pal_false;
     }
 
@@ -1784,6 +1795,7 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
     }
 
     if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        pal_set_error("pal_is_mouse_down(): mouse_id is invalid");
         return pal_false;
     }
 
@@ -1794,6 +1806,7 @@ PALAPI pal_bool pal_is_mouse_down(int mouse_id, int button) {
 PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
     int i;
     if (button < 0 || button >= MAX_MOUSE_BUTTONS) {
+        pal_set_error("pal_is_mouse_pressed(): button is invalid");
         return pal_false;
     }
 
@@ -1808,6 +1821,7 @@ PALAPI pal_bool pal_is_mouse_pressed(int mouse_id, int button) {
     }
 
     if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        pal_set_error("pal_is_mouse_pressed(): mouse_id is invalid");
         return pal_false;
     }
 
@@ -1831,6 +1845,7 @@ PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
     }
 
     if (mouse_id < 0 || mouse_id >= g_mice.count) {
+        pal_set_error("pal_get_mouse_delta(): mouse_id is invalid");
         return delta;
     }
 
@@ -3821,8 +3836,8 @@ WINBASEAPI DWORD WINAPI WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds
 WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 WINBASEAPI BOOL WINAPI ResetEvent(HANDLE hEvent);
 WINBASEAPI BOOL WINAPI SetEvent(HANDLE hEvent);
-WINCOMMDLGAPI BOOL APIENTRY GetSaveFileNameW(LPOPENFILENAMEW);
-WINCOMMDLGAPI BOOL  APIENTRY GetOpenFileNameW(LPOPENFILENAMEW);
+WINCOMMDLGAPI BOOL APIENTRY GetSaveFileNameA(LPOPENFILENAMEA);
+WINCOMMDLGAPI BOOL  APIENTRY GetOpenFileNameA(LPOPENFILENAMEA);
 WINBASEAPI DECLSPEC_ALLOCATOR LPVOID WINAPI HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes );
 WINBASEAPI HANDLE WINAPI GetProcessHeap(VOID);
 WINBASEAPI BOOL WINAPI HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem);
@@ -4736,6 +4751,9 @@ PALAPI void pal_set_cursor(pal_window* window, unsigned char *image, int size, i
     ReleaseDC(window->hwnd, hdc);
 
     if (!hBitmap || !dibPixels) {
+
+        /* this should never happen unless the user passes in garbage, will revisit this error later. */
+        pal_set_error("pal_set_cursor(): Failed to acquire handle to bitmap!");
         return;
     }
 
@@ -6049,7 +6067,7 @@ static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
 PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
-	WCHAR *wtitle = NULL;
+	WCHAR *title = NULL;
 	DEVMODEW dm = {0};
 	LONG result;
     WNDCLASSEXW wc = {0};
@@ -6062,7 +6080,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
     PFN_DwmSetWindowAttribute DwmSetWindowAttributePtr;
 
-    wtitle = win32_utf8_to_utf16(window_title);
+    title = win32_utf8_to_utf16(window_title);
 
     if (window_flags & PAL_WINDOW_NOT_FOCUSABLE) {
         ext_window_style |= WS_EX_NOACTIVATE;
@@ -6123,7 +6141,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     window->hwnd = CreateWindowExW(
         ext_window_style,
         wc.lpszClassName,
-        wtitle ? wtitle : L"",  /* Use converted title */
+        title ? title : L"",  /* Use converted title */
         window_style,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -6135,7 +6153,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         NULL
     );
 
-    free(wtitle);  /* Safe to free after CreateWindowExW (it copies the string) */
+    free(title);  /* Safe to free after CreateWindowExW (it copies the string) */
 
     if (window->hwnd == NULL) {
         return window;
@@ -6224,8 +6242,11 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 PALAPI void pal_close_window(pal_window *window) {
     pal_event event = {0};
     int i, j;
-    if (!window || !window->hwnd)
+    if (!window || !window->hwnd) {
+
+        pal_set_error("pal_close_window(): variable \"window\" is invalid");
         return;
+    }
 
     event.window.type = PAL_EVENT_WINDOW_CLOSED;
     event.window.window_id = window->id;
@@ -6365,11 +6386,13 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 }
 
 PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
-    WCHAR* wstring;
+    WCHAR *wstring;
     BOOL result;
 
-    if (!string || !*string)
+    if (!string || !*string) {
+        pal_set_error("pal_set_window_title(): string is invalid.");
         return (pal_bool)SetWindowTextW(window->hwnd, L"");
+    }
 
     wstring = win32_utf8_to_utf16(string);
 
@@ -7352,12 +7375,11 @@ PALAPI void pal_url_launch(char* url) {
 /*---------------------------------------------------------------------------------- */
 /* File Requester Functions. */
 /*---------------------------------------------------------------------------------- */
-
 typedef struct pal_dialog {
     char path[MAX_PATH];
 } pal_dialog;
 
-static pal_dialog g_dialogs[16]; /* simple static pool, indexed by `id` */
+static pal_dialog g_dialogs[16];
 
 static pal_dialog* win32_get_dialog(void* id) {
     uintptr_t index = (uintptr_t)id;
@@ -7366,45 +7388,42 @@ static pal_dialog* win32_get_dialog(void* id) {
     return &g_dialogs[index];
 }
 
+/* Build double-null terminated filter string for OPENFILENAMEA */
 static void win32_build_filter_string(char** types, uint32_t type_count, char* out, size_t out_size) {
     size_t pos = 0;
-	uint32_t i;
-	size_t remaining = 0;
+    uint32_t i;
 
-    if (out_size == 0) return;
-    
-    out[0] = '\0';
-    
+    if (out_size < 2) return;
+
     for (i = 0; i < type_count; i++) {
         const char* ext = types[i];
-        remaining = out_size - pos;
-        if (remaining <= 1) break;  /* Need room for final null */
-        
-        int written = snprintf(out + pos, remaining, "%s files (*.%s)%c*.%s%c", ext, ext, '\0', ext, '\0');
-        
-        if (written < 0) break;  /* snprintf error */
-        if ((size_t)written >= remaining) {
-            /* Truncation occurred, stop here */
-            pos = out_size - 1;
-            break;
-        }
-        pos += written;
+        int written;
+        size_t remaining = out_size - pos - 1; /* reserve space for final null */
+
+        /* Write description: "ext files (*.ext)" */
+        written = snprintf(out + pos, remaining, "%s files (*.%s)", ext, ext);
+        if (written < 0 || (size_t)written >= remaining) break;
+        pos += written + 1; /* include the null terminator */
+
+        remaining = out_size - pos - 1;
+
+        /* Write pattern: "*.ext" */
+        written = snprintf(out + pos, remaining, "*.%s", ext);
+        if (written < 0 || (size_t)written >= remaining) break;
+        pos += written + 1; /* include the null terminator */
     }
-    
-    /* Add final double-null terminator */
-    if (pos < out_size) {
-        out[pos] = '\0';
-    }
+
+    /* Double-null terminator */
+    out[pos] = '\0';
 }
 
 void pal_create_save_dialog(char** types, int type_count, void* id) {
     pal_dialog* dialog = win32_get_dialog(id);
-    OPENFILENAMEW ofn = {0};
-    LPWSTR filter[512];
-    LPWSTR path[MAX_PATH] = {0};
+    OPENFILENAMEA ofn = {0};
+    char filter[512];
+    char path[MAX_PATH] = {0};
 
-    if (!dialog)
-        return;
+    if (!dialog) return;
 
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
 
@@ -7414,10 +7433,11 @@ void pal_create_save_dialog(char** types, int type_count, void* id) {
     ofn.lpstrFile = path;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-    ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
+    ofn.lpstrDefExt = type_count > 0 ? types[0] : NULL;
 
-    if (GetSaveFileNameW(&ofn)) {
-        pal_strcpy(dialog->path, path);
+    if (GetSaveFileNameA(&ofn)) {
+        pal_strncpy(dialog->path, path, MAX_PATH - 1);
+        dialog->path[MAX_PATH - 1] = '\0';
     } else {
         dialog->path[0] = '\0';
     }
@@ -7425,12 +7445,11 @@ void pal_create_save_dialog(char** types, int type_count, void* id) {
 
 void pal_create_load_dialog(char** types, int type_count, void* id) {
     pal_dialog* dialog = win32_get_dialog(id);
-    OPENFILENAMEW ofn = {0};
+    OPENFILENAMEA ofn = {0};
     char filter[512];
     char path[MAX_PATH] = {0};
 
-    if (!dialog)
-        return;
+    if (!dialog) return;
 
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
 
@@ -7440,10 +7459,11 @@ void pal_create_load_dialog(char** types, int type_count, void* id) {
     ofn.lpstrFile = path;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-    ofn.lpstrDefExt = type_count > 0 ? types[0] : "";
+    ofn.lpstrDefExt = type_count > 0 ? types[0] : NULL;
 
-    if (GetOpenFileNameW(&ofn)) {
-        pal_strcpy(dialog->path, path);
+    if (GetOpenFileNameA(&ofn)) {
+        pal_strncpy(dialog->path, path, MAX_PATH - 1);
+        dialog->path[MAX_PATH - 1] = '\0';
     } else {
         dialog->path[0] = '\0';
     }
