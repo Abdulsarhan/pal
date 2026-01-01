@@ -5344,19 +5344,20 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         if (makecode < 256) pal_scancode = win32_makecode_to_pal_scancode[makecode];
     }
 
-    pal_key = (pal_scancode < PAL_SCAN_COUNT) ? pal_scancode_to_keycode[pal_scancode] : 0;
+    /* Debug: Log A, D, W key events */
+    if (pal_scancode == PAL_SCAN_A || pal_scancode == PAL_SCAN_D || pal_scancode == PAL_SCAN_W) {
+        printf("Key %c: %s, kb_index=%d, handle=%p, kb_count=%d\n",
+               pal_scancode == PAL_SCAN_A ? 'A' : (pal_scancode == PAL_SCAN_D ? 'D' : 'W'),
+               is_key_released ? "RELEASE" : "PRESS",
+               kb_index, raw->header.hDevice, g_keyboards.count);
+    }
 
-    /* If device not found and this is a key release, clear on ALL keyboards */
     if (kb_index < 0) {
-        if (is_key_released && pal_scancode > 0 && pal_scancode < PAL_SCAN_COUNT) {
-            for (i = 0; i < g_keyboards.count; i++) {
-                g_keyboards.keys[i][pal_scancode] = 0;
-                g_keyboards.keys_toggled[i][pal_scancode] = 0;
-                key_is_down[i][pal_scancode] = 0;
-            }
-        }
+        printf("WARNING: Unknown device, ignoring\n");
         return;
     }
+
+    pal_key = (pal_scancode < PAL_SCAN_COUNT) ? pal_scancode_to_keycode[pal_scancode] : 0;
 
     is_repeat = pal_false;
 
@@ -6366,9 +6367,11 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
         
         /* Pump messages, but skip WM_INPUT since we already processed raw input */
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
-            if (msg.message == WM_INPUT) {
-                continue;  /* Already handled via GetRawInputBuffer */
-            }
+			if (msg.message == WM_INPUT) {
+				win32_get_raw_input_buffer();
+				DefWindowProcW(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+				continue;
+			}
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
