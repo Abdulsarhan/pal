@@ -1,6 +1,7 @@
 #ifndef PAL_H
 #define PAL_H
 
+#include <stdio.h>
 #include <limits.h>
 #include <stdlib.h> /* temporary, for malloc()*/
 #include <math.h>
@@ -1439,6 +1440,7 @@ PALAPI int pal_get_keyboard_count(void);
 PALAPI const char *pal_get_keyboard_name(int keyboard_id);
 PALAPI int pal_get_keyboard_indices(int key, int *keyboard_indices);
 PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int key);
+PALAPI pal_bool pal_is_key_released(int keyboard_id, int key);
 PALAPI pal_bool pal_is_key_down(int keyboard_id, int key);
 
 /* Mouse input */
@@ -1720,8 +1722,32 @@ PALAPI pal_bool pal_is_key_pressed(int keyboard_id, int scan_code) {
         return pal_false;
     }
 
-    /* Return true only if the key was toggled this frame AND is currently down */
-    return (g_keyboards.keys_toggled[keyboard_id][scan_code] && g_keyboards.keys[keyboard_id][scan_code]) ? pal_true : pal_false;
+    return g_keyboards.keys_toggled[keyboard_id][scan_code] && g_keyboards.keys[keyboard_id][scan_code];
+}
+
+PALAPI pal_bool pal_is_key_released(int keyboard_id, int scan_code) {
+    int i;
+    if (scan_code < 0 || scan_code >= MAX_SCANCODES) {
+        pal_set_error("pal_is_key_pressed(): scan_code is invalid");
+        return pal_false;
+    }
+
+    /* -1 means check ANY keyboard */
+	if (keyboard_id == -1) {
+		for (i = 0; i < g_keyboards.count; ++i) {
+			if (g_keyboards.keys_toggled[i][scan_code] && !g_keyboards.keys[i][scan_code]) {
+				return pal_true;
+			}
+		}
+		return pal_false;
+	}
+
+    if (keyboard_id < 0 || keyboard_id >= g_keyboards.count) {
+        pal_set_error("pal_is_key_pressed(): keyboard_id is not valid.");
+        return pal_false;
+    }
+
+    return g_keyboards.keys_toggled[keyboard_id][scan_code] && !g_keyboards.keys[keyboard_id][scan_code];
 }
 
 PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
@@ -5388,7 +5414,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         event.key.window_id = target_window_id;
 
         g_keyboards.keys[kb_index][pal_scancode] = 0;
-        g_keyboards.keys_toggled[kb_index][pal_scancode] = 0;
+        g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
         pal__eventq_push(&g_event_queue, event);
     } else {
         event.key.type = PAL_EVENT_KEY_DOWN;
@@ -6467,22 +6493,27 @@ PALAPI pal_bool pal_minimize_window(pal_window* window) {
 static int win32_get_raw_input_buffer(void);
 
 
+static int first_run = pal_true;
+
 PALAPI pal_bool pal_poll_events(pal_event* event) {
     MSG msg = {0};
     pal_event_queue* queue = &g_event_queue;
     int i;
     static BYTE raw_buffer[RAW_INPUT_BUFFER_CAPACITY];
 
+    if (first_run) {
+		pal__reset_mouse_deltas();
+		for (int i = 0; i < g_keyboards.count; i++) {
+			pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
+		}
+		for (int i = 0; i < g_mice.count; i++) {
+			pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+		}
+
+        first_run = pal_false;
+    }
+
     if (!g_message_pump_drained) {
-        pal__reset_mouse_deltas();
-        
-        for (i = 0; i < g_keyboards.count; i++) {
-            pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
-        }
-        for (i = 0; i < g_mice.count; i++) {
-            pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-        }
-        
         win32_process_raw_input();
 
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
@@ -6500,6 +6531,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
         return 1;
     } else {
         g_message_pump_drained = pal_false;
+        first_run = pal_true;
         return 0;
     }
 }
@@ -7008,11 +7040,10 @@ PALAPI pal_bool pal_copy_file(const char* original_path, const char* copy_path) 
     wchar_t* wide_original = win32_utf8_to_utf16(original_path);
     wchar_t* wide_copy = win32_utf8_to_utf16(copy_path);
     BOOL result;
-
     if (!wide_original || !wide_copy) {
         if (wide_original) free(wide_original);
         if (wide_copy) free(wide_copy);
-        return 1;
+        return pal_false;  // was returning 1 (true) on failure
     }
     
     result = CopyFileW(wide_original, wide_copy, FALSE);
@@ -7020,7 +7051,7 @@ PALAPI pal_bool pal_copy_file(const char* original_path, const char* copy_path) 
     free(wide_original);
     free(wide_copy);
     
-    return result ? 0 : 1;
+    return result ? pal_true : pal_false;  // was inverted
 }
 
 PALAPI pal_file* pal_open_file(const char* file_path) {
@@ -7697,7 +7728,12 @@ PALAPI void pal_destroy_thread(pal_thread *thread) {
 /* Dynamic Library Functions. */
 /*---------------------------------------------------------------------------------- */
 PALAPI void* pal_load_dynamic_library(const char* dll) {
-    HMODULE result = LoadLibraryW((LPCWSTR)dll);
+    wchar_t* wide_dll = win32_utf8_to_utf16(dll);
+    if (!wide_dll) return NULL;
+    
+    HMODULE result = LoadLibraryW(wide_dll);
+    free(wide_dll);
+    
     if (result) return (void*)result;
     return NULL;
 }
