@@ -5205,7 +5205,6 @@ void win32_enumerate_keyboards(void) {
             g_keyboards.count++;
         }
     }
-
     free(deviceList);
 }
 
@@ -5427,6 +5426,12 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         event.key.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
 
+        unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
+        g_keyboards.keys[kb_index][pal_scancode] = 1;
+
+        if (old_state != 1) {
+            g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
+        }
         /* Build keyboard state from our per-keyboard tracking */
         pal_memset(keyboard_state, 0, sizeof(keyboard_state));
         
@@ -5478,12 +5483,6 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
             }
         }
 
-        unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
-        g_keyboards.keys[kb_index][pal_scancode] = 1;
-
-        if (old_state != 1) {
-            g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
-        }
     }
 }
 
@@ -5610,7 +5609,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             pal__eventq_push(&g_event_queue, event);
         } else if (up) {
             g_mice.buttons[mouse_index][pal_button] = 0;
-            g_mice.buttons_toggled[mouse_index][pal_button] = 0;
+            g_mice.buttons_toggled[mouse_index][pal_button] = 1;
             g_cached_mouse_buttons &= ~(1 << i);
 
             cached_modifiers = 0;
@@ -5715,20 +5714,6 @@ static pal_bool raw_queue_pop(raw_input_queue* q, RAWINPUT* out) {
 #endif  // _WIN64
 
 #define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
-
-
-static void win32_process_raw_queue(void) {
-    RAWINPUT raw;
-    while (raw_queue_pop(&g_raw_queue, &raw)) {
-        if (raw.header.dwType == RIM_TYPEKEYBOARD) {
-            win32_handle_keyboard(&raw);
-        } else if (raw.header.dwType == RIM_TYPEMOUSE) {
-            win32_handle_mouse(&raw);
-        } else if (raw.header.dwType == RIM_TYPEHID) {
-            win32_handle_hid(&raw);
-        }
-    }
-}
 
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
@@ -6501,7 +6486,6 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
     int i;
     static BYTE raw_buffer[RAW_INPUT_BUFFER_CAPACITY];
 
-    if (first_run) {
 		pal__reset_mouse_deltas();
 		for (int i = 0; i < g_keyboards.count; i++) {
 			pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
@@ -6510,8 +6494,6 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 			pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
 		}
 
-        first_run = pal_false;
-    }
 
     if (!g_message_pump_drained) {
         win32_process_raw_input();
@@ -6531,7 +6513,6 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
         return 1;
     } else {
         g_message_pump_drained = pal_false;
-        first_run = pal_true;
         return 0;
     }
 }
