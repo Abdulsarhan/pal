@@ -5205,6 +5205,7 @@ void win32_enumerate_keyboards(void) {
             g_keyboards.count++;
         }
     }
+
     free(deviceList);
 }
 
@@ -5426,12 +5427,6 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         event.key.window_id = target_window_id;
         pal__eventq_push(&g_event_queue, event);
 
-        unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
-        g_keyboards.keys[kb_index][pal_scancode] = 1;
-
-        if (old_state != 1) {
-            g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
-        }
         /* Build keyboard state from our per-keyboard tracking */
         pal_memset(keyboard_state, 0, sizeof(keyboard_state));
         
@@ -5465,6 +5460,12 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_SCROLL)
             keyboard_state[VK_SCROLL] = 0x01;
 
+        unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
+        g_keyboards.keys[kb_index][pal_scancode] = 1;
+
+        if (old_state != 1) {
+            g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
+        }
         scan_code = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
         result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
         
@@ -5482,6 +5483,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
                 pal__eventq_push(&g_event_queue, event);
             }
         }
+
 
     }
 }
@@ -5653,57 +5655,6 @@ void win32_handle_hid(const RAWINPUT* raw) {
 #define RIDEV_EXINPUTSINK       0x00001000
 #define RIDEV_DEVNOTIFY         0x00002000
 #endif /* _WIN32_WINNT >= 0x0501 */
-/* Thread-safe input queue */
-typedef struct {
-    RAWINPUT* events;
-    int capacity;
-    int head;
-    int tail;
-    int count;
-    CRITICAL_SECTION lock;
-} raw_input_queue;
-
-static raw_input_queue g_raw_queue = {0};
-static HANDLE g_input_thread = NULL;
-static volatile BOOL g_input_thread_running = FALSE;
-
-static void raw_queue_init(raw_input_queue* q, int capacity) {
-    q->events = (RAWINPUT*)malloc(sizeof(RAWINPUT) * capacity);
-    q->capacity = capacity;
-    q->head = 0;
-    q->tail = 0;
-    q->count = 0;
-    InitializeCriticalSection(&q->lock);
-}
-
-static void raw_queue_destroy(raw_input_queue* q) {
-    DeleteCriticalSection(&q->lock);
-    free(q->events);
-    q->events = NULL;
-}
-
-static void raw_queue_push(raw_input_queue* q, const RAWINPUT* raw) {
-    EnterCriticalSection(&q->lock);
-    if (q->count < q->capacity) {
-        q->events[q->tail] = *raw;
-        q->tail = (q->tail + 1) % q->capacity;
-        q->count++;
-    }
-    LeaveCriticalSection(&q->lock);
-}
-
-static pal_bool raw_queue_pop(raw_input_queue* q, RAWINPUT* out) {
-    pal_bool result = pal_false;
-    EnterCriticalSection(&q->lock);
-    if (q->count > 0) {
-        *out = q->events[q->head];
-        q->head = (q->head + 1) % q->capacity;
-        q->count--;
-        result = pal_true;
-    }
-    LeaveCriticalSection(&q->lock);
-    return result;
-}
 
 #define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) /* 64 KB */
 
@@ -6002,36 +5953,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 				event.window.focused = 1;
 			}
 		}; break;
-            /* TODO: Make this return a pal_event of some kind. */
-        case WM_DEVICECHANGE: {
-            switch (wparam) {
-                case DBT_DEVICEARRIVAL: {
-                    PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
-                    if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
-#if 0
-                        PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-#endif
-                        /* Re-enumerate all input devices */
-                        win32_enumerate_keyboards();
-                        win32_enumerate_mice();
-                    }
-                } break;
-
-                case DBT_DEVICEREMOVECOMPLETE: {
-                    PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
-                    if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
-#if 0
-                        PDEV_BROADCAST_DEVICEINTERFACE pDi = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-#endif
-                        
-                        /* Re-enumerate all input devices */
-                        win32_enumerate_keyboards();
-                        win32_enumerate_mice();
-                    }
-                } break;
-            }
-            return TRUE;  /* Return TRUE to indicate we handled the message */
-        } break;
         default:
             event.type = PAL_EVENT_NONE;
             return DefWindowProcW(hwnd, msg, wparam, lparam);
@@ -6486,6 +6407,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
     int i;
     static BYTE raw_buffer[RAW_INPUT_BUFFER_CAPACITY];
 
+    if (first_run) {
 		pal__reset_mouse_deltas();
 		for (int i = 0; i < g_keyboards.count; i++) {
 			pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
@@ -6493,9 +6415,11 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
 		for (int i = 0; i < g_mice.count; i++) {
 			pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
 		}
-
+        first_run = pal_false;
+    }
 
     if (!g_message_pump_drained) {
+
         win32_process_raw_input();
 
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
@@ -6513,6 +6437,7 @@ PALAPI pal_bool pal_poll_events(pal_event* event) {
         return 1;
     } else {
         g_message_pump_drained = pal_false;
+        first_run = pal_true;
         return 0;
     }
 }
