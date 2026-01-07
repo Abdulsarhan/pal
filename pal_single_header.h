@@ -5722,11 +5722,12 @@ static pal_bool win32_create_input_window(void) {
     /* Register for device hotplug notifications */
     filter.dbcc_size = sizeof(filter);
     filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
+    filter.dbcc_classguid = GUID_DEVINTERFACE_HID;
 
     g_hDevNotify_HID = RegisterDeviceNotification(
         g_input_window,
         &filter,
-        DEVICE_NOTIFY_WINDOW_HANDLE | DEVICE_NOTIFY_ALL_INTERFACE_CLASSES
+        DEVICE_NOTIFY_WINDOW_HANDLE
     );
 
     return pal_true;
