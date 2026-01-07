@@ -5675,6 +5675,7 @@ static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wpar
                 case DBT_DEVICEREMOVECOMPLETE: {
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
+                                  printf("device changed!\n");
                         win32_enumerate_keyboards();
                         win32_enumerate_mice();
                     }
@@ -5708,7 +5709,7 @@ static pal_bool win32_create_input_window(void) {
         L"",
         0,
         0, 0, 0, 0,
-        HWND_MESSAGE,
+        NULL,
         NULL,
         wc.hInstance,
         NULL
@@ -5725,7 +5726,7 @@ static pal_bool win32_create_input_window(void) {
     g_hDevNotify_HID = RegisterDeviceNotification(
         g_input_window,
         &filter,
-        DEVICE_NOTIFY_WINDOW_HANDLE
+        DEVICE_NOTIFY_WINDOW_HANDLE | DEVICE_NOTIFY_ALL_INTERFACE_CLASSES
     );
 
     return pal_true;
