@@ -1407,6 +1407,7 @@ PALAPI pal_window *pal_create_window(int width, int height, const char *window_t
 PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
+PALAPI pal_ivec2 pal_get_window_drawable_area(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
 PALAPI int pal_show_cursor(pal_window *window);
 PALAPI int pal_hide_cursor(pal_window *window);
@@ -5991,6 +5992,12 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 
 	int wgl_profile = 0;
 
+	if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
+		wgl_profile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+	} else {
+		wgl_profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+	}
+
 	int contextAttribs[] = {
 		WGL_CONTEXT_MAJOR_VERSION_ARB, major,
 		WGL_CONTEXT_MINOR_VERSION_ARB, minor,
@@ -6092,12 +6099,6 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
     if (!SetPixelFormat(window->hdc, pixelFormatID, &pfd)) {
         return NULL;
     }
-
-	if (profile == PAL_GL_COMPATIBILITY_PROFILE) {
-		wgl_profile = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-	} else {
-		wgl_profile = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
-	}
 
     window->hglrc = p_wglCreateContextAttribsARB(window->hdc, NULL, contextAttribs);
     if (!window->hglrc) {
@@ -6337,26 +6338,32 @@ PALAPI void pal_close_window(pal_window *window) {
 #define LOGPIXELSY    90    /* Logical pixels/inch in Y                 */
 
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window* window) {
-    RECT rect;
-    HDC hdc;
-    int dpi_x, dpi_y;
-    float scale_x, scale_y;
+    RECT window_rect, client_rect;
     pal_ivec2 border_size;
-
-    GetClientRect(window->hwnd, &rect);
-
-    hdc = GetDC(window->hwnd);
-    dpi_x = GetDeviceCaps(hdc, LOGPIXELSX);
-    dpi_y = GetDeviceCaps(hdc, LOGPIXELSY);
-    ReleaseDC(window->hwnd, hdc);
-
-    /* Convert logical pixels to physical pixels */
-    scale_x = dpi_x / 96.0f;
-    scale_y = dpi_y / 96.0f;
-
-    border_size.x = (int)((rect.right - rect.left) * scale_x);
-    border_size.y = (int)((rect.bottom - rect.top) * scale_y);
+    
+    GetWindowRect(window->hwnd, &window_rect);
+    GetClientRect(window->hwnd, &client_rect);
+    
+    int window_width = window_rect.right - window_rect.left;
+    int window_height = window_rect.bottom - window_rect.top;
+    int client_width = client_rect.right - client_rect.left;
+    int client_height = client_rect.bottom - client_rect.top;
+    
+    border_size.x = window_width - client_width;
+    border_size.y = window_height - client_height;
+    
     return border_size;
+}
+
+PALAPI pal_ivec2 pal_get_window_drawable_area(pal_window *window){
+    RECT client_rect;
+
+    GetClientRect(window->hwnd, &client_rect);
+
+    pal_ivec2 drawable_area = {client_rect.right - client_rect.left,
+                               client_rect.bottom - client_rect.top};
+
+    return drawable_area;
 }
 
 PALAPI void *pal_get_window_handle(pal_window *window) {
@@ -7766,12 +7773,12 @@ PALAPI void pal_init(void) {
     
     win32_create_input_window();  /* For device hotplug only */
     
-    win32_enumerate_keyboards();
-    win32_enumerate_mice();
-    
     if (!win32_register_raw_input()) {
         printf("ERROR: Failed to register raw input devices\n");
     }
+
+    win32_enumerate_keyboards();
+    win32_enumerate_mice();
     
     if (!win32_init_gamepads()) {
         printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
