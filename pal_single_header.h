@@ -1355,11 +1355,11 @@ typedef union pal_event {
 } pal_event;
 
 typedef struct pal_event_queue {
+    pal_event *events;
     size_t size;
     size_t capacity;
     int front;
     int back;
-    pal_event *events;
 } pal_event_queue;
 
 typedef struct {
@@ -1774,7 +1774,7 @@ PALAPI pal_bool pal_is_key_down(int keyboard_id, int scan_code) {
     }
 
     /* Return true as long as the key is held down */
-    return g_keyboards.keys[keyboard_id][scan_code] ? pal_true : pal_false;
+    return g_keyboards.keys[keyboard_id][scan_code];
 }
 
 /* ========== Mouse Functions ========== */
@@ -3780,8 +3780,8 @@ WINADVAPI LSTATUS APIENTRY RegCloseKey( HKEY hKey );
 WINUSERAPI BOOL WINAPI PeekMessageA(LPMSG lpMsg,HWND hWnd,UINT wMsgFilterMin,UINT wMsgFilterMax,UINT wRemoveMsg);
 WINUSERAPI ATOM WINAPI RegisterClassExW(CONST WNDCLASSEXW *); 
 WINUSERAPI BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName,  HINSTANCE hInstance);
-WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle,  LPCWSTR lpClassName,  LPCWSTR lpWindowName,  DWORD dwStyle,  int X,  int Y,  int nWidth,  int nHeight,  HWND hWndParent,  HMENU hMenu,  HINSTANCE hInstance,  LPVOID lpParam);
-WINUSERAPI BOOL WINAPI RegisterRawInputDevices(PCRAWINPUTDEVICE pRawInputDevices,  UINT uiNumDevices,  UINT cbSize);
+WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle,  int X,  int Y,  int nWidth,  int nHeight,  HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
+WINUSERAPI BOOL WINAPI RegisterRawInputDevices(PCRAWINPUTDEVICE pRawInputDevices, UINT uiNumDevices, UINT cbSize);
 WINUSERAPI BOOL WINAPI ShowWindow(HWND hWnd, int nCmdShow);
 WINUSERAPI BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
 WINUSERAPI BOOL WINAPI CloseClipboard(VOID);
@@ -3878,7 +3878,7 @@ ULONG_PTR GetClassLongPtrW(HWND hWnd, int nIndex);
 WINBASEAPI DWORD WINAPI TlsAlloc(VOID);
 WINBASEAPI LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex);
 WINBASEAPI BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue);
-
+VOID Sleep(DWORD dwMilliseconds);
 /*
 * windows.h END
 */
@@ -5657,7 +5657,7 @@ void win32_handle_hid(const RAWINPUT* raw) {
 #define RIDEV_DEVNOTIFY         0x00002000
 #endif /* _WIN32_WINNT >= 0x0501 */
 
-#define RAW_INPUT_BUFFER_CAPACITY (64 * 1024) /* 64 KB */
+#define RAW_INPUT_BUFFER_CAPACITY (128 * 1024) /* 64 KB */
 
 #ifdef _WIN64
 #define RAWINPUT_ALIGN(x)   (((x) + sizeof(QWORD) - 1) & ~(sizeof(QWORD) - 1))
@@ -5669,13 +5669,15 @@ void win32_handle_hid(const RAWINPUT* raw) {
 
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
+        case WM_INPUT:
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
+            break;
         case WM_DEVICECHANGE: {
             switch (wparam) {
                 case DBT_DEVICEARRIVAL:
                 case DBT_DEVICEREMOVECOMPLETE: {
                     PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
                     if (pHdr && pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
-                                  printf("device changed!\n");
                         win32_enumerate_keyboards();
                         win32_enumerate_mice();
                     }
@@ -5759,28 +5761,24 @@ typedef struct tagWINDOWPOS {
 } WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
 
 static void win32_process_raw_input(void) {
-    static BYTE raw_buffer[RAW_INPUT_BUFFER_CAPACITY];
-    int i;
-    
-    for (;;) {
-        UINT buffer_size = RAW_INPUT_BUFFER_CAPACITY;
-        UINT count = GetRawInputBuffer((PRAWINPUT)raw_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
-        
-        if (count == 0 || count == (UINT)-1) {
-            break;
-        }
-        
-        PRAWINPUT raw = (PRAWINPUT)raw_buffer;
-        for (i = 0; i < (int)count; i++) {
-            if (raw->header.dwType == RIM_TYPEKEYBOARD) {
-                win32_handle_keyboard(raw);
-            } else if (raw->header.dwType == RIM_TYPEMOUSE) {
-                win32_handle_mouse(raw);
-            } else if (raw->header.dwType == RIM_TYPEHID) {
-                win32_handle_hid(raw);
-            }
-            raw = NEXTRAWINPUTBLOCK(raw);
-        }
+    static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
+    UINT buffer_size;
+    UINT input_event_count;
+    PRAWINPUT raw;
+    UINT i;
+
+    buffer_size = RAW_INPUT_BUFFER_CAPACITY;
+    input_event_count = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
+
+    raw = (PRAWINPUT)g_raw_input_buffer;
+    for (i = 0; i < input_event_count; ++i) {
+        if (raw->header.dwType == RIM_TYPEMOUSE)
+            win32_handle_mouse(raw);
+        else if (raw->header.dwType == RIM_TYPEKEYBOARD)
+            win32_handle_keyboard(raw);
+        else
+            win32_handle_hid(raw);
+        raw = NEXTRAWINPUTBLOCK(raw);
     }
 }
 
@@ -5898,7 +5896,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
 
         case WM_INPUT: {
-			win32_process_raw_input();
+            DefWindowProcW(hwnd, msg, wparam, lparam);
+            break;
 #if 0
             event.sensor.type = PAL_EVENT_SENSOR_UPDATE;
             event.sensor.device_id = 0;
@@ -6130,6 +6129,7 @@ static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
     return utf16_str;
 }
 
+static pal_bool win32_register_raw_input(void);
 PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
@@ -6218,8 +6218,15 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
         wc.hInstance,
         NULL
     );
-
     free(title);  /* Safe to free after CreateWindowExW (it copies the string) */
+
+	SetForegroundWindow(window->hwnd);
+	SetFocus(window->hwnd);
+
+    static pal_bool raw_input_registered = pal_false;
+    if(!raw_input_registered) {
+        raw_input_registered = win32_register_raw_input();
+    }
 
     if (window->hwnd == NULL) {
         return window;
@@ -6293,8 +6300,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	} else {
 		window->confine_mouse = pal_false;
 	}
-	SetForegroundWindow(window->hwnd);
-	SetFocus(window->hwnd);
 	/* save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen. */
 	/* The fullscreen function is supposed to save this state whenever the user calls it, */
 	/* but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes, */
@@ -6405,33 +6410,35 @@ PALAPI pal_bool pal_minimize_window(pal_window* window) {
     return (pal_bool)ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
-static int win32_get_raw_input_buffer(void);
-
-
 static int first_run = pal_true;
 
-PALAPI pal_bool pal_poll_events(pal_event* event) {
+PALAPI pal_bool pal_poll_events(pal_event *event) {
     MSG msg = {0};
     pal_event_queue* queue = &g_event_queue;
-    int i;
-    static BYTE raw_buffer[RAW_INPUT_BUFFER_CAPACITY];
 
     if (first_run) {
-		pal__reset_mouse_deltas();
-		for (int i = 0; i < g_keyboards.count; i++) {
-			pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
-		}
-		for (int i = 0; i < g_mice.count; i++) {
-			pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-		}
+        pal__reset_mouse_deltas();
+        for (int i = 0; i < g_keyboards.count; i++) {
+            pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
+        }
+        for (int i = 0; i < g_mice.count; i++) {
+            pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+        }
         first_run = pal_false;
     }
 
     if (!g_message_pump_drained) {
-
+        // Process raw input first
         win32_process_raw_input();
-
-        while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
+        
+        // Process messages BELOW WM_INPUT (0 to 0x00FE)
+        while (PeekMessageA(&msg, NULL, 0, WM_INPUT - 1, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
+        }
+        
+        // Process messages ABOVE WM_INPUT (0x0100 and up)
+        while (PeekMessageA(&msg, NULL, WM_INPUT + 1, 0xFFFF, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
@@ -6567,28 +6574,6 @@ RawInputHandler Win32InputHandlers[3] = {
     win32_handle_keyboard,
     win32_handle_hid
 };
-
-static int win32_get_raw_input_buffer(void) {
-    static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
-    UINT buffer_size = RAW_INPUT_BUFFER_CAPACITY;
-    UINT input_event_count = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
-    PRAWINPUT raw = (PRAWINPUT)g_raw_input_buffer;
-    UINT type = 0;
-    UINT i;
-
-    for (i = 0; i < input_event_count; ++i) {
-        type = raw->header.dwType;
-        if (type == RIM_TYPEMOUSE) {
-            win32_handle_mouse(raw);
-        } else if (type == RIM_TYPEKEYBOARD) {
-            win32_handle_keyboard(raw);
-        } else {
-            win32_handle_hid(raw);
-        }
-        raw = NEXTRAWINPUTBLOCK(raw);
-    }
-    return 0;
-}
 
 /*---------------------------------------------------------------------------------- */
 /* File Functions. */
@@ -7750,22 +7735,22 @@ void pal_error_thread_cleanup(void)
 
 static pal_bool win32_register_raw_input(void) {
     RAWINPUTDEVICE rid[3];
-
+    
     rid[0].usUsagePage = 0x01;
-    rid[0].usUsage = 0x06;  /* Keyboard */
+    rid[0].usUsage = 0x06;
     rid[0].dwFlags = 0;
     rid[0].hwndTarget = NULL;
-
+    
     rid[1].usUsagePage = 0x01;
-    rid[1].usUsage = 0x02;  /* Mouse */
+    rid[1].usUsage = 0x02;
     rid[1].dwFlags = 0;
     rid[1].hwndTarget = NULL;
-
+    
     rid[2].usUsagePage = 0x01;
-    rid[2].usUsage = 0x04;  /* Joystick/HID */
+    rid[2].usUsage = 0x04;
     rid[2].dwFlags = 0;
     rid[2].hwndTarget = NULL;
-
+    
     return RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE));
 }
 
@@ -7774,10 +7759,12 @@ PALAPI void pal_init(void) {
     win32_init_timer();
     
     win32_create_input_window();  /* For device hotplug only */
-    
+
+#if 0
     if (!win32_register_raw_input()) {
         printf("ERROR: Failed to register raw input devices\n");
     }
+#endif
 
     win32_enumerate_keyboards();
     win32_enumerate_mice();
