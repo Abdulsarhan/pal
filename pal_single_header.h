@@ -869,6 +869,7 @@ typedef struct pal_window pal_window;
 typedef struct pal_monitor pal_monitor;
 typedef struct pal_music pal_music;
 typedef struct pal_mutex pal_mutex;
+typedef struct pal_event_queue pal_event_queue; 
 
 typedef struct pal_video_mode {
     int width;
@@ -1354,13 +1355,6 @@ typedef union pal_event {
     uint8_t padding[128];
 } pal_event;
 
-typedef struct pal_event_queue {
-    pal_event *events;
-    size_t size;
-    size_t capacity;
-    int front;
-    int back;
-} pal_event_queue;
 
 typedef struct {
     int width, height, x, y;
@@ -1576,48 +1570,6 @@ PALAPI void pal_clear_error(void);
 /* Cross-platform code ----------------*/
 /*-------------------------------------*/
 
-pal_event_queue g_event_queue = {0};
-
-pal_bool pal__init_eventq() {
-
-    /* -- CREATE QUEUE FOR THE WINDOW -- */
-    size_t capacity = 10000;
-    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
-
-    if (events == NULL) {
-        pal_set_error("pal__init_eventq(): failed to allocate memory for events!");
-        return 0;
-    }
-
-    g_event_queue.size = 0;
-    g_event_queue.capacity = capacity;
-    g_event_queue.front = 0;
-    g_event_queue.back = 0;
-    g_event_queue.events = events;
-
-    return 1;
-}
-
-/* push / enqueue */
-void pal__eventq_push(pal_event_queue* queue, pal_event event) {
-	if (queue->size == queue->capacity) {
-        pal_set_error("pal__eventq_push(): Event queue->size has reached capacity. Not going to enqueue!");
-	}
-	queue->events[queue->back] = event;
-	queue->back = (queue->back + 1) % queue->capacity;
-	queue->size++;
-}
-
-pal_bool pal__eventq_free(pal_event_queue queue) {
-    if (queue.events) {
-        free(queue.events);
-        return 1;
-    } else {
-        pal_set_error("pal__eventq_free(): tried to free a queue that was already freed!");
-        queue.events = NULL;
-        return 0;
-    }
-}
 
 /* Window registry */
 #define MAX_WINDOWS 16
@@ -1880,15 +1832,6 @@ PALAPI pal_vec2 pal_get_mouse_delta(int mouse_id) {
     delta.x = (float)g_mice.dx[mouse_id];
     delta.y = (float)g_mice.dy[mouse_id];
     return delta;
-}
-
-void pal__reset_mouse_deltas(void) {
-    int i;
-    for (i = 0; i < g_mice.count; i++) {
-        g_mice.dx[i] = 0;
-        g_mice.dy[i] = 0;
-        g_mice.wheel[i] = 0;
-    }
 }
 
 /* clang-format off */
@@ -3879,6 +3822,8 @@ WINBASEAPI DWORD WINAPI TlsAlloc(VOID);
 WINBASEAPI LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex);
 WINBASEAPI BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue);
 VOID Sleep(DWORD dwMilliseconds);
+DWORD MsgWaitForMultipleObjects( DWORD nCount, const HANDLE *pHandles, BOOL fWaitAll, DWORD dwMilliseconds, DWORD dwWakeMask);
+
 /*
 * windows.h END
 */
@@ -4290,6 +4235,57 @@ struct pal_monitor {
     HMONITOR handle;
 };
 
+typedef struct pal_event_queue {
+    pal_event *events;
+    size_t size;
+    size_t capacity;
+    int front;
+    int back;
+    CRITICAL_SECTION lock;
+} pal_event_queue;
+
+pal_event_queue g_event_queue = {0};
+pal_event_queue g_input_queue = {0};
+static HANDLE g_input_thread;
+static volatile BOOL g_input_thread_running;
+
+static void pal__eventq_init(pal_event_queue *queue, int capacity) {
+    queue->events = (pal_event*)malloc(sizeof(pal_event) * capacity);
+    queue->capacity = capacity;
+    queue->front = 0;
+    queue->back = 0;
+    queue->size = 0;
+    InitializeCriticalSection(&queue->lock);
+}
+
+static void pal__eventq_shutdown(pal_event_queue *queue) {
+    DeleteCriticalSection(&queue->lock);
+    free(queue->events);
+    queue->events = NULL;
+}
+
+static void pal_eventq_push(pal_event_queue *queue, pal_event* event) {
+    EnterCriticalSection(&queue->lock);
+    if (queue->size < queue->capacity) {
+        queue->events[queue->back] = *event;
+        queue->back = (queue->back + 1) % queue->capacity;
+        queue->size++;
+    }
+    LeaveCriticalSection(&queue->lock);
+}
+
+static pal_bool pal_eventq_pop(pal_event_queue *queue, pal_event* event) {
+    pal_bool result = pal_false;
+    EnterCriticalSection(&queue->lock);
+    if (queue->size > 0) {
+        *event = queue->events[queue->front];
+        queue->front = (queue->front + 1) % queue->capacity;
+        queue->size--;
+        result = pal_true;
+    }
+    LeaveCriticalSection(&queue->lock);
+    return result;
+}
 
 #define MAX_XINPUT_CONTROLLERS 4
 #define PAL_MAX_GAMEPADS 16
@@ -4960,6 +4956,8 @@ void win32_handle_raw_input(HRAWINPUT raw_input) {
     /* we currently use GetRawInputBuffer(), because it's better for high-polling rate mice. */
 }
 
+
+
 /* --- pal_get_gamepad_count --- */
 
 #define ERROR_SUCCESS                    0L
@@ -5416,7 +5414,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
 
         g_keyboards.keys[kb_index][pal_scancode] = 0;
         g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
-        pal__eventq_push(&g_event_queue, event);
+        pal_eventq_push(&g_input_queue, &event);
     } else {
         event.key.type = PAL_EVENT_KEY_DOWN;
         event.key.virtual_key = pal_key;
@@ -5426,7 +5424,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         event.key.modifiers = g_keyboards.cached_modifiers[kb_index];
         event.key.keyboard_id = kb_index;
         event.key.window_id = target_window_id;
-        pal__eventq_push(&g_event_queue, event);
+        pal_eventq_push(&g_input_queue, &event);
 
         /* Build keyboard state from our per-keyboard tracking */
         pal_memset(keyboard_state, 0, sizeof(keyboard_state));
@@ -5481,7 +5479,7 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
                 event.text.text[sizeof(event.text.text) - 1] = '\0';
                 event.text.keyboard_id = kb_index;
                 event.text.window_id = target_window_id;
-                pal__eventq_push(&g_event_queue, event);
+                pal_eventq_push(&g_input_queue, &event);
             }
         }
 
@@ -5545,7 +5543,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.motion.buttons = g_cached_mouse_buttons;
         event.motion.mouse_id = mouse_index;
         event.motion.window_id = target_window_id;
-        pal__eventq_push(&g_event_queue, event);
+        pal_eventq_push(&g_input_queue, &event);
     }
 
     /* Handle mouse wheel */
@@ -5561,7 +5559,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.wheel.wheel_direction = PAL_MOUSEWHEEL_VERTICAL;
         event.wheel.mouse_id = mouse_index;
         event.wheel.window_id = target_window_id;
-        pal__eventq_push(&g_event_queue, event);
+        pal_eventq_push(&g_input_queue, &event);
     }
 
     /* Handle horizontal wheel */
@@ -5576,7 +5574,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         event.wheel.wheel_direction = PAL_MOUSEWHEEL_HORIZONTAL;
         event.wheel.mouse_id = mouse_index;
         event.wheel.window_id = target_window_id;
-        pal__eventq_push(&g_event_queue, event);
+        pal_eventq_push(&g_input_queue, &event);
     }
 
     /* Handle button events */
@@ -5609,7 +5607,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             event.button.button = pal_button;
             event.button.mouse_id = mouse_index;
             event.button.window_id = target_window_id;
-            pal__eventq_push(&g_event_queue, event);
+            pal_eventq_push(&g_input_queue, &event);
         } else if (up) {
             g_mice.buttons[mouse_index][pal_button] = 0;
             g_mice.buttons_toggled[mouse_index][pal_button] = 1;
@@ -5629,7 +5627,7 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             event.button.button = pal_button;
             event.button.mouse_id = mouse_index;
             event.button.window_id = target_window_id;
-            pal__eventq_push(&g_event_queue, event);
+            pal_eventq_push(&g_input_queue, &event);
         }
     }
 }
@@ -5666,9 +5664,29 @@ void win32_handle_hid(const RAWINPUT* raw) {
 #endif  // _WIN64
 
 #define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
+#define QS_KEY 0x0001
+#define QS_MOUSEMOVE 0x0002
+#define QS_MOUSEBUTTON 0x0004
+#define QS_POSTMESSAGE 0x0008
+#define QS_TIMER 0x0010
+#define QS_PAINT 0x0020
+#define QS_SENDMESSAGE 0x0040
+#define QS_HOTKEY 0x0080
+#define QS_ALLPOSTMESSAGE 0x0100
+#define QS_RAWINPUT 0x0400
+#define QS_TOUCH 0x0800
+#define QS_POINTER 0x1000
+#define QS_MOUSE (QS_MOUSEMOVE | QS_MOUSEBUTTON)
+#define QS_INPUT (QS_MOUSE | QS_KEY | QS_RAWINPUT | QS_TOUCH | QS_POINTER)
+#define QS_ALLEVENTS (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY)
+#define QS_ALLINPUT (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE)
 
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
+        case WM_CLOSE:
+            return 0;  // Ignore close requests
+        case WM_DESTROY:
+            return 0;  // Don't post quit
         case WM_INPUT:
             return DefWindowProcW(hwnd, msg, wparam, lparam);
             break;
@@ -5709,9 +5727,9 @@ static pal_bool win32_create_input_window(void) {
         0,
         wc.lpszClassName,
         L"",
-        0,
+        0,                    /* No window styles - invisible */
         0, 0, 0, 0,
-        NULL,
+        NULL,                 /* NULL parent = top-level window */
         NULL,
         wc.hInstance,
         NULL
@@ -5761,25 +5779,101 @@ typedef struct tagWINDOWPOS {
 } WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
 
 static void win32_process_raw_input(void) {
-    static BYTE g_raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
+    static BYTE raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
     UINT buffer_size;
     UINT input_event_count;
     PRAWINPUT raw;
     UINT i;
 
-    buffer_size = RAW_INPUT_BUFFER_CAPACITY;
-    input_event_count = GetRawInputBuffer((PRAWINPUT)g_raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
+    for (;;) {
+        buffer_size = RAW_INPUT_BUFFER_CAPACITY;
+        input_event_count = GetRawInputBuffer((PRAWINPUT)raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
+        
+        if (input_event_count == 0 || input_event_count == (UINT)-1)
+            break;
 
-    raw = (PRAWINPUT)g_raw_input_buffer;
-    for (i = 0; i < input_event_count; ++i) {
-        if (raw->header.dwType == RIM_TYPEMOUSE)
-            win32_handle_mouse(raw);
-        else if (raw->header.dwType == RIM_TYPEKEYBOARD)
-            win32_handle_keyboard(raw);
-        else
-            win32_handle_hid(raw);
-        raw = NEXTRAWINPUTBLOCK(raw);
+        raw = (PRAWINPUT)raw_input_buffer;
+        for (i = 0; i < input_event_count; ++i) {
+            if (raw->header.dwType == RIM_TYPEMOUSE)
+                win32_handle_mouse(raw);
+            else if (raw->header.dwType == RIM_TYPEKEYBOARD)
+                win32_handle_keyboard(raw);
+            else
+                win32_handle_hid(raw);
+            raw = NEXTRAWINPUTBLOCK(raw);
+        }
     }
+}
+
+static DWORD WINAPI pal_input_thread_proc(LPVOID param) {
+    MSG msg;
+    RAWINPUTDEVICE rid[2];
+    
+    if (!win32_create_input_window()) {
+        printf("Failed to create input window\n");
+        return 1;
+    }
+    
+    rid[0].usUsagePage = 0x01;
+    rid[0].usUsage = 0x02;
+    rid[0].dwFlags = RIDEV_INPUTSINK;
+    rid[0].hwndTarget = g_input_window;
+    
+    rid[1].usUsagePage = 0x01;
+    rid[1].usUsage = 0x06;
+    rid[1].dwFlags = RIDEV_INPUTSINK;
+    rid[1].hwndTarget = g_input_window;
+    
+    RegisterRawInputDevices(rid, 2, sizeof(RAWINPUTDEVICE));
+    
+    win32_enumerate_keyboards();
+    win32_enumerate_mice();
+    
+    while (g_input_thread_running) {
+        DWORD result = MsgWaitForMultipleObjects(0, NULL, FALSE, 1000, QS_RAWINPUT | QS_ALLEVENTS);
+        
+        if (result == WAIT_OBJECT_0) {
+            win32_process_raw_input();
+            
+            /* Process other messages */
+            while (PeekMessageA(&msg, g_input_window, 0, WM_INPUT - 1, PM_REMOVE)) {
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+            }
+            while (PeekMessageA(&msg, g_input_window, WM_INPUT + 1, 0xFFFF, PM_REMOVE)) {
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+            }
+        }
+    }
+    
+    win32_destroy_input_window();
+    return 0;
+}
+
+pal_bool pal_init_input(int queue_capacity) {
+    pal__eventq_init(&g_input_queue, queue_capacity);
+    g_input_thread_running = TRUE;
+    g_input_thread = CreateThread(NULL, 0, pal_input_thread_proc, NULL, 0, NULL);
+    
+    if (!g_input_thread) {
+        pal__eventq_shutdown(&g_input_queue);
+        return pal_false;
+    }
+    
+    return pal_true;
+}
+
+void pal_shutdown_input(void) {
+    g_input_thread_running = FALSE;
+    WaitForSingleObject(g_input_thread, INFINITE);
+    CloseHandle(g_input_thread);
+    g_input_thread = NULL;
+    pal__eventq_shutdown(&g_input_queue);
+}
+
+pal_bool pal_poll_input(pal_event* event) {
+    return pal_eventq_pop(&g_input_queue, event);
 }
 
 static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -5959,7 +6053,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             event.type = PAL_EVENT_NONE;
             return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
-    pal__eventq_push(&g_event_queue, event);
+    pal_eventq_push(&g_event_queue, &event);
     return 0;
 }
 
@@ -6129,7 +6223,6 @@ static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
     return utf16_str;
 }
 
-static pal_bool win32_register_raw_input(void);
 PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
@@ -6222,11 +6315,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
 	SetForegroundWindow(window->hwnd);
 	SetFocus(window->hwnd);
-
-    static pal_bool raw_input_registered = pal_false;
-    if(!raw_input_registered) {
-        raw_input_registered = win32_register_raw_input();
-    }
 
     if (window->hwnd == NULL) {
         return window;
@@ -6321,7 +6409,7 @@ PALAPI void pal_close_window(pal_window *window) {
 
     event.window.type = PAL_EVENT_WINDOW_CLOSED;
     event.window.window_id = window->id;
-    pal__eventq_push(&g_event_queue, event);
+    pal_eventq_push(&g_event_queue, &event);
 
     /* Remove from window registry */
     for (i = 0; i < g_windows.count; i++) {
@@ -6410,54 +6498,66 @@ PALAPI pal_bool pal_minimize_window(pal_window* window) {
     return (pal_bool)ShowWindow(window->hwnd, SW_MINIMIZE);
 }
 
-static int first_run = pal_true;
+static int first_run = pal_true; /* maybe I can just move this into pal_poll_events? */
+static pal_bool cleared_this_frame = pal_false;
 
 PALAPI pal_bool pal_poll_events(pal_event *event) {
-    MSG msg = {0};
-    pal_event_queue* queue = &g_event_queue;
-
-    if (first_run) {
-        pal__reset_mouse_deltas();
-        for (int i = 0; i < g_keyboards.count; i++) {
+    static pal_bool cleared_this_frame = pal_false;
+    MSG msg;
+    int i, j;
+    
+    if (!cleared_this_frame) {
+        for (i = 0; i < g_keyboards.count; i++) {
             pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
         }
-        for (int i = 0; i < g_mice.count; i++) {
+        for (i = 0; i < g_mice.count; i++) {
             pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
         }
-        first_run = pal_false;
-    }
 
-    if (!g_message_pump_drained) {
-        // Process raw input first
-        win32_process_raw_input();
-        
-        // Process messages BELOW WM_INPUT (0 to 0x00FE)
-        while (PeekMessageA(&msg, NULL, 0, WM_INPUT - 1, PM_REMOVE)) {
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
-        }
-        
-        // Process messages ABOVE WM_INPUT (0x0100 and up)
-        while (PeekMessageA(&msg, NULL, WM_INPUT + 1, 0xFFFF, PM_REMOVE)) {
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
-        }
-        
-        g_message_pump_drained = pal_true;
+        pal_memset(g_mice.dx, 0, g_mice.count);
+        pal_memset(g_mice.dy, 0, g_mice.count);
+        pal_memset(g_mice.wheel, 0, g_mice.count);
+        cleared_this_frame = pal_true;
     }
-
-    if (queue->size) {
-        *event = queue->events[queue->front];
-        queue->front = (queue->front + 1) % queue->capacity;
-        queue->size--;
-        return 1;
-    } else {
-        g_message_pump_drained = pal_false;
-        first_run = pal_true;
-        return 0;
+    
+    if (pal_eventq_pop(&g_input_queue, event)) {
+        if (event->type == PAL_EVENT_KEY_DOWN || event->type == PAL_EVENT_KEY_UP) {
+            g_keyboards.keys_toggled[0][event->key.scancode] = 1;
+            g_keyboards.keys[0][event->key.scancode] = event->key.pressed;
+        } else if (event->type == PAL_EVENT_MOUSE_BUTTON_DOWN || event->type == PAL_EVENT_MOUSE_BUTTON_UP) {
+            g_mice.buttons_toggled[0][event->button.button] = 1;
+            g_mice.buttons[0][event->button.button] = event->button.pressed;
+        }
+        return pal_true;
     }
+    
+    if (pal_eventq_pop(&g_event_queue, event)) {
+        return pal_true;
+    }
+    
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+    
+    if (pal_eventq_pop(&g_input_queue, event)) {
+        if (event->type == PAL_EVENT_KEY_DOWN || event->type == PAL_EVENT_KEY_UP) {
+            g_keyboards.keys_toggled[0][event->key.scancode] = 1;
+            g_keyboards.keys[0][event->key.scancode] = event->key.pressed;
+        } else if (event->type == PAL_EVENT_MOUSE_BUTTON_DOWN || event->type == PAL_EVENT_MOUSE_BUTTON_UP) {
+            g_mice.buttons_toggled[0][event->button.button] = 1;
+            g_mice.buttons[0][event->button.button] = event->button.pressed;
+        }
+        return pal_true;
+    }
+    
+    if (pal_eventq_pop(&g_event_queue, event)) {
+        return pal_true;
+    }
+    
+    cleared_this_frame = pal_false;
+    return pal_false;
 }
-
 PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
     WCHAR *wstring;
     BOOL result;
@@ -7733,42 +7833,13 @@ void pal_error_thread_cleanup(void)
 /* Init and Shutdown */
 /*---------------------------------------------------------------------------------- */
 
-static pal_bool win32_register_raw_input(void) {
-    RAWINPUTDEVICE rid[3];
-    
-    rid[0].usUsagePage = 0x01;
-    rid[0].usUsage = 0x06;
-    rid[0].dwFlags = 0;
-    rid[0].hwndTarget = NULL;
-    
-    rid[1].usUsagePage = 0x01;
-    rid[1].usUsage = 0x02;
-    rid[1].dwFlags = 0;
-    rid[1].hwndTarget = NULL;
-    
-    rid[2].usUsagePage = 0x01;
-    rid[2].usUsage = 0x04;
-    rid[2].dwFlags = 0;
-    rid[2].hwndTarget = NULL;
-    
-    return RegisterRawInputDevices(rid, 3, sizeof(RAWINPUTDEVICE));
-}
 
 PALAPI void pal_init(void) {
-    pal__init_eventq();
+    pal__eventq_init(&g_event_queue, 10000);
     win32_init_timer();
     
-    win32_create_input_window();  /* For device hotplug only */
+    pal_init_input(10000);
 
-#if 0
-    if (!win32_register_raw_input()) {
-        printf("ERROR: Failed to register raw input devices\n");
-    }
-#endif
-
-    win32_enumerate_keyboards();
-    win32_enumerate_mice();
-    
     if (!win32_init_gamepads()) {
         printf("ERROR: %s: win32_init_gamepads failed\n", __func__);
     }
@@ -7780,8 +7851,9 @@ PALAPI void pal_shutdown(void) {
     int i = 0;
     win32_shutdown_gamepads();
     pal_cleanup_icons();
-    pal__eventq_free(g_event_queue);
+    pal__eventq_shutdown(&g_event_queue);
     pal_error_thread_cleanup();
+    pal_shutdown_input();
     
     /* Clear window registry */
     for (; i < g_windows.count; i++) {
@@ -8353,6 +8425,59 @@ struct pal_window {
     float x,y;
     uint32_t id;
 };
+
+typedef struct pal_event_queue {
+    pal_event *events;
+    size_t size;
+    size_t capacity;
+    int front;
+    int back;
+    pthread_mutex_t mutex;
+} pal_event_queue;
+
+pal_event_queue g_event_queue = {0};
+
+pal_bool pal__init_eventq() {
+
+    /* -- CREATE QUEUE FOR THE WINDOW -- */
+    size_t capacity = 10000;
+    pal_event* events = (pal_event*)malloc((capacity * sizeof(pal_event)));
+
+    if (events == NULL) {
+        pal_set_error("pal__init_eventq(): failed to allocate memory for events!");
+        return 0;
+    }
+
+    g_event_queue.size = 0;
+    g_event_queue.capacity = capacity;
+    g_event_queue.front = 0;
+    g_event_queue.back = 0;
+    g_event_queue.events = events;
+
+    return 1;
+}
+
+/* push / enqueue */
+void pal__eventq_push(pal_event_queue* queue, pal_event event) {
+	if (queue->size == queue->capacity) {
+        pal_set_error("pal__eventq_push(): Event queue->size has reached capacity. Not going to enqueue!");
+	}
+	queue->events[queue->back] = event;
+	queue->back = (queue->back + 1) % queue->capacity;
+	queue->size++;
+}
+
+pal_bool pal__eventq_free(pal_event_queue queue) {
+    if (queue.events) {
+        free(queue.events);
+        return 1;
+    } else {
+        pal_set_error("pal__eventq_free(): tried to free a queue that was already freed!");
+        queue.events = NULL;
+        return 0;
+    }
+}
+
 uint32_t g_next_window_id = 1;
 
 /* X11 window registry (uses same g_windows from cross-platform section) */
