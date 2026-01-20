@@ -600,6 +600,7 @@ Scancodes
                            *   SIGN in a Swiss German German or French Mac   \
                            *   layout on ANSI keyboards.                     \
                            */
+#define PAL_SCAN_BACKTICK PAL_SCAN_GRAVE
 #define PAL_SCAN_COMMA 54
 #define PAL_SCAN_PERIOD 55
 #define PAL_SCAN_SLASH 56
@@ -1406,6 +1407,8 @@ PALAPI void *pal_get_window_handle(pal_window *window);
 PALAPI int pal_show_cursor(pal_window *window);
 PALAPI int pal_hide_cursor(pal_window *window);
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
+
+PALAPI int pal_get_dpi(pal_window *window);
 
 /* might change all of these functions into one function, that takes in a different full screen mode. */
 
@@ -2479,6 +2482,8 @@ typedef  HDEVNOTIFY     *PHDEVNOTIFY;
 #ifndef FALSE
 #define FALSE 0
 #endif
+
+#define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
 
 #ifndef DUMMYUNIONNAME
 #if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
@@ -5975,7 +5980,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             ClipCursor(NULL); /* we unclip the cursor to the window in case it was clipped before. */
             /* Mouse just left the window */
             break;
-        case WM_WINDOWPOSCHANGED:
         case WM_WINDOWPOSCHANGING:
             pos = (WINDOWPOS*)lparam;
             event.window.type = PAL_EVENT_WINDOW_MOVED;
@@ -6573,6 +6577,42 @@ PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
     free(wstring);
 
     return (pal_bool)result;
+}
+
+PALAPI int pal_get_dpi(pal_window *window) {
+    static UINT (WINAPI *pGetDpiForWindow)(HWND) = NULL;
+    static HRESULT (WINAPI *pGetDpiForMonitor)(HMONITOR, int, UINT*, UINT*) = NULL;
+    static BOOL checked = FALSE;
+    HWND hwnd = window->hwnd;
+
+    if (!checked) {
+        HMODULE user32 = GetModuleHandleW(L"user32.dll");
+        HMODULE shcore = LoadLibraryW(L"shcore.dll");
+        
+        pGetDpiForWindow = (void*)GetProcAddress(user32, "GetDpiForWindow");
+        if (shcore) {
+            pGetDpiForMonitor = (void*)GetProcAddress(shcore, "GetDpiForMonitor");
+        }
+        
+        checked = TRUE;
+    }
+
+    if (pGetDpiForWindow && hwnd) {
+        return pGetDpiForWindow(hwnd);
+    }
+
+    if (pGetDpiForMonitor && hwnd) {
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        UINT dpiX, dpiY;
+        if (SUCCEEDED(pGetDpiForMonitor(monitor, 0, &dpiX, &dpiY))){
+            return dpiX;
+        }
+    }
+
+    HDC hdc = GetDC(NULL);
+    int dpi = GetDeviceCaps(hdc, LOGPIXELSX);
+    ReleaseDC(NULL, hdc);
+    return dpi;
 }
 
 PALAPI pal_monitor* pal_get_primary_monitor(void) {
