@@ -1,5 +1,6 @@
 #ifndef PAL_H
 #define PAL_H
+#define PAL_IMPLEMENTATION
 
 #include <stdio.h>
 #include <limits.h>
@@ -40,7 +41,7 @@ typedef signed   long  int32_t;
 #endif /* 32 bit types */
 
 #if ULONG_MAX == 0xFFFFFFFFFFFFFFFFUL
-ypedef unsigned long uint64_t;
+typedef unsigned long uint64_t;
 typedef signed   long int64_t;
 #elif defined(ULLONG_MAX) && ULLONG_MAX == 0xFFFFFFFFFFFFFFFFULL
 typedef unsigned long long uint64_t;
@@ -2782,7 +2783,6 @@ typedef PDEVMODEA PDEVMODE;
 typedef NPDEVMODEA NPDEVMODE;
 typedef LPDEVMODEA LPDEVMODE;
 #endif /* UNICODE */
-#endif /* (_WIN32_WINNT >= _WIN32_WINNT_WINXP) */
 
 #endif /* WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP | WINAPI_PARTITION_SYSTEM) */
 
@@ -7859,8 +7859,8 @@ void pal_clear_error(void)
  *     pal_error_thread_cleanup();
  *     break;
  */
-void pal_error_thread_cleanup(void)
-{
+
+void pal_error_thread_cleanup(void) {
     if (tls_index != TLS_OUT_OF_INDEXES) {
         char *buffer = (char *)TlsGetValue(tls_index);
         if (buffer != NULL) {
@@ -7869,10 +7869,10 @@ void pal_error_thread_cleanup(void)
         }
     }
 }
+
 /*---------------------------------------------------------------------------------- */
 /* Init and Shutdown */
 /*---------------------------------------------------------------------------------- */
-
 
 PALAPI void pal_init(void) {
     pal__eventq_init(&g_event_queue, 10000);
@@ -7916,6 +7916,7 @@ PALAPI void pal_shutdown(void) {
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 /*---------------------------------------------------------------------------------- */
 /* File I/O */
@@ -8158,7 +8159,6 @@ PALAPI void *pal_load_dynamic_library(const char *dll) {
     void *lib = dlopen(dll, RTLD_NOW | RTLD_LOCAL);
     if (!lib) {
         fprintf(stderr, "dlopen failed: %s\n", dlerror());
-        assert(0 && "Failed to load shared library");
     }
     return lib;
 }
@@ -8169,7 +8169,6 @@ PALAPI void *pal_load_dynamic_function(void *dll, char *func_name) {
     const char *error = dlerror();
     if (error) {
         fprintf(stderr, "dlsym failed: %s\n", error);
-        assert(0 && "Failed to load function from shared library");
     }
     return symbol;
 }
@@ -8178,7 +8177,6 @@ PALAPI pal_bool pal_free_dynamic_library(void *dll) {
     int result = dlclose(dll);
     if (result != 0) {
         fprintf(stderr, "dlclose failed: %s\n", dlerror());
-        assert(0 && "Failed to unload shared library");
     }
     return (uint8_t)(result == 0);
 }
@@ -8243,13 +8241,12 @@ void pal_clear_error(void) {
 
 /* Check if the platform is PAL_PLATFORM_LINUX_X11 */
 #if !defined(PAL_PLATFORM_LINUX_WAYLAND) && !defined(PAL_PLATFORM_WINDOWS)
-#ifndef PLATFORM_LINUX_X11_H
-#define PLATFORM_LINUX_X11_H
 
 /* C standard lib */
+#include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
+#include <ctype.h>
 
 /* X11 window headers */
 #include <X11/Xlib.h>
@@ -8372,6 +8369,13 @@ static PFN_glXSwapIntervalSGI p_glXSwapIntervalSGI = NULL;
  * GLX LOADING FUNCTIONS
  * ============================================================================ */
 
+#define PAL_LOAD_SYM(handle, fn)                         \
+    do {                                                 \
+        void *sym = dlsym(handle, #fn);                  \
+        if (!sym) return pal_false;                      \
+        pal_memcpy(&p_##fn, &sym, sizeof(sym));          \
+    } while (0)
+
 static pal_bool linux_x11_load_glx(void) {
     if (g_glx_loaded) {
         return pal_true;
@@ -8388,16 +8392,16 @@ static pal_bool linux_x11_load_glx(void) {
     }
 
     /* Load core GLX functions */
-    p_glXChooseFBConfig = (PFN_glXChooseFBConfig)dlsym(g_libgl, "glXChooseFBConfig");
-    p_glXGetVisualFromFBConfig = (PFN_glXGetVisualFromFBConfig)dlsym(g_libgl, "glXGetVisualFromFBConfig");
-    p_glXCreateNewContext = (PFN_glXCreateNewContext)dlsym(g_libgl, "glXCreateNewContext");
-    p_glXMakeCurrent = (PFN_glXMakeCurrent)dlsym(g_libgl, "glXMakeCurrent");
-    p_glXSwapBuffers = (PFN_glXSwapBuffers)dlsym(g_libgl, "glXSwapBuffers");
-    p_glXDestroyContext = (PFN_glXDestroyContext)dlsym(g_libgl, "glXDestroyContext");
+    PAL_LOAD_SYM(g_libgl, glXChooseFBConfig);
+    PAL_LOAD_SYM(g_libgl, glXGetVisualFromFBConfig);
+    PAL_LOAD_SYM(g_libgl, glXCreateNewContext);
+    PAL_LOAD_SYM(g_libgl, glXMakeCurrent);
+    PAL_LOAD_SYM(g_libgl, glXSwapBuffers);
+    PAL_LOAD_SYM(g_libgl, glXDestroyContext);
     
     /* Load glXGetProcAddress - try both versions */
-    p_glXGetProcAddress = (PFN_glXGetProcAddress)dlsym(g_libgl, "glXGetProcAddress");
-    p_glXGetProcAddressARB = (PFN_glXGetProcAddressARB)dlsym(g_libgl, "glXGetProcAddressARB");
+    PAL_LOAD_SYM(g_libgl, glXGetProcAddress);
+    PAL_LOAD_SYM(g_libgl, glXGetProcAddressARB);
     
     /* Use ARB version as fallback if regular version not found */
     if (!p_glXGetProcAddress && p_glXGetProcAddressARB) {
@@ -8466,14 +8470,14 @@ struct pal_window {
     uint32_t id;
 };
 
-typedef struct pal_event_queue {
+struct pal_event_queue {
     pal_event *events;
     size_t size;
     size_t capacity;
     int front;
     int back;
     pthread_mutex_t mutex;
-} pal_event_queue;
+};
 
 pal_event_queue g_event_queue = {0};
 
@@ -8571,10 +8575,10 @@ struct pal_sound {
     int stream_finished;
 };
 
-typedef struct pal_monitor {
+struct pal_monitor {
     Display *display;
     RROutput output;
-} pal_monitor;
+};
 
 Display *g_display = NULL;
 Atom g_wm_delete = 0;
@@ -9701,6 +9705,11 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
 /* ============================================================================
  * WINDOW CREATION (using dynamic GLX loading)
  * ============================================================================ */
+/* Add this in the Linux section, before pal_is_linux_dark_mode() */
+#if defined(__linux__) && !defined(_WIN32)
+extern FILE *popen(const char *command, const char *type);
+extern int pclose(FILE *stream);
+#endif
 
 static pal_bool pal_is_linux_dark_mode(void) {
     FILE *fp;
@@ -10369,13 +10378,9 @@ PALAPI void *pal_gl_get_proc_address(const char *procname) {
     return NULL;
 }
 
-#endif /* PLATFORM_LINUX_X11_H */
 
 #elif defined(PAL_PLATFORM_LINUX_WAYLAND) && !defined (PAL_PLATFORM_LINUX_X11) && !defined (PAL_PLATFORM_WINDOWS)
-#ifndef PLATFORM_LINUX_WAYLAND_H
-#define PLATFORM_LINUX_WAYLAND_H
 #define _POSIX_C_SOURCE 200112L
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -10458,21 +10463,16 @@ static size_t g_window_capacity = 0;
 
 /* Buffer utility functions */
 static void buf_write_u32(char *buf, uint64_t *buf_size, uint64_t buf_cap, uint32_t x) {
-    assert(*buf_size + sizeof(x) <= buf_cap);
-    assert(((size_t)buf + *buf_size) % sizeof(x) == 0);
     *(uint32_t *)(buf + *buf_size) = x;
     *buf_size += sizeof(x);
 }
 
 static void buf_write_u16(char *buf, uint64_t *buf_size, uint64_t buf_cap, uint16_t x) {
-    assert(*buf_size + sizeof(x) <= buf_cap);
-    assert(((size_t)buf + *buf_size) % sizeof(x) == 0);
     *(uint16_t *)(buf + *buf_size) = x;
     *buf_size += sizeof(x);
 }
 
 static void buf_write_string(char *buf, uint64_t *buf_size, uint64_t buf_cap, const char *src, uint32_t src_len) {
-    assert(*buf_size + src_len <= buf_cap);
     buf_write_u32(buf, buf_size, buf_cap, src_len);
     pal_memcpy(buf + *buf_size, src, src_len);
     uint32_t padded = roundup_4(src_len);
@@ -10483,8 +10483,6 @@ static void buf_write_string(char *buf, uint64_t *buf_size, uint64_t buf_cap, co
 }
 
 static uint32_t buf_read_u32(char **buf, uint64_t *buf_size) {
-    assert(*buf_size >= sizeof(uint32_t));
-    assert((size_t)*buf % sizeof(uint32_t) == 0);
     uint32_t res = *(uint32_t *)(*buf);
     *buf += sizeof(res);
     *buf_size -= sizeof(res);
@@ -10492,8 +10490,6 @@ static uint32_t buf_read_u32(char **buf, uint64_t *buf_size) {
 }
 
 static uint16_t buf_read_u16(char **buf, uint64_t *buf_size) {
-    assert(*buf_size >= sizeof(uint16_t));
-    assert((size_t)*buf % sizeof(uint16_t) == 0);
     uint16_t res = *(uint16_t *)(*buf);
     *buf += sizeof(res);
     *buf_size -= sizeof(res);
@@ -10501,7 +10497,6 @@ static uint16_t buf_read_u16(char **buf, uint64_t *buf_size) {
 }
 
 static void buf_read_n(char **buf, uint64_t *buf_size, char *dst, uint64_t n) {
-    assert(*buf_size >= n);
     pal_memcpy(dst, *buf, n);
     *buf += n;
     *buf_size -= n;
@@ -11167,7 +11162,7 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
 
     return pal_true;
 }
-#endif /* PLATFORM_LINUX_WAYLAND_H */
-#endif // linux_* platforms
+#endif /* PAL_PLATFORM_LINUX_WAYLAND || PAL_PLATFORM_LINUX_WAYLAND */
+#endif // __linux__
 
 #endif /* PAL_IMPLEMENTATION */
