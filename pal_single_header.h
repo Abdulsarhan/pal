@@ -1457,6 +1457,12 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state);
 PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger);
 PALAPI void pal_stop_gamepad_vibration(int controller_id);
 
+/* Input focus behaviour */
+/* When enabled (the default), keyboard events are suppressed if none of the   */
+/* app's windows are focused. Disable this if you need input in the background */
+/* e.g. for push-to-talk, global hotkeys, or background game recording.        */
+PALAPI void pal_set_input_requires_focus(pal_bool requires_focus);
+
 /* Rendering stuff. */
 PALAPI void pal_swap_buffers(pal_window *window);
 PALAPI void pal_swap_interval(int interval);
@@ -2374,6 +2380,8 @@ typedef HKEY *PHKEY;
 #define WM_DESTROY                      0x0002
 #define WM_MOVE                         0x0003
 #define WM_SIZE                         0x0005
+#define WM_SETFOCUS                     0x0007
+#define WM_KILLFOCUS                    0x0008
 #define WM_MOUSEMOVE                    0x0200
 #define WM_CLOSE                        0x0010
 #define WM_QUIT                         0x0012
@@ -4253,6 +4261,11 @@ pal_event_queue g_event_queue = {0};
 pal_event_queue g_input_queue = {0};
 static HANDLE g_input_thread;
 static volatile BOOL g_input_thread_running;
+/* Written on the main thread by WM_ACTIVATEAPP, read on the input thread.
+   Holds the id of the currently focused app window, or 0 if none. */
+static volatile uint32_t g_focused_window_id = 0;
+/* When pal_true, keyboard events are suppressed if no app window is focused. */
+static volatile pal_bool g_input_requires_focus = pal_true;
 
 static void pal__eventq_init(pal_event_queue *queue, int capacity) {
     queue->events = (pal_event*)malloc(sizeof(pal_event) * capacity);
@@ -4896,11 +4909,10 @@ static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
 }
 
 static pal_window* win32_get_focused_window(void) {
-    HWND focused = GetFocus();
-    if (!focused) {
-        focused = GetForegroundWindow();
-    }
-    return win32_find_window_by_hwnd(focused);
+    /* g_focused_window_id is written by WM_SETFOCUS/WM_KILLFOCUS on the main
+       thread and read here on the input thread. uint32_t reads are atomic on
+       x86/x64, and volatile prevents the compiler from caching the value. */
+    return win32_find_window_by_id(g_focused_window_id);
 }
 
 /* Helper to find window by ID */
@@ -5405,6 +5417,9 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     update_modifier_state(pal_scancode, is_key_released, kb_index);
 
     target_window = win32_get_focused_window();
+    if (!target_window && g_input_requires_focus) {
+        return; /* No app window is focused and focus is required; discard. */
+    }
     target_window_id = target_window ? target_window->id : 0;
 
     if (is_key_released) {
@@ -5877,6 +5892,10 @@ void pal_shutdown_input(void) {
     pal__eventq_shutdown(&g_input_queue);
 }
 
+PALAPI void pal_set_input_requires_focus(pal_bool requires_focus) {
+    g_input_requires_focus = requires_focus;
+}
+
 pal_bool pal_poll_input(pal_event* event) {
     return pal_eventq_pop(&g_input_queue, event);
 }
@@ -6024,6 +6043,27 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
         }
 
+		case WM_SETFOCUS:
+            /* A specific window just received keyboard focus. Record it so the
+               input thread can attach the right window_id to keyboard events. */
+            g_focused_window_id = window_id;
+            event.window.type = PAL_EVENT_WINDOW_GAINED_FOCUS;
+            event.window.window_id = window_id;
+            event.window.focused = 1;
+            break;
+
+        case WM_KILLFOCUS:
+            /* A specific window lost keyboard focus. Clear the tracked id so
+               that keyboard events are suppressed (or sent with id 0 if
+               background input is enabled) until another window gets focus. */
+            if (g_focused_window_id == window_id) {
+                g_focused_window_id = 0;
+            }
+            event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
+            event.window.window_id = window_id;
+            event.window.focused = 0;
+            break;
+
 		case WM_ACTIVATEAPP: {
 			event.window.window_id = window_id;
 			event.window.event_code = WM_MOVE;
@@ -6033,7 +6073,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 			event.window.height = 0;
 			event.window.visible = 1;
 			if ((BOOL)wparam == FALSE) {
-				/* Window lost focus - clear all key states */
+				/* App lost focus entirely — clear all input state so keys and
+				   buttons don't get stuck down from the app's perspective. */
 				int i;
 				for (i = 0; i < g_keyboards.count; i++) {
 					pal_memset(g_keyboards.keys[i], 0, MAX_SCANCODES);
@@ -6045,7 +6086,6 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 					pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
 				}
 				g_cached_mouse_buttons = 0;
-				
 				event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
 				event.window.focused = 0;
 			} else {
@@ -6322,8 +6362,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 
     if (window->hwnd == NULL) {
         return window;
-    } else {
-        window->id = g_next_window_id++; 
     }
     
     if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &key) == ERROR_SUCCESS) {
@@ -7812,7 +7850,7 @@ static char *get_thread_buffer(void)
     return buffer;
 }
 
-void pal_set_error(const char *error)
+PALAPI void pal_set_error(const char *error)
 {
     char *buffer = get_thread_buffer();
     if (buffer == NULL) {
@@ -7833,7 +7871,7 @@ void pal_set_error(const char *error)
     buffer[len] = '\0';
 }
 
-const char *pal_get_error(void)
+PALAPI const char *pal_get_error(void)
 {
     char *buffer = get_thread_buffer();
     if (buffer == NULL) {
@@ -7842,7 +7880,7 @@ const char *pal_get_error(void)
     return buffer;
 }
 
-void pal_clear_error(void)
+PALAPI void pal_clear_error(void)
 {
     char *buffer = get_thread_buffer();
     if (buffer != NULL) {
