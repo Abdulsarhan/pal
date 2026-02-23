@@ -1,6 +1,5 @@
 #ifndef PAL_H
 #define PAL_H
-#define PAL_IMPLEMENTATION
 
 #include <stdio.h>
 #include <limits.h>
@@ -4908,15 +4907,6 @@ static pal_window* win32_find_window_by_hwnd(HWND hwnd) {
     return NULL;
 }
 
-static pal_window* win32_get_focused_window(void) {
-    /* g_focused_window_id is written by WM_SETFOCUS/WM_KILLFOCUS on the main
-       thread and read here on the input thread. uint32_t reads are atomic on
-       x86/x64, and volatile prevents the compiler from caching the value. */
-    return win32_find_window_by_id(g_focused_window_id);
-}
-
-/* Helper to find window by ID */
-/* currently unused, let's keep it for now.*/
 static pal_window* win32_find_window_by_id(uint32_t id) {
     int i = 0;
     for (; i < g_windows.count; i++) {
@@ -4926,6 +4916,16 @@ static pal_window* win32_find_window_by_id(uint32_t id) {
     }
     return NULL;
 }
+
+static pal_window* win32_get_focused_window(void) {
+    /* g_focused_window_id is written by WM_SETFOCUS/WM_KILLFOCUS on the main
+       thread and read here on the input thread. uint32_t reads are atomic on
+       x86/x64, and volatile prevents the compiler from caching the value. */
+    return win32_find_window_by_id(g_focused_window_id);
+}
+
+/* Helper to find window by ID */
+/* currently unused, let's keep it for now.*/
 
 PALAPI void pal_set_taskbar_icon(unsigned char *image, int size) {
     if (g_app_icon) {
