@@ -1481,6 +1481,9 @@ PALAPI pal_bool pal_close_file(const unsigned char *file);
 /* Directory Listing */
 PALAPI pal_bool pal_path_is_dir(const char *path);
 
+/* sleep */
+PALAPI void pal_sleep_for_milliseconds(uint32_t milliseconds);
+
 /* Open File I/O */
 PALAPI pal_file *pal_open_file(const char *file_path);
 PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t bytes_to_read, char *buffer);
@@ -1541,7 +1544,7 @@ PALAPI uint64_t pal_get_ticks(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
 
 /* Multi-threadding functions */
-PALAPI pal_mutex *pal_create_mutex();
+PALAPI pal_mutex *pal_create_mutex(void);
 PALAPI void pal_lock_mutex(pal_mutex *mutex);
 PALAPI pal_bool pal_lock_mutex_try(pal_mutex *mutex);
 PALAPI void pal_unlock_mutex(pal_mutex *mutex);
@@ -3735,7 +3738,7 @@ WINADVAPI LSTATUS APIENTRY RegCloseKey( HKEY hKey );
 WINUSERAPI BOOL WINAPI PeekMessageA(LPMSG lpMsg,HWND hWnd,UINT wMsgFilterMin,UINT wMsgFilterMax,UINT wRemoveMsg);
 WINUSERAPI ATOM WINAPI RegisterClassExW(CONST WNDCLASSEXW *); 
 WINUSERAPI BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName,  HINSTANCE hInstance);
-WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle,  int X,  int Y,  int nWidth,  int nHeight,  HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
+WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
 WINUSERAPI BOOL WINAPI RegisterRawInputDevices(PCRAWINPUTDEVICE pRawInputDevices, UINT uiNumDevices, UINT cbSize);
 WINUSERAPI BOOL WINAPI ShowWindow(HWND hWnd, int nCmdShow);
 WINUSERAPI BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
@@ -6357,9 +6360,6 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     );
     free(title);  /* Safe to free after CreateWindowExW (it copies the string) */
 
-	SetForegroundWindow(window->hwnd);
-	SetFocus(window->hwnd);
-
     if (window->hwnd == NULL) {
         return window;
     }
@@ -6370,25 +6370,24 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     }
 
     if (!is_light_mode) {
-		dwmapi = LoadLibraryW(L"dwmapi.dll");
-		if (!dwmapi) {
-			return NULL;  /* Windows XP or dwmapi not available */
-		}
-		
-		DwmSetWindowAttributePtr = (PFN_DwmSetWindowAttribute)GetProcAddress(dwmapi, "DwmSetWindowAttribute");
-		
-		if (DwmSetWindowAttributePtr) {
-			BOOL dark_mode = TRUE;
-			HRESULT hr = DwmSetWindowAttributePtr(window->hwnd, 20, &dark_mode, sizeof(dark_mode));
-			
-			/* Fallback for older Windows 10 builds */
-			if (FAILED(hr)) {
-				DwmSetWindowAttributePtr(window->hwnd, 19, &dark_mode, sizeof(dark_mode));
-			}
-		}
-		
-		FreeLibrary(dwmapi);
-	}
+        dwmapi = LoadLibraryW(L"dwmapi.dll");
+        if (dwmapi) {
+            DwmSetWindowAttributePtr = (PFN_DwmSetWindowAttribute)GetProcAddress(dwmapi, "DwmSetWindowAttribute");
+            
+            if (DwmSetWindowAttributePtr) {
+                BOOL dark_mode = TRUE;
+                HRESULT hr = DwmSetWindowAttributePtr(window->hwnd, 20, &dark_mode, sizeof(dark_mode));
+                
+                /* Fallback for older Windows 10 builds */
+                if (FAILED(hr)) {
+                    DwmSetWindowAttributePtr(window->hwnd, 19, &dark_mode, sizeof(dark_mode));
+                }
+            }
+            
+            FreeLibrary(dwmapi);
+        }
+        
+    }
 
     /* Register window in global registry with unique ID */
     if (g_windows.count < MAX_WINDOWS) {
@@ -6398,6 +6397,9 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
     } else {
     }
     
+    if(g_focused_window_id == 0) {
+        g_focused_window_id = window->id;
+    }
     /* Raw input and device notification registration is now done in pal_init() */
     /* via the message-only input window, so we don't need to do it here. */
     
@@ -6411,9 +6413,12 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 		} else {
 			ShowWindow(window->hwnd, SW_SHOWNORMAL);
 		}
+        SetForegroundWindow(window->hwnd);
+        SetFocus(window->hwnd);
 	} else {
 		ShowWindow(window->hwnd, SW_HIDE);
 	}
+
 	if (window_flags & PAL_WINDOW_MOUSE_CONFINED) {
 		RECT rect;
 		GetClientRect(window->hwnd, &rect);
@@ -6430,6 +6435,7 @@ PALAPI pal_window* pal_create_window(int width, int height, const char *window_t
 	} else {
 		window->confine_mouse = pal_false;
 	}
+
 	/* save the final_window style and the final_window rect in case the user sets the final_window to windowed before setting it to fullscreen. */
 	/* The fullscreen function is supposed to save this state whenever the user calls it, */
 	/* but if the user doesn't, the pal_make_window_windowed() function uses a state that's all zeroes, */
@@ -7210,19 +7216,26 @@ PALAPI pal_bool pal_close_open_file(pal_file *file) {
     return 1;
 }
 
+
+PALAPI void pal_sleep_for_milliseconds(uint32_t milliseconds) {
+    Sleep(milliseconds);
+}
+
 /*---------------------------------------------------------------------------------- */
 /* Directory Listing. */
 /*---------------------------------------------------------------------------------- */
 PALAPI pal_bool pal_path_is_dir(const char *path) {
     wchar_t *wide_path = win32_utf8_to_utf16(path);
-    if (!wide_path)
+    if (!wide_path) {
         return pal_false;
+    }
 
     DWORD attrs = GetFileAttributesW(wide_path);
     free(wide_path);
 
-    if (attrs == INVALID_FILE_ATTRIBUTES)
+    if (attrs == INVALID_FILE_ATTRIBUTES) {
         return pal_false;
+    }
 
     return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? pal_true : pal_false;
 }
@@ -7493,8 +7506,9 @@ PALAPI char* pal_clipboard_get(void) {
     int size_needed = 0;
     char* text = NULL;
 
-    if (!OpenClipboard(NULL))
+    if (!OpenClipboard(NULL)) {
         return NULL;
+    }
 
     hData = GetClipboardData(CF_UNICODETEXT);
     if (!hData) {
@@ -7511,8 +7525,9 @@ PALAPI char* pal_clipboard_get(void) {
     /* Convert wide char text to UTF-8 */
     size_needed = WideCharToMultiByte(CP_UTF8, 0, wtext, -1, NULL, 0, NULL, NULL);
     text = (char*)malloc(size_needed);
-    if (text)
+    if (text) {
         WideCharToMultiByte(CP_UTF8, 0, wtext, -1, text, size_needed, NULL, NULL);
+    }
 
     GlobalUnlock(hData);
     CloseClipboard();
@@ -7522,28 +7537,30 @@ PALAPI char* pal_clipboard_get(void) {
 
 PALAPI void pal_clipboard_set(const char* text) {
     size_t len = 0;
-    HGLOBAL hMem;
+    HGLOBAL memory_handle;
 
-    if (text == NULL || *text == '\0')
+    if (text == NULL || *text == '\0') {
         return;
+    }
 
     /* Calculate the size of the text, including the null terminator */
     len = pal_strlen(text) + 1;
-    hMem = GlobalAlloc(GMEM_MOVEABLE, len);
-    if (!hMem)
+    memory_handle = GlobalAlloc(GMEM_MOVEABLE, len);
+    if (!memory_handle) {
         return;
+    }
 
     /* Copy the text into the allocated memory */
-    pal_memcpy(GlobalLock(hMem), text, len);
-    GlobalUnlock(hMem);
+    pal_memcpy(GlobalLock(memory_handle), text, len);
+    GlobalUnlock(memory_handle);
 
     /* Open the clipboard and set the data */
     if (OpenClipboard(NULL)) {
         EmptyClipboard();
-        SetClipboardData(CF_TEXT, hMem);
+        SetClipboardData(CF_TEXT, memory_handle);
         CloseClipboard();
     } else {
-        GlobalFree(hMem);
+        GlobalFree(memory_handle);
     }
 }
 
@@ -7551,11 +7568,11 @@ PALAPI void pal_clipboard_set(const char* text) {
 /* Mouse Warp Functions. */
 /*---------------------------------------------------------------------------------- */
 
-void pal_mouse_warp(int x, int y) {
+PALAPI void pal_mouse_warp(int x, int y) {
     SetCursorPos(x, y);
 }
 
-void pal_mouse_warp_relative(int dx, int dy) {
+PALAPI void pal_mouse_warp_relative(int dx, int dy) {
     INPUT input = {0};
     input.type = INPUT_MOUSE;
     input.mi.dwFlags = MOUSEEVENTF_MOVE;
@@ -7571,10 +7588,14 @@ PALAPI void pal_url_launch(char* url) {
 	HINSTANCE result;
 	WCHAR* wurl;
 
-	if (!url || !*url) return;
+	if (!url || !*url){
+        return;
+    }
 
 	wurl = win32_utf8_to_utf16(url);
-	if (!wurl) free(wurl);
+	if (!wurl){
+        free(wurl);
+    }
 
 	/* ShellExecuteW opens the URL with the default app (e.g., browser) */
 	result = ShellExecuteW(NULL, L"open", wurl, NULL, NULL, SW_SHOWNORMAL);
@@ -7597,8 +7618,9 @@ static pal_dialog g_dialogs[16];
 
 static pal_dialog* win32_get_dialog(void* id) {
     uintptr_t index = (uintptr_t)id;
-    if (index >= 16)
+    if (index >= 16) {
         return NULL;
+    }
     return &g_dialogs[index];
 }
 
@@ -7607,7 +7629,9 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
     size_t pos = 0;
     uint32_t i;
 
-    if (out_size < 2) return;
+    if (out_size < 2) {
+        return;
+    }
 
     for (i = 0; i < type_count; i++) {
         const char* ext = types[i];
@@ -7616,14 +7640,19 @@ static void win32_build_filter_string(char** types, uint32_t type_count, char* o
 
         /* Write description: "ext files (*.ext)" */
         written = snprintf(out + pos, remaining, "%s files (*.%s)", ext, ext);
-        if (written < 0 || (size_t)written >= remaining) break;
+        if (written < 0 || (size_t)written >= remaining) {
+            break;
+        }
+
         pos += written + 1; /* include the null terminator */
 
         remaining = out_size - pos - 1;
 
         /* Write pattern: "*.ext" */
         written = snprintf(out + pos, remaining, "*.%s", ext);
-        if (written < 0 || (size_t)written >= remaining) break;
+        if (written < 0 || (size_t)written >= remaining) {
+            break;
+        }
         pos += written + 1; /* include the null terminator */
     }
 
@@ -7637,7 +7666,9 @@ void pal_create_save_dialog(char** types, int type_count, void* id) {
     char filter[512];
     char path[MAX_PATH] = {0};
 
-    if (!dialog) return;
+    if (!dialog) {
+        return;
+    }
 
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
 
@@ -7663,7 +7694,9 @@ void pal_create_load_dialog(char** types, int type_count, void* id) {
     char filter[512];
     char path[MAX_PATH] = {0};
 
-    if (!dialog) return;
+    if (!dialog) {
+        return;
+    }
 
     win32_build_filter_string(types, type_count, filter, sizeof(filter));
 
@@ -7697,9 +7730,11 @@ char* pal_show_load_dialog(void* id) {
 /* Multi-threadding functions. */
 /*---------------------------------------------------------------------------------- */
 
-PALAPI pal_mutex *pal_create_mutex() {
+PALAPI pal_mutex *pal_create_mutex(void) {
     pal_mutex *mutex = (pal_mutex*)malloc(sizeof(*mutex));
-    if (!mutex) return NULL;
+    if (!mutex) {
+        return NULL;
+    }
     InitializeCriticalSection(&mutex->cs);
     return mutex;
 }
@@ -7727,40 +7762,46 @@ PALAPI pal_signal *pal_create_signal(void) {
 }
 
 PALAPI pal_bool pal_wait_for_signal(pal_signal *signal, pal_mutex *mutex) {
-    if (!signal)
+    if (!signal) {
         return pal_false;
+    }
 
     /* Release the mutex so other threads can activate the signal */
-    if (mutex)
+    if (mutex) {
         pal_unlock_mutex(mutex);
+    }
 
     /* Wait for the signal to be activated */
     DWORD result = WaitForSingleObject((HANDLE)signal, INFINITE);
 
     /* Reacquire the mutex before returning */
-    if (mutex)
+    if (mutex) {
         pal_lock_mutex(mutex);
+    }
 
     return (result == WAIT_OBJECT_0);
 }
 
 PALAPI pal_bool pal_activate_signal(pal_signal *signal) {
-    if (!signal)
+    if (!signal) {
         return pal_false;
+    }
 
     return SetEvent((HANDLE)signal) ? pal_true : pal_false;
 }
 
 PALAPI pal_bool pal_deactivate_signal(pal_signal *signal) {
-    if (!signal)
+    if (!signal) {
         return pal_false;
+    }
 
     return ResetEvent((HANDLE)signal) ? pal_true : pal_false;
 }
 
 PALAPI void pal_destroy_signal(pal_signal *signal) {
-    if (signal)
+    if (signal) {
         CloseHandle((HANDLE)signal);
+    }
 }
 
 typedef struct {
@@ -7780,7 +7821,9 @@ PALAPI pal_thread *pal_create_thread(pal_thread_func func, void *arg) {
     thread_wrapper_arg *wrapper = (thread_wrapper_arg *)HeapAlloc(GetProcessHeap(), 0, sizeof(thread_wrapper_arg));
     HANDLE thread;
 
-    if (!wrapper) return NULL;
+    if (!wrapper) {
+        return NULL;
+    }
     wrapper->func = func;
     wrapper->arg = arg;
 
@@ -7789,17 +7832,23 @@ PALAPI pal_thread *pal_create_thread(pal_thread_func func, void *arg) {
 }
 
 PALAPI pal_bool pal_start_thread(pal_thread *thread) {
-    if (!thread) return pal_false;
-    return ResumeThread((HANDLE)thread) != (DWORD)-1;
+    if (!thread) {
+        return pal_false;
+    }
+    return ResumeThread((HANDLE)thread) != (DWORD) - 1;
 }
 
 PALAPI pal_bool pal_join_thread(pal_thread *thread) {
-    if (!thread) return pal_false;
+    if (!thread) {
+        return pal_false;
+    }
     return WaitForSingleObject((HANDLE)thread, INFINITE) == WAIT_OBJECT_0;
 }
 
 PALAPI void pal_destroy_thread(pal_thread *thread) {
-    if (thread) CloseHandle((HANDLE)thread);
+    if (thread) {
+        CloseHandle((HANDLE)thread);
+    }
 }
 
 /*---------------------------------------------------------------------------------- */
@@ -7807,24 +7856,32 @@ PALAPI void pal_destroy_thread(pal_thread *thread) {
 /*---------------------------------------------------------------------------------- */
 PALAPI void* pal_load_dynamic_library(const char* dll) {
     wchar_t* wide_dll = win32_utf8_to_utf16(dll);
-    if (!wide_dll) return NULL;
+    if (!wide_dll) {
+        return NULL;
+    }
     
     HMODULE result = LoadLibraryW(wide_dll);
     free(wide_dll);
     
-    if (result) return (void*)result;
+    if (result) {
+        return (void*)result;
+    }
     return NULL;
 }
 
 PALAPI void* pal_load_dynamic_function(void* dll, char* func_name) {
     FARPROC proc = GetProcAddress(dll, func_name);
-    if (proc) return (void*)proc;
+    if (proc) {
+        return (void*)proc;
+    }
     return NULL;
 }
 
 PALAPI pal_bool pal_free_dynamic_library(void* dll) {
     pal_bool free_result = (pal_bool)FreeLibrary(dll);
-    if(free_result) return (pal_bool)free_result;
+    if(free_result) {
+        return (pal_bool)free_result;
+    }
     return 0;
 }
 /*---------------------------------------------------------------------------------- */
@@ -7850,8 +7907,7 @@ static char *get_thread_buffer(void)
     return buffer;
 }
 
-PALAPI void pal_set_error(const char *error)
-{
+PALAPI void pal_set_error(const char *error) {
     char *buffer = get_thread_buffer();
     if (buffer == NULL) {
         return;
@@ -7871,8 +7927,7 @@ PALAPI void pal_set_error(const char *error)
     buffer[len] = '\0';
 }
 
-PALAPI const char *pal_get_error(void)
-{
+PALAPI const char *pal_get_error(void) {
     char *buffer = get_thread_buffer();
     if (buffer == NULL) {
         return "";
@@ -7880,8 +7935,7 @@ PALAPI const char *pal_get_error(void)
     return buffer;
 }
 
-PALAPI void pal_clear_error(void)
-{
+PALAPI void pal_clear_error(void) {
     char *buffer = get_thread_buffer();
     if (buffer != NULL) {
         buffer[0] = '\0';
