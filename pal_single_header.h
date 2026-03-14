@@ -1397,9 +1397,15 @@ extern "C" {
 PALAPI void pal_init(void);
 PALAPI void pal_shutdown(void);
 
+/* pal_main subsystem */
+PALAPI void pal_main_init(int argc, char **argv, unsigned int width, unsigned int height, unsigned int samples, pal_bool window_fullscreen, char *window_title);
+typedef void(main_func_t)(pal_event *events);
+PALAPI void pal_set_main_func(main_func_t main_func, void *user_pointer);
+PALAPI void pal_call_main_func(void);
+
 /* Video and Windowing subsystem. */
-PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t window_flags);
-PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context);
+PALAPI pal_window *pal_create_window(unsigned int width, unsigned int height, const char *window_title, uint64_t window_flags);
+PALAPI pal_gl_context pal_gl_create_context(pal_window *window, unsigned int samples, int major, int minor, int profile, pal_bool debug_context);
 PALAPI void pal_close_window(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_border_size(pal_window *window);
 PALAPI pal_ivec2 pal_get_window_drawable_area(pal_window *window);
@@ -1410,20 +1416,18 @@ PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
 
 PALAPI int pal_get_dpi(pal_window *window);
 
-/* might change all of these functions into one function, that takes in a different full screen mode. */
-
-PALAPI pal_bool pal_make_window_fullscreen(pal_window *window);
+PALAPI pal_bool pal_set_window_display(pal_window *window, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int refresh_rate, unsigned int fullscreen_mode);
+PALAPI pal_bool pal_set_window_position(pal_window *window, unsigned int x, unsigned int y);
+PALAPI pal_bool pal_set_window_size(pal_window *window, unsigned int width, unsigned int height);
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
-PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window);
-PALAPI pal_bool pal_make_window_windowed(pal_window *window);
 
 PALAPI pal_bool pal_maximize_window(pal_window *window);
 PALAPI pal_bool pal_minimize_window(pal_window *window);
 
 PALAPI void pal_set_window_icon(pal_window* window, unsigned char *image, int size);
 PALAPI void pal_set_taskbar_icon(unsigned char *image, int size);
-PALAPI void pal_set_cursor(pal_window* window, unsigned char *image, int size, int hotspot_x, int hotspot_y);
-PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor);
+PALAPI void pal_set_cursor(pal_window *window, unsigned char *image, int size, int hotspot_x, int hotspot_y);
+PALAPI pal_video_mode pal_get_video_mode(pal_monitor *monitor);
 PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode);
 PALAPI pal_monitor *pal_get_primary_monitor(void);
 PALAPI void *pal_gl_get_proc_address(const char *proc);
@@ -1539,7 +1543,7 @@ PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n);
 PALAPI pal_time pal_get_date_and_time_utc(void);
 PALAPI pal_time pal_get_date_and_time_local(void);
 PALAPI pal_time pal_get_time_since_boot(void);
-PALAPI double   pal_get_time_since_pal_init(void);
+PALAPI uint64_t pal_get_nanoseconds_since_init(void);
 PALAPI uint64_t pal_get_ticks(void);
 PALAPI uint64_t pal_get_timer_frequency(void);
 
@@ -1622,8 +1626,8 @@ typedef struct {
 #endif
     char names[MAX_MICE][256];
     int count;
-    int buttons[MAX_MICE][MAX_MOUSE_BUTTONS];
-    int buttons_toggled[MAX_MICE][MAX_MOUSE_BUTTONS];
+    unsigned char buttons[MAX_MICE][MAX_MOUSE_BUTTONS];
+    unsigned char buttons_toggled[MAX_MICE][MAX_MOUSE_BUTTONS];
     int dx[MAX_MICE];
     int dy[MAX_MICE];
     int wheel[MAX_MICE];
@@ -3687,6 +3691,66 @@ typedef enum _TOKEN_INFORMATION_CLASS {
 #define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
 #define HEAP_ZERO_MEMORY 0x00000008
 
+#define MAPVK_VK_TO_VSC     (0)
+#define CP_UTF8                   65001       /* UTF-8 translation */
+#define VK_SHIFT        0x10
+#define VK_CONTROL      0x11
+#define VK_MENU         0x12
+#define VK_CAPITAL      0x14
+#define VK_NUMLOCK      0x90
+#define VK_SCROLL       0x91
+#define VK_LSHIFT       0xA0
+#define VK_RSHIFT       0xA1
+#define VK_LCONTROL     0xA2
+#define VK_RCONTROL     0xA3
+#define VK_LMENU        0xA4
+#define VK_RMENU        0xA5
+
+#define ERROR_CLASS_ALREADY_EXISTS       1410L
+
+#if(WINVER >= 0x0500)
+#define HWND_MESSAGE     ((HWND)-3)
+#endif /* WINVER >= 0x0500 */
+
+#define RIDEV_REMOVE            0x00000001
+#define RIDEV_EXCLUDE           0x00000010
+#define RIDEV_PAGEONLY          0x00000020
+#define RIDEV_NOLEGACY          0x00000030
+#define RIDEV_INPUTSINK         0x00000100
+#define RIDEV_CAPTUREMOUSE      0x00000200  /* effective when mouse nolegacy is specified, otherwise it would be an error */
+#define RIDEV_NOHOTKEYS         0x00000200  /* effective for keyboard. */
+#define RIDEV_APPKEYS           0x00000400  /* effective for keyboard. */
+#if(_WIN32_WINNT >= 0x0501)
+#define RIDEV_EXINPUTSINK       0x00001000
+#define RIDEV_DEVNOTIFY         0x00002000
+#endif /* _WIN32_WINNT >= 0x0501 */
+
+#define RAW_INPUT_BUFFER_CAPACITY (128 * 1024) /* 64 KB */
+
+#ifdef _WIN64
+#define RAWINPUT_ALIGN(x)   (((x) + sizeof(QWORD) - 1) & ~(sizeof(QWORD) - 1))
+#else   // _WIN64
+#define RAWINPUT_ALIGN(x)   (((x) + sizeof(DWORD) - 1) & ~(sizeof(DWORD) - 1))
+#endif  // _WIN64
+
+#define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
+#define QS_KEY 0x0001
+#define QS_MOUSEMOVE 0x0002
+#define QS_MOUSEBUTTON 0x0004
+#define QS_POSTMESSAGE 0x0008
+#define QS_TIMER 0x0010
+#define QS_PAINT 0x0020
+#define QS_SENDMESSAGE 0x0040
+#define QS_HOTKEY 0x0080
+#define QS_ALLPOSTMESSAGE 0x0100
+#define QS_RAWINPUT 0x0400
+#define QS_TOUCH 0x0800
+#define QS_POINTER 0x1000
+#define QS_MOUSE (QS_MOUSEMOVE | QS_MOUSEBUTTON)
+#define QS_INPUT (QS_MOUSE | QS_KEY | QS_RAWINPUT | QS_TOUCH | QS_POINTER)
+#define QS_ALLEVENTS (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY)
+#define QS_ALLINPUT (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE)
+
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPCWSTR lpszDeviceName,  DEVMODEW* lpDevMode, HWND hwnd,  DWORD dwflags,  LPVOID lParam);
 WINUSERAPI LONG WINAPI ChangeDisplaySettingsW(DEVMODEW* lpDevMode,  DWORD dwFlags);
 WINUSERAPI BOOL WINAPI EnumDisplaySettingsW(LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
@@ -4710,61 +4774,79 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window* window, int width, int
     return pal_true;
 }
 
-PALAPI pal_bool pal_make_window_fullscreen(pal_window* window) {
-    DEVMODEW dm = {0};
-
-    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
-    EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &dm);
-    dm.dmSize = sizeof(dm);
-    dm.dmPelsWidth = (DWORD)window->width;
-    dm.dmPelsHeight = (DWORD)window->height;
-    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
-
-    if (ChangeDisplaySettingsExW(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
-        return pal_false;
-    }
-
-    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    SetWindowPos(window->hwnd, HWND_TOP, 0, 0, dm.dmPelsWidth, dm.dmPelsHeight, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
-
-    return pal_true;
-}
-
-PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window* window) {
-    HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi = {.cbSize = sizeof(mi)};
-
-    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
-
-    if (!GetMonitorInfo(monitor, &mi)) {
-        return pal_false;
-    }
-
-    /* Set the window to borderless fullscreen */
-    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    if (!SetWindowPos(window->hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
-        return pal_false;
-    }
-
-    return pal_true;
-}
-
-PALAPI pal_bool pal_make_window_windowed(pal_window* window) {
+PALAPI pal_bool pal_set_window_display(pal_window *window, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int refresh_rate, unsigned int fullscreen_mode) {
     RECT rect;
-    /* Restore display mode (in case exclusive mode was used) */
-    ChangeDisplaySettingsW(NULL, 0);
+    pal_rect pal_rect;
+    DEVMODEW monitor_settings;
+    GetWindowRect(window->hwnd, &rect);
+    if(width > 32 && height > 32) {
+        pal_rect.width = width;
+        pal_rect.height = height;
+    } else {
+        pal_rect.width = rect.right - rect.left;
+        pal_rect.height = rect.bottom - rect.top;
+    }
+    EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &monitor_settings);
+    if(x > monitor_settings.dmPelsWidth || !x || y > monitor_settings.dmPelsHeight || !y) {
+        pal_rect.x = rect.left;
+        pal_rect.y = rect.top;
+    } else {
+        pal_rect.x = x - pal_rect.width / 2;
+        pal_rect.y = y - pal_rect.height / 2;
+    }
+    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE); /* Save style before any mode changes */
+    if(fullscreen_mode == 1) { /* borderless fullscreen */
+        HMONITOR monitor = MonitorFromWindow(window->hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi = {.cbSize = sizeof(mi)};
 
-    /* Restore the window style */
+        if (!GetMonitorInfo(monitor, &mi)) {
+            return pal_false;
+        }
+
+        /* Set the window to borderless fullscreen */
+        SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        if (!SetWindowPos(window->hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER)) {
+            return pal_false;
+        }
+
+        return pal_true;
+    } else if (fullscreen_mode == 2) { /* exclusive fullscreen */
+        DEVMODEW dm = {0};
+        dm.dmSize = sizeof(dm);
+        dm.dmPelsWidth = pal_rect.width;
+        dm.dmPelsHeight = pal_rect.height;
+        dm.dmBitsPerPel = 32;
+        dm.dmDisplayFrequency = refresh_rate ? refresh_rate : monitor_settings.dmDisplayFrequency;
+        dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+
+        ChangeDisplaySettingsW(&dm, CDS_FULLSCREEN);
+
+        SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP);
+        SetWindowPos(window->hwnd, HWND_TOPMOST, pal_rect.x, pal_rect.y, pal_rect.width, pal_rect.height, SWP_FRAMECHANGED);
+        return pal_true;
+    }
+
+    ChangeDisplaySettingsW(NULL, 0);
     if (SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle) == 0) {
         return pal_false;
     }
-    GetWindowRect(window->hwnd, &rect);
-    /* Restore the window's size and position */
-    if (!SetWindowPos(window->hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_FRAMECHANGED)) {
+    if (!SetWindowPos(window->hwnd, NULL, pal_rect.x, pal_rect.y, pal_rect.width, pal_rect.height, SWP_NOZORDER | SWP_FRAMECHANGED)) {
         return pal_false;
     }
 
     return pal_true;
+}
+
+PALAPI pal_bool pal_set_window_position(pal_window *window, unsigned int x, unsigned int y) {
+    RECT rect;
+    GetWindowRect(window->hwnd, &rect);
+    return SetWindowPos(window->hwnd, HWND_TOP, x - (rect.right - rect.left) / 2, y - (rect.bottom - rect.top) / 2, rect.right - rect.left, rect.bottom - rect.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+}
+
+PALAPI pal_bool pal_set_window_size(pal_window *window, unsigned int width, unsigned int height) {
+    RECT rect;
+    GetWindowRect(window->hwnd, &rect);
+    return SetWindowPos(window->hwnd, HWND_TOP, rect.left, rect.top, width, height, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
 }
 
 PALAPI void pal_set_cursor(pal_window* window, unsigned char *image, int size, int hotspot_x, int hotspot_y) {
@@ -4971,15 +5053,7 @@ LRESULT CALLBACK win32_fake_window_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
-void win32_handle_raw_input(HRAWINPUT raw_input) {
-    /* currently unused. This is for GetRawInputData(). */
-    /* we currently use GetRawInputBuffer(), because it's better for high-polling rate mice. */
-}
-
-
-
 /* --- pal_get_gamepad_count --- */
-
 #define ERROR_SUCCESS                    0L
 PALAPI int pal_get_gamepad_count(void) {
     /* Poll remaining XInput slots */
@@ -5253,8 +5327,8 @@ void win32_enumerate_mice(void) {
             }
 
             /* Initialize state arrays for this mouse */
-            pal_memset(g_mice.buttons[idx], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-            pal_memset(g_mice.buttons_toggled[idx], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            pal_memset(g_mice.buttons[idx], 0, MAX_MOUSE_BUTTONS);
+            pal_memset(g_mice.buttons_toggled[idx], 0, MAX_MOUSE_BUTTONS);
             g_mice.dx[idx] = 0;
             g_mice.dy[idx] = 0;
             g_mice.wheel[idx] = 0;
@@ -5349,20 +5423,6 @@ static void update_modifier_state(int pal_scancode, pal_bool is_key_released, in
         g_keyboards.cached_modifiers[keyboard_index] |= modifier_flag;
     }
 }
-#define MAPVK_VK_TO_VSC     (0)
-#define CP_UTF8                   65001       /* UTF-8 translation */
-#define VK_SHIFT        0x10
-#define VK_CONTROL      0x11
-#define VK_MENU         0x12
-#define VK_CAPITAL      0x14
-#define VK_NUMLOCK      0x90
-#define VK_SCROLL       0x91
-#define VK_LSHIFT       0xA0
-#define VK_RSHIFT       0xA1
-#define VK_LCONTROL     0xA2
-#define VK_RCONTROL     0xA3
-#define VK_LMENU        0xA4
-#define VK_RMENU        0xA5
 
 void win32_handle_keyboard(const RAWINPUT* raw) {
     int kb_index = -1;
@@ -5397,9 +5457,13 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
     is_extended = (flags & RI_KEY_E0) != 0;
 
     if (is_extended) {
-        if (makecode < 256) pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
+        if (makecode < 256){
+            pal_scancode = win32_extended_makecode_to_pal_scancode[makecode];
+        }
     } else {
-        if (makecode < 256) pal_scancode = win32_makecode_to_pal_scancode[makecode];
+        if (makecode < 256) {
+            pal_scancode = win32_makecode_to_pal_scancode[makecode];
+        }
     }
 
     if (kb_index < 0) {
@@ -5434,9 +5498,6 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         event.key.modifiers = g_keyboards.cached_modifiers[kb_index];
         event.key.keyboard_id = kb_index;
         event.key.window_id = target_window_id;
-
-        g_keyboards.keys[kb_index][pal_scancode] = 0;
-        g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
         pal_eventq_push(&g_input_queue, &event);
     } else {
         event.key.type = PAL_EVENT_KEY_DOWN;
@@ -5453,41 +5514,45 @@ void win32_handle_keyboard(const RAWINPUT* raw) {
         pal_memset(keyboard_state, 0, sizeof(keyboard_state));
         
         /* Set modifier key states (high bit = key down) */
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_LSHIFT)
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_LSHIFT) {
             keyboard_state[VK_LSHIFT] = 0x80;
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_RSHIFT)
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_RSHIFT) {
             keyboard_state[VK_RSHIFT] = 0x80;
-        if (g_keyboards.cached_modifiers[kb_index] & (PAL_MOD_LSHIFT | PAL_MOD_RSHIFT))
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & (PAL_MOD_LSHIFT | PAL_MOD_RSHIFT)) {
             keyboard_state[VK_SHIFT] = 0x80;
-        
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_LCTRL)
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_LCTRL) {
             keyboard_state[VK_LCONTROL] = 0x80;
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_RCTRL)
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_RCTRL) {
             keyboard_state[VK_RCONTROL] = 0x80;
-        if (g_keyboards.cached_modifiers[kb_index] & (PAL_MOD_LCTRL | PAL_MOD_RCTRL))
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & (PAL_MOD_LCTRL | PAL_MOD_RCTRL)) {
             keyboard_state[VK_CONTROL] = 0x80;
-        
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_LALT)
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_LALT) {
             keyboard_state[VK_LMENU] = 0x80;
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_RALT)
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_RALT) {
             keyboard_state[VK_RMENU] = 0x80;
-        if (g_keyboards.cached_modifiers[kb_index] & (PAL_MOD_LALT | PAL_MOD_RALT))
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & (PAL_MOD_LALT | PAL_MOD_RALT)) {
             keyboard_state[VK_MENU] = 0x80;
+        }
         
         /* Toggle states (low bit = toggled on) */
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_CAPS)
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_CAPS) {
             keyboard_state[VK_CAPITAL] = 0x01;
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_NUM)
-            keyboard_state[VK_NUMLOCK] = 0x01;
-        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_SCROLL)
-            keyboard_state[VK_SCROLL] = 0x01;
-
-        unsigned char old_state = g_keyboards.keys[kb_index][pal_scancode];
-        g_keyboards.keys[kb_index][pal_scancode] = 1;
-
-        if (old_state != 1) {
-            g_keyboards.keys_toggled[kb_index][pal_scancode] = 1;
         }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_NUM) {
+            keyboard_state[VK_NUMLOCK] = 0x01;
+        }
+        if (g_keyboards.cached_modifiers[kb_index] & PAL_MOD_SCROLL) {
+            keyboard_state[VK_SCROLL] = 0x01;
+        }
+
         scan_code = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
         result = ToUnicode(vk, scan_code, keyboard_state, utf16_buffer, 4, 0);
         
@@ -5607,14 +5672,6 @@ void win32_handle_mouse(const RAWINPUT* raw) {
         pal_button = win32_button_to_pal_button[i];
 
         if (down) {
-            old_state = g_mice.buttons[mouse_index][pal_button];
-            g_mice.buttons[mouse_index][pal_button] = 1;
-            
-            /* Mark as toggled if state changed */
-            if (old_state != 1) {
-                g_mice.buttons_toggled[mouse_index][pal_button] = 1;
-            }
-            
             g_cached_mouse_buttons |= (1 << i);
 
             for (k = 0; k < g_keyboards.count; k++) {
@@ -5632,8 +5689,6 @@ void win32_handle_mouse(const RAWINPUT* raw) {
             event.button.window_id = target_window_id;
             pal_eventq_push(&g_input_queue, &event);
         } else if (up) {
-            g_mice.buttons[mouse_index][pal_button] = 0;
-            g_mice.buttons_toggled[mouse_index][pal_button] = 1;
             g_cached_mouse_buttons &= ~(1 << i);
 
             cached_modifiers = 0;
@@ -5659,50 +5714,6 @@ void win32_handle_hid(const RAWINPUT* raw) {
     printf("%d", raw->data.hid.dwCount);
 }
 
-#define ERROR_CLASS_ALREADY_EXISTS       1410L
-
-#if(WINVER >= 0x0500)
-#define HWND_MESSAGE     ((HWND)-3)
-#endif /* WINVER >= 0x0500 */
-
-#define RIDEV_REMOVE            0x00000001
-#define RIDEV_EXCLUDE           0x00000010
-#define RIDEV_PAGEONLY          0x00000020
-#define RIDEV_NOLEGACY          0x00000030
-#define RIDEV_INPUTSINK         0x00000100
-#define RIDEV_CAPTUREMOUSE      0x00000200  /* effective when mouse nolegacy is specified, otherwise it would be an error */
-#define RIDEV_NOHOTKEYS         0x00000200  /* effective for keyboard. */
-#define RIDEV_APPKEYS           0x00000400  /* effective for keyboard. */
-#if(_WIN32_WINNT >= 0x0501)
-#define RIDEV_EXINPUTSINK       0x00001000
-#define RIDEV_DEVNOTIFY         0x00002000
-#endif /* _WIN32_WINNT >= 0x0501 */
-
-#define RAW_INPUT_BUFFER_CAPACITY (128 * 1024) /* 64 KB */
-
-#ifdef _WIN64
-#define RAWINPUT_ALIGN(x)   (((x) + sizeof(QWORD) - 1) & ~(sizeof(QWORD) - 1))
-#else   // _WIN64
-#define RAWINPUT_ALIGN(x)   (((x) + sizeof(DWORD) - 1) & ~(sizeof(DWORD) - 1))
-#endif  // _WIN64
-
-#define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
-#define QS_KEY 0x0001
-#define QS_MOUSEMOVE 0x0002
-#define QS_MOUSEBUTTON 0x0004
-#define QS_POSTMESSAGE 0x0008
-#define QS_TIMER 0x0010
-#define QS_PAINT 0x0020
-#define QS_SENDMESSAGE 0x0040
-#define QS_HOTKEY 0x0080
-#define QS_ALLPOSTMESSAGE 0x0100
-#define QS_RAWINPUT 0x0400
-#define QS_TOUCH 0x0800
-#define QS_POINTER 0x1000
-#define QS_MOUSE (QS_MOUSEMOVE | QS_MOUSEBUTTON)
-#define QS_INPUT (QS_MOUSE | QS_KEY | QS_RAWINPUT | QS_TOUCH | QS_POINTER)
-#define QS_ALLEVENTS (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY)
-#define QS_ALLINPUT (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE)
 
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
@@ -5789,7 +5800,6 @@ static void win32_destroy_input_window(void) {
 
     UnregisterClassW(L"PAL_RawInputWindow", GetModuleHandleW(NULL));
 }
-/* Message-only window for device hotplug notifications */
 
 typedef struct tagWINDOWPOS {
     HWND    hwnd;
@@ -5800,6 +5810,14 @@ typedef struct tagWINDOWPOS {
     int     cy;
     UINT    flags;
 } WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
+
+typedef void (*RawInputHandler)(const RAWINPUT*);
+
+RawInputHandler win32_raw_input_handlers[3] = {
+    win32_handle_mouse,
+    win32_handle_keyboard,
+    win32_handle_hid
+};
 
 static void win32_process_raw_input(void) {
     static BYTE raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
@@ -5812,17 +5830,13 @@ static void win32_process_raw_input(void) {
         buffer_size = RAW_INPUT_BUFFER_CAPACITY;
         input_event_count = GetRawInputBuffer((PRAWINPUT)raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
         
-        if (input_event_count == 0 || input_event_count == (UINT)-1)
+        if (input_event_count == 0 || input_event_count == (UINT)-1) {
             break;
+        }
 
         raw = (PRAWINPUT)raw_input_buffer;
         for (i = 0; i < input_event_count; ++i) {
-            if (raw->header.dwType == RIM_TYPEMOUSE)
-                win32_handle_mouse(raw);
-            else if (raw->header.dwType == RIM_TYPEKEYBOARD)
-                win32_handle_keyboard(raw);
-            else
-                win32_handle_hid(raw);
+            win32_raw_input_handlers[raw->header.dwType](raw);
             raw = NEXTRAWINPUTBLOCK(raw);
         }
     }
@@ -6085,8 +6099,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 					g_keyboards.cached_modifiers[i] = 0;
 				}
 				for (i = 0; i < g_mice.count; i++) {
-					pal_memset(g_mice.buttons[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-					pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+					pal_memset(g_mice.buttons[i], 0, MAX_MOUSE_BUTTONS);
+					pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS);
 				}
 				g_cached_mouse_buttons = 0;
 				event.window.type = PAL_EVENT_WINDOW_LOST_FOCUS;
@@ -6106,7 +6120,7 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
 
 static pal_bool g_wgl_extensions_loaded = pal_false;
 
-PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
+PALAPI pal_gl_context pal_gl_create_context(pal_window *window, unsigned int samples, int major, int minor, int profile, pal_bool debug_context) {
     WNDCLASSEXW fakewc = {0};
 	HWND fake_hwnd = NULL;
 	HDC fake_dc = NULL;
@@ -6124,8 +6138,8 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int m
         WGL_ALPHA_BITS_ARB, 8,
         WGL_DEPTH_BITS_ARB, 24,
         WGL_STENCIL_BITS_ARB, 8,
-        WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-        WGL_SAMPLES_ARB, 4,
+        WGL_SAMPLE_BUFFERS_ARB, samples ? GL_TRUE : GL_FALSE,
+        WGL_SAMPLES_ARB, (int)samples,
         0
     };
 
@@ -6270,7 +6284,7 @@ static wchar_t* win32_utf8_to_utf16(const char* utf8_str) {
     return utf16_str;
 }
 
-PALAPI pal_window* pal_create_window(int width, int height, const char *window_title, uint64_t window_flags) {
+PALAPI pal_window *pal_create_window(unsigned int width, unsigned int height, const char *window_title, uint64_t window_flags) {
     DWORD ext_window_style = 0;
     DWORD window_style = 0;
 	WCHAR *title = NULL;
@@ -6550,7 +6564,6 @@ static int first_run = pal_true; /* maybe I can just move this into pal_poll_eve
 static pal_bool cleared_this_frame = pal_false;
 
 PALAPI pal_bool pal_poll_events(pal_event *event) {
-    static pal_bool cleared_this_frame = pal_false;
     MSG msg;
     int i, j;
     
@@ -6559,28 +6572,13 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
             pal_memset(g_keyboards.keys_toggled[i], 0, MAX_SCANCODES);
         }
         for (i = 0; i < g_mice.count; i++) {
-            pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            pal_memset(g_mice.buttons_toggled[i], 0, MAX_MOUSE_BUTTONS);
         }
 
         pal_memset(g_mice.dx, 0, g_mice.count);
         pal_memset(g_mice.dy, 0, g_mice.count);
         pal_memset(g_mice.wheel, 0, g_mice.count);
         cleared_this_frame = pal_true;
-    }
-    
-    if (pal_eventq_pop(&g_input_queue, event)) {
-        if (event->type == PAL_EVENT_KEY_DOWN || event->type == PAL_EVENT_KEY_UP) {
-            g_keyboards.keys_toggled[0][event->key.scancode] = 1;
-            g_keyboards.keys[0][event->key.scancode] = event->key.pressed;
-        } else if (event->type == PAL_EVENT_MOUSE_BUTTON_DOWN || event->type == PAL_EVENT_MOUSE_BUTTON_UP) {
-            g_mice.buttons_toggled[0][event->button.button] = 1;
-            g_mice.buttons[0][event->button.button] = event->button.pressed;
-        }
-        return pal_true;
-    }
-    
-    if (pal_eventq_pop(&g_event_queue, event)) {
-        return pal_true;
     }
     
     while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
@@ -6590,11 +6588,11 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
     
     if (pal_eventq_pop(&g_input_queue, event)) {
         if (event->type == PAL_EVENT_KEY_DOWN || event->type == PAL_EVENT_KEY_UP) {
-            g_keyboards.keys_toggled[0][event->key.scancode] = 1;
-            g_keyboards.keys[0][event->key.scancode] = event->key.pressed;
+            g_keyboards.keys_toggled[event->key.keyboard_id][event->key.scancode] = 1;
+            g_keyboards.keys[event->key.keyboard_id][event->key.scancode] = event->key.pressed;
         } else if (event->type == PAL_EVENT_MOUSE_BUTTON_DOWN || event->type == PAL_EVENT_MOUSE_BUTTON_UP) {
-            g_mice.buttons_toggled[0][event->button.button] = 1;
-            g_mice.buttons[0][event->button.button] = event->button.pressed;
+            g_mice.buttons_toggled[event->button.mouse_id][event->button.button] = 1;
+            g_mice.buttons[event->button.mouse_id][event->button.button] = event->button.pressed;
         }
         return pal_true;
     }
@@ -6606,6 +6604,7 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
     cleared_this_frame = pal_false;
     return pal_false;
 }
+
 PALAPI pal_bool pal_set_window_title(pal_window* window, const char* string) {
     WCHAR *wstring;
     BOOL result;
@@ -6667,24 +6666,28 @@ PALAPI pal_monitor* pal_get_primary_monitor(void) {
     return monitor;
 }
 
-PALAPI pal_video_mode* pal_get_video_mode(pal_monitor* monitor) {
+PALAPI pal_video_mode pal_get_video_mode(pal_monitor* monitor) {
     MONITORINFOEXW mi = {0};
     DEVMODEW dm = {0};
-    pal_video_mode* mode;
+    pal_video_mode mode = {0};
     mi.cbSize = sizeof(MONITORINFOEXW);
     dm.dmSize = sizeof(DEVMODEW);
 
-    if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi))
-        return 0;
+    if(!monitor) {
+        pal_set_error("Monitor handle was null!");
+    }
+    if (!GetMonitorInfo(monitor->handle, (MONITORINFO*)&mi)) {
+        return mode;
+    }
 
-    if (!EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm))
-        return 0;
+    if (!EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
+        return mode;
+    }
 
-    mode = (pal_video_mode*)malloc(sizeof(pal_video_mode));
-    mode->width = dm.dmPelsWidth;
-    mode->height = dm.dmPelsHeight;
-    mode->refresh_rate = dm.dmDisplayFrequency;
-    mode->bits_per_pixel = dm.dmBitsPerPel;
+    mode.width = dm.dmPelsWidth;
+    mode.height = dm.dmPelsHeight;
+    mode.refresh_rate = dm.dmDisplayFrequency;
+    mode.bits_per_pixel = dm.dmBitsPerPel;
 
     return mode;
 }
@@ -6751,13 +6754,6 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window* window) {
 
 /* Handles Gamepads, Joysticks, Steering wheels, etc... */
 /* Handler function signatures */
-typedef void (*RawInputHandler)(const RAWINPUT*);
-
-RawInputHandler Win32InputHandlers[3] = {
-    win32_handle_mouse,
-    win32_handle_keyboard,
-    win32_handle_hid
-};
 
 /*---------------------------------------------------------------------------------- */
 /* File Functions. */
@@ -7474,14 +7470,14 @@ void win32_init_timer(void) {
     g_app_start_time = counter.QuadPart;
 }
 
-PALAPI double pal_get_time_since_pal_init(void) {
+PALAPI uint64_t pal_get_nanoseconds_since_init(void) {
     volatile KUSER_SHARED_DATA *kuser = (volatile KUSER_SHARED_DATA*)KUSER_SHARED_DATA_ADDRESS;
     
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
     uint64_t elapsed_ticks = counter.QuadPart - g_app_start_time;
     
-    return (double)elapsed_ticks / (double)kuser->QpcFrequency;
+    return ((double)elapsed_ticks / (double)kuser->QpcFrequency) * (double)1000000000;
 }
 
 PALAPI uint64_t pal_get_ticks(void) {
@@ -8935,8 +8931,8 @@ void linux_x11_init_raw_input() {
         } else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
             g_mice.handles[g_mice.count] = dev_fd;
             pal_strncpy(g_mice.names[g_mice.count], name, 255);
-            pal_memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-            pal_memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+            pal_memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS);
+            pal_memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS);
             g_mice.dx[g_mice.count] = 0;
             g_mice.dy[g_mice.count] = 0;
             g_mice.wheel[g_mice.count] = 0;
@@ -9476,8 +9472,8 @@ void linux_x11_poll_raw_input() {
                 else if (is_mouse(dev_fd) && g_mice.count < MAX_MICE) {
                     g_mice.handles[g_mice.count] = dev_fd;
                     pal_strncpy(g_mice.names[g_mice.count], name, 255);
-                    pal_memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
-                    pal_memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS * sizeof(int));
+                    pal_memset(g_mice.buttons[g_mice.count], 0, MAX_MOUSE_BUTTONS);
+                    pal_memset(g_mice.buttons_toggled[g_mice.count], 0, MAX_MOUSE_BUTTONS);
                     g_mice.dx[g_mice.count] = 0;
                     g_mice.dy[g_mice.count] = 0;
                     g_mice.wheel[g_mice.count] = 0;
@@ -9710,7 +9706,7 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state,
  * OPENGL CONTEXT CREATION (using dynamic GLX loading)
  * ============================================================================ */
 
-PALAPI pal_gl_context pal_gl_create_context(pal_window *window, int major, int minor, int profile, pal_bool debug_context) {
+PALAPI pal_gl_context pal_gl_create_context(pal_window *window, unsigned int samples, int major, int minor, int profile, pal_bool debug_context) {
     if (!window || !window->window || !g_display) {
         return NULL;
     }
@@ -9864,7 +9860,7 @@ static void pal_apply_dark_mode_hint(Display *display, Window window) {
                     (unsigned char *)"dark", 4);
 }
 
-PALAPI pal_window *pal_create_window(int width, int height, const char *window_title, uint64_t flags) {
+PALAPI pal_window *pal_create_window(unsigned int width, unsigned int height, const char *window_title, uint64_t window_flags) {
     pal_window *window = (pal_window*)malloc(sizeof(pal_window));
     if (!window) return NULL;
     
