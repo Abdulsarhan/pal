@@ -1411,14 +1411,13 @@ PALAPI pal_ivec2 pal_get_window_drawable_area(pal_window *window);
 PALAPI void *pal_get_window_handle(pal_window *window);
 PALAPI int pal_show_cursor(pal_window *window);
 PALAPI int pal_hide_cursor(pal_window *window);
-PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string);
+PALAPI pal_bool pal_set_window_title(pal_window *window, const char *title);
 
 PALAPI int pal_get_dpi(pal_window *window);
 
 PALAPI pal_bool pal_set_window_display(pal_window *window, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int refresh_rate, unsigned int fullscreen_mode);
 PALAPI pal_bool pal_set_window_position(pal_window *window, unsigned int x, unsigned int y);
 PALAPI pal_bool pal_set_window_size(pal_window *window, unsigned int width, unsigned int height);
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate);
 
 PALAPI pal_bool pal_maximize_window(pal_window *window);
 PALAPI pal_bool pal_minimize_window(pal_window *window);
@@ -5233,27 +5232,6 @@ static const GUID xbox_guid = {
     { 0xb5, 0xf7, 0x8b, 0x84, 0xd5, 0x42, 0x60, 0xcb }
 };
  
-PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate) {
-    DEVMODEW dm = {0};
-
-    window->windowedStyle = GetWindowLongW(window->hwnd, GWL_STYLE);
-
-    dm.dmSize = sizeof(dm);
-    dm.dmPelsWidth = width;
-    dm.dmPelsHeight = height;
-    dm.dmDisplayFrequency = refresh_rate;
-    dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
-
-    if (ChangeDisplaySettingsExW(NULL, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
-        return pal_false;
-    }
-
-    SetWindowLongA(window->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-    SetWindowPos(window->hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
-
-    return pal_true;
-}
-
 PALAPI pal_bool pal_set_window_display(pal_window *window, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int refresh_rate, unsigned int fullscreen_mode) {
     RECT rect;
     pal_rect pal_rect;
@@ -8361,16 +8339,16 @@ PALAPI pal_bool pal_poll_events(pal_event *event) {
     return pal_false;
 }
 
-PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string) {
+PALAPI pal_bool pal_set_window_title(pal_window *window, const char *title) {
     WCHAR *wstring;
     BOOL result;
 
-    if (!string || !*string) {
+    if (!title || !*title) {
         pal_set_error("pal_set_window_title(): string is invalid.");
         return (pal_bool)SetWindowTextW(window->hwnd, L"");
     }
 
-    wstring = win32_utf8_to_utf16(string);
+    wstring = win32_utf8_to_utf16(title);
 
     result = SetWindowTextW(window->hwnd, wstring);
     free(wstring);
@@ -11817,12 +11795,12 @@ static void linux_x11_send_wm_state_message(Window win, long action, Atom proper
     XSendEvent(g_display, DefaultRootWindow(g_display), False, SubstructureNotifyMask | SubstructureRedirectMask, &e);
 }
 
-PALAPI pal_bool pal_set_window_title(pal_window *window, const char *string) {
-    if (!window || !string)
+PALAPI pal_bool pal_set_window_title(pal_window *window, const char *title) {
+    if (!window || !title)
         return pal_false;
 
-    XStoreName(g_display, window->window, string);
-    XSetIconName(g_display, window->window, string);
+    XStoreName(g_display, window->window, title);
+    XSetIconName(g_display, window->window, title);
     XFlush(g_display);
 
     return pal_true;
