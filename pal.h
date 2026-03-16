@@ -2855,7 +2855,7 @@ typedef LPMONITORINFOEXW LPMONITORINFOEX;
 typedef MONITORINFOEXA MONITORINFOEX;
 typedef LPMONITORINFOEXA LPMONITORINFOEX;
 #endif /* UNICODE */
-#else  /* ndef __cplusplus */
+#else  /* ifndef __cplusplus */
 typedef struct tagMONITORINFOEXA {
     MONITORINFO DUMMYSTRUCTNAME;
     CHAR szDevice[CCHDEVICENAME];
