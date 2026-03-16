@@ -5741,7 +5741,7 @@ static pal_bool gip_poll(void)
     return pal_true;
 }
 
-/* base on a writepup made by mmozeiko "martins" on github
+/* based on a writeup made by mmozeiko "martins" on github
     https://gist.github.com/mmozeiko/b8ccc54037a5eaf35432396feabbe435
 */
 
