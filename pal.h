@@ -941,6 +941,14 @@ typedef struct {
     } touchpad;
 } pal_gamepad_state;
 
+/* main callback system */
+
+typedef enum {
+    PAL_APP_CONTINUE,
+    PAL_APP_SUCCESS,
+    PAL_APP_FAILURE,
+}pal_app_result;
+
 /* events. */
 typedef enum pal_event_type {
     PAL_EVENT_NONE = 0x0,
@@ -1573,6 +1581,14 @@ PALAPI void pal_set_error(const char *error);
 PALAPI const char *pal_get_error(void);
 PALAPI void pal_clear_error(void);
 
+#ifdef PAL_USE_CALLBACKS
+
+extern pal_app_result pal_app_init(void **appstate, int argc, char *argv[]);
+extern pal_app_result pal_app_event(void *appstate, pal_event *event);
+extern pal_app_result pal_app_iterate(void *appstate);
+extern void pal_app_quit(void *appstate, pal_app_result result);
+
+#endif
 #ifdef __cplusplus
 }
 #endif
@@ -1583,6 +1599,28 @@ PALAPI void pal_clear_error(void);
 /*-------------------------------------*/
 /* Cross-platform code ----------------*/
 /*-------------------------------------*/
+
+/*TODO: This main callback implementation should not be under cross-platform code
+  but it's here for now because this just so happens to work under windows and linux. */
+#ifdef PAL_USE_CALLBACKS
+int main (int argc, char *argv[]) {
+    pal_app_result app_result;
+    void *appstate = NULL;
+
+    app_result = pal_app_init(&appstate, argc, argv);
+
+    pal_event event;
+    while(app_result == PAL_APP_CONTINUE) {
+        while(pal_poll_events(&event)) {
+            app_result = pal_app_event(appstate, &event);
+        }
+        app_result = pal_app_iterate(appstate);
+    }
+
+    pal_app_quit(appstate, app_result);
+    return 0;
+}
+#endif
 
 /* Window registry */
 #define MAX_WINDOWS 16
@@ -7784,6 +7822,8 @@ static LRESULT CALLBACK win32_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LP
             break;
 
         case WM_INPUT: {
+            /* I don't think that we actually get raw input events in here
+               because we have the raw input on a separate thread */
             DefWindowProcW(hwnd, msg, wparam, lparam);
             break;
 #if 0
