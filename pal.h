@@ -871,6 +871,7 @@ typedef struct pal_monitor pal_monitor;
 typedef struct pal_music pal_music;
 typedef struct pal_mutex pal_mutex;
 typedef struct pal_event_queue pal_event_queue;
+typedef struct pal_dir pal_dir;
 
 typedef struct pal_video_mode {
     int width;
@@ -947,7 +948,7 @@ typedef enum {
     PAL_APP_CONTINUE,
     PAL_APP_SUCCESS,
     PAL_APP_FAILURE,
-}pal_app_result;
+} pal_app_result;
 
 /* events. */
 typedef enum pal_event_type {
@@ -1488,6 +1489,9 @@ PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *bu
 PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path);
 PALAPI pal_bool pal_close_file(const unsigned char *file);
 
+PALAPI pal_dir *pal_open_directory(const char *directory_path);
+PALAPI const char *pal_next_file_in_directory(pal_dir *directory);
+PALAPI void pal_close_directory(pal_dir *directory);
 /* Directory Listing */
 PALAPI pal_bool pal_path_is_dir(const char *path);
 
@@ -1541,6 +1545,7 @@ PALAPI void *pal_memset(void *buf, int value, size_t count);
 
 PALAPI size_t pal_strlen(const char *str);
 PALAPI char *pal_strcpy(char *dest, const char *src);
+PALAPI char *pal_strcat(char *dest, const char *src);
 PALAPI char *pal_strncpy(char *dest, const char *src, size_t n);
 PALAPI int pal_strcmp(const char *s1, const char *s2);
 PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n);
@@ -1599,29 +1604,6 @@ extern void pal_app_quit(void *appstate, pal_app_result result);
 /*-------------------------------------*/
 /* Cross-platform code ----------------*/
 /*-------------------------------------*/
-
-/*TODO: This main callback implementation should not be under cross-platform code
-  but it's here for now because this just so happens to work under windows and linux. */
-#ifdef PAL_USE_CALLBACKS
-int main (int argc, char *argv[]) {
-    pal_app_result app_result;
-    void *appstate = NULL;
-
-    app_result = pal_app_init(&appstate, argc, argv);
-
-    pal_event event;
-    while(app_result == PAL_APP_CONTINUE) {
-        while(pal_poll_events(&event)) {
-            app_result = pal_app_event(appstate, &event);
-        }
-        app_result = pal_app_iterate(appstate);
-    }
-
-    pal_app_quit(appstate, app_result);
-    return 0;
-}
-#endif
-
 /* Window registry */
 #define MAX_WINDOWS 16
 
@@ -2039,8 +2021,9 @@ PALAPI int pal_memcmp(const void *a, const void *b, size_t n) {
     size_t i = 0;
 
     for (; i < n; i++) {
-        if (p1[i] != p2[i])
+        if (p1[i] != p2[i]) {
             return (p1[i] < p2[i]) ? -1 : 1;
+        }
     }
 
     return 0;
@@ -2060,12 +2043,14 @@ PALAPI void *pal_memcpy(void *dest, const void *src, size_t n) {
 
 PALAPI size_t pal_strlen(const char *str) {
     const char *count = NULL;
-    if (!str)
+    if (!str) {
         return 0;
+    }
 
     count = str;
-    while (*count != '\0')
+    while (*count != '\0') {
         count++;
+    }
 
     return count - str;
 }
@@ -2075,6 +2060,12 @@ PALAPI char *pal_strcpy(char *dest, const char *src) {
     while ((*dest++ = *src++))
         ;
     return orig;
+}
+
+PALAPI char *pal_strcat(char *dest, const char *src) {
+    size_t dest_len = pal_strlen(dest);
+    pal_strcpy(dest + dest_len, src);
+    return dest;
 }
 
 PALAPI char *pal_strncpy(char *dest, const char *src, size_t n) {
@@ -2110,8 +2101,9 @@ PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n) {
         n--;
     }
 
-    if (n == 0)
+    if (n == 0) {
         return 0;
+    }
 
     return (unsigned char)*s1 - (unsigned char)*s2;
 }
@@ -2119,19 +2111,22 @@ PALAPI int pal_strncmp(const char *s1, const char *s2, size_t n) {
 PALAPI const char *pal_strstr(const char *haystack, const char *needle) {
     size_t needle_len;
 
-    if (!haystack || !needle)
+    if (!haystack || !needle) {
         return NULL;
+    }
 
     /* Empty needle matches immediately, same as standard strstr */
-    if (!*needle)
+    if (!*needle) {
         return haystack;
+    }
 
     needle_len = pal_strlen(needle);
 
     while (*haystack) {
         if (*haystack == *needle) {
-            if (pal_strncmp(haystack, needle, needle_len) == 0)
+            if (pal_strncmp(haystack, needle, needle_len) == 0) {
                 return haystack;
+            }
         }
         haystack++;
     }
@@ -2143,995 +2138,24 @@ PALAPI const char *pal_strstr(const char *haystack, const char *needle) {
 /* platform-specific code--------------*/
 /*-------------------------------------*/
 #if defined(_WIN32) || defined(WIN32) || defined(__MINGW32__) || defined(_MSC_VER)
-#define _CRT_SECURE_NO_WARNINGS
 
 /*
    windows.h begin
 */
-
-#ifndef CONST
-#define CONST const
-#endif
-
-#define VOID void
-typedef int BOOL;
-typedef BOOL *PBOOL, *LPBOOL;
-typedef uint8_t BYTE, *LPBYTE, *PBYTE;
-typedef uint16_t WORD, *LPWORD;
-typedef uint32_t DWORD;
-
-typedef DWORD *PDWORD, *LPDWORD;
-typedef unsigned int UINT, *PUINT;
-typedef int32_t LONG, *LPLONG;
-typedef uint32_t ULONG;
-typedef int64_t LONGLONG;
-typedef uint64_t ULONGLONG;
-typedef int16_t SHORT;
-typedef uint16_t USHORT;
-#if !defined(_NATIVE_WCHAR_T_DEFINED)
-typedef unsigned short WCHAR;
-#else
-typedef wchar_t WCHAR;
-#endif
-typedef char CHAR;
-typedef unsigned char UCHAR;
-typedef CHAR *LPSTR, *LPCH;
-typedef const CHAR *LPCSTR;
-typedef WCHAR *LPWSTR, *LPWCH;
-
-typedef CHAR *PCHAR, *LPCH, *PCH;
-typedef CONST CHAR *LPCCH, *PCCH;
-typedef CONST WCHAR *LPCWCH, *PCWCH;
-
-typedef WCHAR *LPCWSTR;
-typedef void *LPVOID;
-typedef const void *LPCVOID;
-typedef void *PVOID;
-typedef int INT;
-typedef size_t SIZE_T;
-
-typedef uintptr_t UINT_PTR;
-typedef intptr_t INT_PTR;
-typedef intptr_t LONG_PTR;
-typedef uintptr_t ULONG_PTR;
-typedef uintptr_t DWORD_PTR;
-typedef UINT_PTR WPARAM;
-typedef LONG_PTR LPARAM;
-typedef LONG_PTR LRESULT;
-typedef WORD ATOM;
-typedef float FLOAT;
-
-/* Handle types */
-#define STRICT
-#ifdef STRICT
-
-#if 0 && (_MSC_VER > 1000)
-#define DECLARE_HANDLE(name) \
-    struct name##__;         \
-    typedef struct name##__ *name
-#else
-#define DECLARE_HANDLE(name) \
-    struct name##__ {        \
-        int unused;          \
-    };                       \
-    typedef struct name##__ *name
-#endif
-#else
-typedef PVOID HANDLE;
-#define DECLARE_HANDLE(name) typedef HANDLE name
-#endif
-DECLARE_HANDLE(HKEY);
-
-typedef int32_t HRESULT;
-
-typedef void *HANDLE;
-typedef HANDLE *PHANDLE;
-
-DECLARE_HANDLE(HWND);
-DECLARE_HANDLE(HDC);
-DECLARE_HANDLE(HGLRC);
-DECLARE_HANDLE(HINSTANCE);
-typedef HINSTANCE HMODULE;
-DECLARE_HANDLE(ICON);
-DECLARE_HANDLE(HICON);
-
-#ifndef _MAC
-typedef HICON HCURSOR; /* HICONs & HCURSORs are polymorphic */
-#else
-DECLARE_HANDLE(HCURSOR); /* HICONs & HCURSORs are not polymorphic */
-#endif
-
-DECLARE_HANDLE(HBITMAP);
-DECLARE_HANDLE(HBRUSH);
-DECLARE_HANDLE(HMONITOR);
-DECLARE_HANDLE(HMENU);
-DECLARE_HANDLE(HGLOBAL);
-DECLARE_HANDLE(HDROP);
-DECLARE_HANDLE(HGDIOBJ);
-DECLARE_HANDLE(HKL);
-DECLARE_HANDLE(HRAWINPUT);
-
-typedef unsigned int ULONG64, *PULONG64;
-typedef unsigned int ULONG32, *PULONG32;
-typedef unsigned int DWORD32, *PDWORD32;
-typedef unsigned __int64 UINT64;
-
-typedef long LSTATUS;
-typedef DWORD ACCESS_MASK;
-typedef ACCESS_MASK *PACCESS_MASK;
-typedef ACCESS_MASK REGSAM;
-typedef HKEY *PHKEY;
-
-#ifndef NTDDI_VERSION
-#ifdef _WIN32_WINNT
-#if (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE)
-/* set NTDDI_VERSION based on _WIN32_WINNT */
-#define NTDDI_VERSION NTDDI_VERSION_FROM_WIN32_WINNT(_WIN32_WINNT)
-#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
-/* set NTDDI_VERSION to default to WDK_NTDDI_VERSION */
-#define NTDDI_VERSION WDK_NTDDI_VERSION
-#endif /* (_WIN32_WINNT <= _WIN32_WINNT_WINBLUE) */
-#else
-/* set NTDDI_VERSION to default to latest if _WIN32_WINNT isn't set */
-#define NTDDI_VERSION 0x0A000010
-#endif /* _WIN32_WINNT */
-#endif /* NTDDI_VERSION */
-
-#ifndef WINVER
-#ifdef _WIN32_WINNT
-/* set WINVER based on _WIN32_WINNT */
-#define WINVER _WIN32_WINNT
-#else
-#define WINVER 0x0A00
-#endif
-#endif
-
-#ifndef WINBASEAPI
-#define WINBASEAPI
-#endif
-#ifndef WINUSERAPI
-#define WINUSERAPI
-#endif
-
-#ifndef DECLSPEC_IMPORT
-#if (defined(_M_IX86) || defined(_M_IA64) || defined(_M_AMD64) || defined(_M_ARM) || defined(_M_ARM64)) && !defined(MIDL_PASS)
-#define DECLSPEC_IMPORT __declspec(dllimport)
-#else
-#define DECLSPEC_IMPORT
-#endif
-#endif
-
-#if !defined(_GDI32_)
-#define WINGDIAPI DECLSPEC_IMPORT
-#else
-#define WINGDIAPI
-#endif
-
-#ifndef WINCOMMDLGAPI
-#if !defined(_COMDLG32_)
-#define WINCOMMDLGAPI DECLSPEC_IMPORT
-#else
-#define WINCOMMDLGAPI
-#endif
-#endif /* WINCOMMDLGAPI */
-
-#ifndef WINADVAPI
-#define WINADVAPI
-#endif
-
-#ifndef EXTERN_C
-#ifdef __cplusplus
-#define EXTERN_C extern "C"
-#else
-#define EXTERN_C extern
-#endif
-#endif
-
-#if defined(_WIN32) || defined(_MPPC_)
-
-/* Win32 doesn't support __export */
-
-#ifdef _68K_
-#define STDMETHODCALLTYPE __cdecl
-#else
-#define STDMETHODCALLTYPE __stdcall
-#endif
-#define STDMETHODVCALLTYPE __cdecl
-
-#define STDAPICALLTYPE __stdcall
-#define STDAPIVCALLTYPE __cdecl
-
-#else
-
-#define STDMETHODCALLTYPE __export __stdcall
-#define STDMETHODVCALLTYPE __export __cdecl
-
-#define STDAPICALLTYPE __export __stdcall
-#define STDAPIVCALLTYPE __export __cdecl
-
-#endif
-
-#ifndef SHSTDAPI
-#if !defined(_SHELL32_)
-#define SHSTDAPI EXTERN_C DECLSPEC_IMPORT HRESULT STDAPICALLTYPE
-#define SHSTDAPI_(type) EXTERN_C DECLSPEC_IMPORT type STDAPICALLTYPE
-#else
-#define SHSTDAPI STDAPI
-#define SHSTDAPI_(type) STDAPI_(type)
-#endif
-#endif /* SHSTDAPI */
-
-#ifdef _MAC
-#define CALLBACK PASCAL
-#define WINAPI CDECL
-#define WINAPIV CDECL
-#define APIENTRY WINAPI
-#define APIPRIVATE CDECL
-#ifdef _68K_
-#define PASCAL __pascal
-#else
-#define PASCAL
-#endif
-#elif (_MSC_VER >= 800) || defined(_STDCALL_SUPPORTED)
-#define CALLBACK __stdcall
-#define WINAPI __stdcall
-#define WINAPIV __cdecl
-#define APIENTRY WINAPI
-#define APIPRIVATE __stdcall
-#define PASCAL __stdcall
-#else
-#define CALLBACK
-#define WINAPI
-#define WINAPIV
-#define APIENTRY WINAPI
-#define APIPRIVATE
-#define PASCAL pascal
-#endif
-
-#ifndef _M_CEE_PURE
-#ifndef WINAPI_INLINE
-#define WINAPI_INLINE WINAPI
-#endif
-#endif
-
-#define far
-#define near
-#define FAR far
-#define NEAR near
-
-/* Max values */
-#define MAXDWORD 0xFFFFFFFF
-#define MAX_PATH 260
-
-#define MAKEWORD(a, b) ((WORD)(((BYTE)(((DWORD_PTR)(a)) & 0xff)) | ((WORD)((BYTE)(((DWORD_PTR)(b)) & 0xff))) << 8))
-#define MAKELONG(a, b) ((LONG)(((WORD)(((DWORD_PTR)(a)) & 0xffff)) | ((DWORD)((WORD)(((DWORD_PTR)(b)) & 0xffff))) << 16))
-#define LOWORD(l) ((WORD)(((DWORD_PTR)(l)) & 0xffff))
-#define HIWORD(l) ((WORD)((((DWORD_PTR)(l)) >> 16) & 0xffff))
-#define LOBYTE(w) ((BYTE)(((DWORD_PTR)(w)) & 0xff))
-#define HIBYTE(w) ((BYTE)((((DWORD_PTR)(w)) >> 8) & 0xff))
-
-#define GET_WPARAM(wp, lp) (wp)
-#define GET_LPARAM(wp, lp) (lp)
-#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
-#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
-
-#define WS_OVERLAPPED 0x00000000L
-#define WS_POPUP 0x80000000L
-#define WS_CHILD 0x40000000L
-#define WS_MINIMIZE 0x20000000L
-#define WS_VISIBLE 0x10000000L
-#define WS_DISABLED 0x08000000L
-#define WS_CLIPSIBLINGS 0x04000000L
-#define WS_CLIPCHILDREN 0x02000000L
-#define WS_MAXIMIZE 0x01000000L
-#define WS_CAPTION 0x00C00000L /* WS_BORDER | WS_DLGFRAME  */
-#define WS_BORDER 0x00800000L
-#define WS_DLGFRAME 0x00400000L
-#define WS_VSCROLL 0x00200000L
-#define WS_HSCROLL 0x00100000L
-#define WS_SYSMENU 0x00080000L
-#define WS_THICKFRAME 0x00040000L
-#define WS_GROUP 0x00020000L
-#define WS_TABSTOP 0x00010000L
-
-#define WS_MINIMIZEBOX 0x00020000L
-#define WS_MAXIMIZEBOX 0x00010000L
-
-#define WS_TILED WS_OVERLAPPED
-#define WS_ICONIC WS_MINIMIZE
-#define WS_SIZEBOX WS_THICKFRAME
-
-#define WS_OVERLAPPEDWINDOW (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX)
-#define WS_POPUPWINDOW (WS_POPUP | WS_BORDER | WS_SYSMENU)
-#define WS_CHILDWINDOW (WS_CHILD)
-
-#define WS_EX_TOOLWINDOW 0x00000080L
-
-#define WM_INPUT 0x00FF
-#define WM_DEVICECHANGE 0x0219
-#define WM_CREATE 0x0001
-#define WM_DESTROY 0x0002
-#define WM_MOVE 0x0003
-#define WM_SIZE 0x0005
-#define WM_SETFOCUS 0x0007
-#define WM_KILLFOCUS 0x0008
-#define WM_MOUSEMOVE 0x0200
-#define WM_CLOSE 0x0010
-#define WM_QUIT 0x0012
-
-#define WM_GETICON 0x007F
-#define WM_SETICON 0x0080
-
-#define ICON_SMALL 0
-#define ICON_BIG 1
-#if (_WIN32_WINNT >= 0x0501)
-#define ICON_SMALL2 2
-#endif /* _WIN32_WINNT >= 0x0501 */
-
-#if ((_WIN32_WINNT >= 0x0400) || (WINVER >= 0x0500))
-#define WM_MOUSEHOVER 0x02A1
-#define WM_MOUSELEAVE 0x02A3
-#endif
-#if (WINVER >= 0x0500)
-#define WM_NCMOUSEHOVER 0x02A0
-#define WM_NCMOUSELEAVE 0x02A2
-#endif /* WINVER >= 0x0500 */
-#define WM_DROPFILES 0x0233
-
-#define WM_WINDOWPOSCHANGING 0x0046
-#define WM_WINDOWPOSCHANGED 0x0047
-#define WM_ACTIVATEAPP 0x001C
-
-#define CW_USEDEFAULT ((int)0x80000000)
-#define GMEM_MOVEABLE 0x0002
-#define CF_TEXT 1
-#define CF_UNICODETEXT 13
-#define INFINITE 0xFFFFFFFF
-#define STATUS_WAIT_0 ((DWORD)0x00000000L)
-#define WAIT_OBJECT_0 ((STATUS_WAIT_0) + 0)
-#define CREATE_SUSPENDED 0x00000004
-
-#define SW_HIDE 0
-#define SW_SHOWNORMAL 1
-#define SW_NORMAL 1
-#define SW_SHOWMINIMIZED 2
-#define SW_SHOWMAXIMIZED 3
-#define SW_MAXIMIZE 3
-#define SW_SHOWNOACTIVATE 4
-#define SW_SHOW 5
-#define SW_MINIMIZE 6
-#define SW_SHOWMINNOACTIVE 7
-#define SW_SHOWNA 8
-#define SW_RESTORE 9
-#define SW_SHOWDEFAULT 10
-#define SW_FORCEMINIMIZE 11
-
-#define TME_LEAVE 0x00000002
-#define HOVER_DEFAULT 0xFFFFFFFF
-
-#define PM_REMOVE 0x0001
-
-#define IS_INTRESOURCE(_r) ((((ULONG_PTR)(_r)) >> 16) == 0)
-#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
-#define MAKEINTRESOURCEW(i) ((LPWSTR)((ULONG_PTR)((WORD)(i))))
-#ifdef UNICODE
-#define MAKEINTRESOURCE MAKEINTRESOURCEW
-#else
-#define MAKEINTRESOURCE MAKEINTRESOURCEA
-#endif /* !UNICODE */
-
-#define IDC_ARROW MAKEINTRESOURCEW(32512)
-
-#if !defined(_WIN32_WINNT) && !defined(_CHICAGO_)
-#define _WIN32_WINNT 0x0A00
-#endif
-
-#define WS_EX_TOPMOST 0x00000008L
-
-#if (_WIN32_WINNT >= 0x0500)
-#define WS_EX_NOACTIVATE 0x08000000L
-#endif /* _WIN32_WINNT >= 0x0500 */
-
-#define OSVERSION_MASK 0xFFFF0000
-#define SPVERSION_MASK 0x0000FF00
-#define SUBVERSION_MASK 0x000000FF
-#ifndef CCHDEVICENAME
-#define CCHDEVICENAME 32
-#endif
-
-#define CCHFORMNAME 32
-#define HKEY_CURRENT_USER ((HKEY)(ULONG_PTR)((LONG)0x80000001))
-
-#if (WINVER >= 0x0500)
-typedef PVOID HDEVNOTIFY;
-typedef HDEVNOTIFY *PHDEVNOTIFY;
-
-#define DEVICE_NOTIFY_WINDOW_HANDLE 0x00000000
-#define DEVICE_NOTIFY_SERVICE_HANDLE 0x00000001
-#if (_WIN32_WINNT >= 0x0501)
-#define DEVICE_NOTIFY_ALL_INTERFACE_CLASSES 0x00000004
-#endif /* _WIN32_WINNT >= 0x0501 */
-#endif
-
-#define OSVER(Version) ((Version) & OSVERSION_MASK)
-#define SPVER(Version) (((Version) & SPVERSION_MASK) >> 8)
-#define SUBVER(Version) (((Version) & SUBVERSION_MASK))
-
-/* Boolean values */
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
-
-#define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
-
-#ifndef DUMMYUNIONNAME
-#if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
-#define DUMMYUNIONNAME u
-#define DUMMYUNIONNAME2 u2
-#define DUMMYUNIONNAME3 u3
-#define DUMMYUNIONNAME4 u4
-#define DUMMYUNIONNAME5 u5
-#define DUMMYUNIONNAME6 u6
-#define DUMMYUNIONNAME7 u7
-#define DUMMYUNIONNAME8 u8
-#define DUMMYUNIONNAME9 u9
-#else
-#define DUMMYUNIONNAME
-#define DUMMYUNIONNAME2
-#define DUMMYUNIONNAME3
-#define DUMMYUNIONNAME4
-#define DUMMYUNIONNAME5
-#define DUMMYUNIONNAME6
-#define DUMMYUNIONNAME7
-#define DUMMYUNIONNAME8
-#define DUMMYUNIONNAME9
-#endif
-#endif /* DUMMYUNIONNAME */
-
-#ifndef DUMMYSTRUCTNAME
-#if defined(NONAMELESSUNION) || !defined(_MSC_EXTENSIONS)
-#define DUMMYSTRUCTNAME s
-#define DUMMYSTRUCTNAME2 s2
-#define DUMMYSTRUCTNAME3 s3
-#define DUMMYSTRUCTNAME4 s4
-#define DUMMYSTRUCTNAME5 s5
-#define DUMMYSTRUCTNAME6 s6
-#else
-#define DUMMYSTRUCTNAME
-#define DUMMYSTRUCTNAME2
-#define DUMMYSTRUCTNAME3
-#define DUMMYSTRUCTNAME4
-#define DUMMYSTRUCTNAME5
-#define DUMMYSTRUCTNAME6
-#endif
-#endif /* DUMMYSTRUCTNAME */
-
-/* Special handles */
-#define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR) - 1)
-
-typedef HANDLE NEAR *SPHANDLE;
-typedef HANDLE FAR *LPHANDLE;
-typedef HANDLE HLOCAL;
-typedef HANDLE GLOBALHANDLE;
-typedef HANDLE LOCALHANDLE;
-
-typedef __int64(WINAPI FAR *FARPROC)();
-typedef __int64(WINAPI NEAR *NEARPROC)();
-typedef __int64(WINAPI *PROC)();
-
-/* Function pointer types */
-typedef LRESULT(CALLBACK *WNDPROC)(HWND, UINT, WPARAM, LPARAM);
-typedef struct tagPOINT {
-    LONG x;
-    LONG y;
-} POINT, *PPOINT, NEAR *NPPOINT, FAR *LPPOINT;
-
-typedef struct _POINTL {
-    LONG x;
-    LONG y;
-} POINTL, *PPOINTL;
-
-#if (_WIN32_WINNT >= ((OSVER(NTDDI_WINXPSP2)) >> 16))
-typedef struct _devicemodeA {
-    BYTE dmDeviceName[CCHDEVICENAME];
-    WORD dmSpecVersion;
-    WORD dmDriverVersion;
-    WORD dmSize;
-    WORD dmDriverExtra;
-    DWORD dmFields;
-    union {
-        /* printer only fields */
-        struct {
-            short dmOrientation;
-            short dmPaperSize;
-            short dmPaperLength;
-            short dmPaperWidth;
-            short dmScale;
-            short dmCopies;
-            short dmDefaultSource;
-            short dmPrintQuality;
-        } DUMMYSTRUCTNAME;
-        /* display only fields */
-        struct {
-            POINTL dmPosition;
-            DWORD dmDisplayOrientation;
-            DWORD dmDisplayFixedOutput;
-        } DUMMYSTRUCTNAME2;
-    } DUMMYUNIONNAME;
-    short dmColor;
-    short dmDuplex;
-    short dmYResolution;
-    short dmTTOption;
-    short dmCollate;
-    BYTE dmFormName[CCHFORMNAME];
-    WORD dmLogPixels;
-    DWORD dmBitsPerPel;
-    DWORD dmPelsWidth;
-    DWORD dmPelsHeight;
-    union {
-        DWORD dmDisplayFlags;
-        DWORD dmNup;
-    } DUMMYUNIONNAME2;
-    DWORD dmDisplayFrequency;
-#if (WINVER >= 0x0400)
-    DWORD dmICMMethod;
-    DWORD dmICMIntent;
-    DWORD dmMediaType;
-    DWORD dmDitherType;
-    DWORD dmReserved1;
-    DWORD dmReserved2;
-#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
-    DWORD dmPanningWidth;
-    DWORD dmPanningHeight;
-#endif
-#endif /* WINVER >= 0x0400 */
-} DEVMODEA, *PDEVMODEA, *NPDEVMODEA, *LPDEVMODEA;
-typedef struct _devicemodeW {
-    WCHAR dmDeviceName[CCHDEVICENAME];
-    WORD dmSpecVersion;
-    WORD dmDriverVersion;
-    WORD dmSize;
-    WORD dmDriverExtra;
-    DWORD dmFields;
-    union {
-        /* printer only fields */
-        struct {
-            short dmOrientation;
-            short dmPaperSize;
-            short dmPaperLength;
-            short dmPaperWidth;
-            short dmScale;
-            short dmCopies;
-            short dmDefaultSource;
-            short dmPrintQuality;
-        } DUMMYSTRUCTNAME;
-        /* display only fields */
-        struct {
-            POINTL dmPosition;
-            DWORD dmDisplayOrientation;
-            DWORD dmDisplayFixedOutput;
-        } DUMMYSTRUCTNAME2;
-    } DUMMYUNIONNAME;
-    short dmColor;
-    short dmDuplex;
-    short dmYResolution;
-    short dmTTOption;
-    short dmCollate;
-    WCHAR dmFormName[CCHFORMNAME];
-    WORD dmLogPixels;
-    DWORD dmBitsPerPel;
-    DWORD dmPelsWidth;
-    DWORD dmPelsHeight;
-    union {
-        DWORD dmDisplayFlags;
-        DWORD dmNup;
-    } DUMMYUNIONNAME2;
-    DWORD dmDisplayFrequency;
-#if (WINVER >= 0x0400)
-    DWORD dmICMMethod;
-    DWORD dmICMIntent;
-    DWORD dmMediaType;
-    DWORD dmDitherType;
-    DWORD dmReserved1;
-    DWORD dmReserved2;
-#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
-    DWORD dmPanningWidth;
-    DWORD dmPanningHeight;
-#endif
-#endif /* WINVER >= 0x0400 */
-} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
-#ifdef UNICODE
-typedef DEVMODEW DEVMODE;
-typedef PDEVMODEW PDEVMODE;
-typedef NPDEVMODEW NPDEVMODE;
-typedef LPDEVMODEW LPDEVMODE;
-#else
-typedef DEVMODEA DEVMODE;
-typedef PDEVMODEA PDEVMODE;
-typedef NPDEVMODEA NPDEVMODE;
-typedef LPDEVMODEA LPDEVMODE;
-#endif /* UNICODE */
-#else
-typedef struct _devicemodeA {
-    BYTE dmDeviceName[CCHDEVICENAME];
-    WORD dmSpecVersion;
-    WORD dmDriverVersion;
-    WORD dmSize;
-    WORD dmDriverExtra;
-    DWORD dmFields;
-    union {
-        struct {
-            short dmOrientation;
-            short dmPaperSize;
-            short dmPaperLength;
-            short dmPaperWidth;
-        } DUMMYSTRUCTNAME;
-        POINTL dmPosition;
-    } DUMMYUNIONNAME;
-    short dmScale;
-    short dmCopies;
-    short dmDefaultSource;
-    short dmPrintQuality;
-    short dmColor;
-    short dmDuplex;
-    short dmYResolution;
-    short dmTTOption;
-    short dmCollate;
-    BYTE dmFormName[CCHFORMNAME];
-    WORD dmLogPixels;
-    DWORD dmBitsPerPel;
-    DWORD dmPelsWidth;
-    DWORD dmPelsHeight;
-    union {
-        DWORD dmDisplayFlags;
-        DWORD dmNup;
-    } DUMMYUNIONNAME2;
-    DWORD dmDisplayFrequency;
-#if (WINVER >= 0x0400)
-    DWORD dmICMMethod;
-    DWORD dmICMIntent;
-    DWORD dmMediaType;
-    DWORD dmDitherType;
-    DWORD dmReserved1;
-    DWORD dmReserved2;
-#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
-    DWORD dmPanningWidth;
-    DWORD dmPanningHeight;
-#endif
-#endif /* WINVER >= 0x0400 */
-} DEVMODEA, *PDEVMODEA, *NPDEVMODEA, *LPDEVMODEA;
-typedef struct _devicemodeW {
-    WCHAR dmDeviceName[CCHDEVICENAME];
-    WORD dmSpecVersion;
-    WORD dmDriverVersion;
-    WORD dmSize;
-    WORD dmDriverExtra;
-    DWORD dmFields;
-    union {
-        struct {
-            short dmOrientation;
-            short dmPaperSize;
-            short dmPaperLength;
-            short dmPaperWidth;
-        } DUMMYSTRUCTNAME;
-        POINTL dmPosition;
-    } DUMMYUNIONNAME;
-    short dmScale;
-    short dmCopies;
-    short dmDefaultSource;
-    short dmPrintQuality;
-    short dmColor;
-    short dmDuplex;
-    short dmYResolution;
-    short dmTTOption;
-    short dmCollate;
-    WCHAR dmFormName[CCHFORMNAME];
-    WORD dmLogPixels;
-    DWORD dmBitsPerPel;
-    DWORD dmPelsWidth;
-    DWORD dmPelsHeight;
-    union {
-        DWORD dmDisplayFlags;
-        DWORD dmNup;
-    } DUMMYUNIONNAME2;
-    DWORD dmDisplayFrequency;
-#if (WINVER >= 0x0400)
-    DWORD dmICMMethod;
-    DWORD dmICMIntent;
-    DWORD dmMediaType;
-    DWORD dmDitherType;
-    DWORD dmReserved1;
-    DWORD dmReserved2;
-#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
-    DWORD dmPanningWidth;
-    DWORD dmPanningHeight;
-#endif
-#endif /* WINVER >= 0x0400 */
-} DEVMODEW, *PDEVMODEW, *NPDEVMODEW, *LPDEVMODEW;
-#ifdef UNICODE
-typedef DEVMODEW DEVMODE;
-typedef PDEVMODEW PDEVMODE;
-typedef NPDEVMODEW NPDEVMODE;
-typedef LPDEVMODEW LPDEVMODE;
-#else
-typedef DEVMODEA DEVMODE;
-typedef PDEVMODEA PDEVMODE;
-typedef NPDEVMODEA NPDEVMODE;
-typedef LPDEVMODEA LPDEVMODE;
-#endif /* UNICODE */
-
-#endif /* WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP | WINAPI_PARTITION_SYSTEM) */
-
-typedef struct tagRECT {
-    LONG left;
-    LONG top;
-    LONG right;
-    LONG bottom;
-} RECT, *PRECT, NEAR *NPRECT, FAR *LPRECT;
-
-typedef struct tagMONITORINFO {
-    DWORD cbSize;
-    RECT rcMonitor;
-    RECT rcWork;
-    DWORD dwFlags;
-} MONITORINFO, *LPMONITORINFO;
-
-#ifdef __cplusplus
-typedef struct tagMONITORINFOEXA : public tagMONITORINFO {
-    CHAR szDevice[CCHDEVICENAME];
-} MONITORINFOEXA, *LPMONITORINFOEXA;
-typedef struct tagMONITORINFOEXW : public tagMONITORINFO {
-    WCHAR szDevice[CCHDEVICENAME];
-} MONITORINFOEXW, *LPMONITORINFOEXW;
-#ifdef UNICODE
-typedef MONITORINFOEXW MONITORINFOEX;
-typedef LPMONITORINFOEXW LPMONITORINFOEX;
-#else
-typedef MONITORINFOEXA MONITORINFOEX;
-typedef LPMONITORINFOEXA LPMONITORINFOEX;
-#endif /* UNICODE */
-#else  /* ifndef __cplusplus */
-typedef struct tagMONITORINFOEXA {
-    MONITORINFO DUMMYSTRUCTNAME;
-    CHAR szDevice[CCHDEVICENAME];
-} MONITORINFOEXA, *LPMONITORINFOEXA;
-typedef struct tagMONITORINFOEXW {
-    MONITORINFO DUMMYSTRUCTNAME;
-    WCHAR szDevice[CCHDEVICENAME];
-} MONITORINFOEXW, *LPMONITORINFOEXW;
-#ifdef UNICODE
-typedef MONITORINFOEXW MONITORINFOEX;
-typedef LPMONITORINFOEXW LPMONITORINFOEX;
-#else
-typedef MONITORINFOEXA MONITORINFOEX;
-typedef LPMONITORINFOEXA LPMONITORINFOEX;
-#endif /* UNICODE */
-#endif
-
-typedef struct _FILETIME {
-    DWORD dwLowDateTime;
-    DWORD dwHighDateTime;
-} FILETIME, *PFILETIME, *LPFILETIME;
-#define _FILETIME_
-
-typedef struct _WIN32_FILE_ATTRIBUTE_DATA {
-    DWORD dwFileAttributes;
-    FILETIME ftCreationTime;
-    FILETIME ftLastAccessTime;
-    FILETIME ftLastWriteTime;
-    DWORD nFileSizeHigh;
-    DWORD nFileSizeLow;
-} WIN32_FILE_ATTRIBUTE_DATA, *LPWIN32_FILE_ATTRIBUTE_DATA;
-
-/* current version of specification */
-#if (WINVER >= 0x0500) || (_WIN32_WINNT >= _WIN32_WINNT_NT4)
-#define DM_SPECVERSION 0x0401
-#elif (WINVER >= 0x0400)
-#define DM_SPECVERSION 0x0400
-#else
-#define DM_SPECVERSION 0x0320
-#endif /* WINVER */
-
-/* field selection bits */
-#define DM_ORIENTATION 0x00000001L
-#define DM_PAPERSIZE 0x00000002L
-#define DM_PAPERLENGTH 0x00000004L
-#define DM_PAPERWIDTH 0x00000008L
-#define DM_SCALE 0x00000010L
-#if (WINVER >= 0x0500)
-#define DM_POSITION 0x00000020L
-#define DM_NUP 0x00000040L
-#endif /* WINVER >= 0x0500 */
-#if (WINVER >= 0x0501)
-#define DM_DISPLAYORIENTATION 0x00000080L
-#endif /* WINVER >= 0x0501 */
-#define DM_COPIES 0x00000100L
-#define DM_DEFAULTSOURCE 0x00000200L
-#define DM_PRINTQUALITY 0x00000400L
-#define DM_COLOR 0x00000800L
-#define DM_DUPLEX 0x00001000L
-#define DM_YRESOLUTION 0x00002000L
-#define DM_TTOPTION 0x00004000L
-#define DM_COLLATE 0x00008000L
-#define DM_FORMNAME 0x00010000L
-#define DM_LOGPIXELS 0x00020000L
-#define DM_BITSPERPEL 0x00040000L
-#define DM_PELSWIDTH 0x00080000L
-#define DM_PELSHEIGHT 0x00100000L
-#define DM_DISPLAYFLAGS 0x00200000L
-#define DM_DISPLAYFREQUENCY 0x00400000L
-#if (WINVER >= 0x0400)
-#define DM_ICMMETHOD 0x00800000L
-#define DM_ICMINTENT 0x01000000L
-#define DM_MEDIATYPE 0x02000000L
-#define DM_DITHERTYPE 0x04000000L
-#define DM_PANNINGWIDTH 0x08000000L
-#define DM_PANNINGHEIGHT 0x10000000L
-#endif /* WINVER >= 0x0400 */
-#if (WINVER >= 0x0501)
-#define DM_DISPLAYFIXEDOUTPUT 0x20000000L
-#endif /* WINVER >= 0x0501 */
-
-typedef PROC(WINAPI *PFN_wglGetProcAddress)(LPCSTR);
-typedef HGLRC(WINAPI *PFN_wglCreateContext)(HDC);
-typedef BOOL(WINAPI *PFN_wglMakeCurrent)(HDC, HGLRC);
-typedef BOOL(WINAPI *PFN_wglDeleteContext)(HGLRC);
-typedef BOOL(WINAPI *PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)(HDC, const int *, const FLOAT *, UINT, int *, UINT *);
-typedef HGLRC(WINAPI *PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)(HDC, HGLRC, const int *);
-typedef BOOL(WINAPI *PFN_WGL_SWAP_INTERVAL_EXT)(int);
-
-/* WGL function pointers */
-static HMODULE g_opengl32;
-static HMODULE g_hid_dll;
-typedef void *PHIDP_PREPARSED_DATA;
-typedef struct _HIDP_CAPS {
-    USHORT Usage;
-    USHORT UsagePage;
-    USHORT InputReportByteLength;
-    USHORT OutputReportByteLength;
-    USHORT FeatureReportByteLength;
-    USHORT Reserved[17];
-    USHORT NumberLinkCollectionNodes;
-    USHORT NumberInputButtonCaps;
-    USHORT NumberInputValueCaps;
-    USHORT NumberInputDataIndices;
-    USHORT NumberOutputButtonCaps;
-    USHORT NumberOutputValueCaps;
-    USHORT NumberOutputDataIndices;
-    USHORT NumberFeatureButtonCaps;
-    USHORT NumberFeatureValueCaps;
-    USHORT NumberFeatureDataIndices;
-} HIDP_CAPS, *PHIDP_CAPS;
-
-typedef USHORT USAGE;
-typedef UCHAR  BOOLEAN;
-typedef struct _HIDP_VALUE_CAPS {
-    USAGE  UsagePage;
-    UCHAR  ReportID;
-    BOOLEAN IsAlias;
-    USHORT BitField;
-    USHORT LinkCollection;
-    USAGE  LinkUsage;
-    USAGE  LinkUsagePage;
-    BOOLEAN IsRange;
-    BOOLEAN IsStringRange;
-    BOOLEAN IsDesignatorRange;
-    BOOLEAN HasNull;
-    UCHAR   Reserved[4];
-    USHORT  BitSize;
-    USHORT  ReportCount;
-    USHORT  Reserved2[5];
-    ULONG   UnitsExp;
-    ULONG   Units;
-    LONG    LogicalMinimum;
-    LONG    LogicalMaximum;
-    LONG    PhysicalMinimum;
-    LONG    PhysicalMaximum;
-    union {
-        struct {
-            USAGE  UsageMin;
-            USAGE  UsageMax;
-            USHORT StringMin;
-            USHORT StringMax;
-            USHORT DesignatorMin;
-            USHORT DesignatorMax;
-            USHORT DataIndexMin;
-            USHORT DataIndexMax;
-        } Range;
-        struct {
-            USAGE  Usage;
-            USAGE  Reserved1;
-            USHORT StringIndex;
-            USHORT Reserved2;
-            USHORT DesignatorIndex;
-            USHORT Reserved3;
-            USHORT DataIndex;
-            USHORT Reserved4;
-        } NotRange;
-    };
-} HIDP_VALUE_CAPS;
-
-typedef struct _HIDP_BUTTON_CAPS {
-    USAGE   UsagePage;
-    UCHAR   ReportID;
-    BOOLEAN IsAlias;
-    USHORT  BitField;
-    USHORT  LinkCollection;
-    USAGE   LinkUsage;
-    USAGE   LinkUsagePage;
-    BOOLEAN IsRange;
-    BOOLEAN IsStringRange;
-    BOOLEAN IsDesignatorRange;
-    BOOLEAN HasNull;
-    UCHAR   Reserved[10];
-    union {
-        struct {
-            USAGE  UsageMin;
-            USAGE  UsageMax;
-            USHORT StringMin;
-            USHORT StringMax;
-            USHORT DesignatorMin;
-            USHORT DesignatorMax;
-            USHORT DataIndexMin;
-            USHORT DataIndexMax;
-        } Range;
-        struct {
-            USAGE  Usage;
-            USAGE  Reserved1;
-            USHORT StringIndex;
-            USHORT Reserved2;
-            USHORT DesignatorIndex;
-            USHORT Reserved3;
-            USHORT DataIndex;
-            USHORT Reserved4;
-        } NotRange;
-    };
-} HIDP_BUTTON_CAPS;
-
-typedef LONG NTSTATUS;
-static BOOL(WINAPI *p_HidD_SetOutputReport)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-static BOOL(WINAPI *p_HidD_GetFeature)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-static BOOL(WINAPI *p_HidD_SetFeature)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-static BOOL(WINAPI *p_HidD_GetPreparsedData)(HANDLE File, PHIDP_PREPARSED_DATA *PreparsedData);
-static BOOL(WINAPI *p_HidD_FreePreparsedData)(PHIDP_PREPARSED_DATA PreparsedData);
-static NTSTATUS(WINAPI *p_HidP_GetCaps)(PHIDP_PREPARSED_DATA PreparsedData, PHIDP_CAPS Capabilities);
-static LONG (WINAPI *p_HidP_GetValueCaps)(int ReportType, void *ValueCaps, USHORT *ValueCapsLength, void *PreparsedData);
-static LONG (WINAPI *p_HidP_GetButtonCaps)(int ReportType, void *ButtonCaps, USHORT *ButtonCapsLength, void *PreparsedData) = NULL;
-static NTSTATUS(WINAPI *p_HidP_GetUsages)(int ReportType, USAGE UsagePage, USHORT LinkCollection, USAGE *UsageList, ULONG *UsageLength, PHIDP_PREPARSED_DATA PreparsedData, PCHAR Report, ULONG ReportLength);
-static NTSTATUS(WINAPI *p_HidP_GetUsageValue)(int ReportType, USAGE UsagePage, USHORT LinkCollection, USAGE Usage, ULONG *UsageValue, PHIDP_PREPARSED_DATA PreparsedData, PCHAR Report, ULONG ReportLength);
-static BOOL(WINAPI *p_HidD_GetInputReport)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-static HMODULE g_setupapi_dll;
-static void *(WINAPI *p_SetupDiGetClassDevsW)(void *ClassGuid, LPCWSTR Enumerator, HWND hwnd, DWORD Flags);
-static BOOL(WINAPI *p_SetupDiEnumDeviceInterfaces)(void *DeviceInfoSet, void *DeviceInfoData, void *InterfaceClassGuid, DWORD MemberIndex, void *DeviceInterfaceData);
-static BOOL(WINAPI *p_SetupDiGetDeviceInterfaceDetailW)(void *DeviceInfoSet, void *DeviceInterfaceData, void *DeviceInterfaceDetailData, DWORD DeviceInterfaceDetailDataSize, PDWORD RequiredSize, void *DeviceInfoData);
-static BOOL(WINAPI *p_SetupDiDestroyDeviceInfoList)(void *DeviceInfoSet);
-static pal_bool g_wgl_loaded = pal_false;
-static PFN_wglGetProcAddress p_wglGetProcAddress;
-static PFN_wglCreateContext p_wglCreateContext;
-static PFN_wglMakeCurrent p_wglMakeCurrent;
-static PFN_wglDeleteContext p_wglDeleteContext;
-static PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB p_wglChoosePixelFormatARB;
-static PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB p_wglCreateContextAttribsARB;
-static PFN_WGL_SWAP_INTERVAL_EXT p_wglSwapIntervalEXT;
-
-typedef HRESULT(WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, uint32_t);
-
-#define HIDP_STATUS_SUCCESS 0x00110000
-#define HID_USAGE_PAGE_GENERIC      0x01
-#define HID_USAGE_GENERIC_POINTER   0x01
-#define HID_USAGE_GENERIC_MOUSE     0x02
-#define HID_USAGE_GENERIC_JOYSTICK  0x04
-#define HID_USAGE_GENERIC_GAMEPAD   0x05
-#define HID_USAGE_GENERIC_KEYBOARD  0x06
-#define HID_USAGE_GENERIC_KEYPAD    0x07
-#define HID_USAGE_GENERIC_MULTI_AXIS_CONTROLLER 0x08
-#define HidP_Input  0
-#define HidP_Output 1
-
-#define FAILED(hr) (((HRESULT)(hr)) < 0)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <windowsx.h>
+#include <hidsdi.h>
+#include <shellapi.h>
+#include <setupapi.h>
+#include <dbt.h>
+#include <accctrl.h>
+#include <aclapi.h>
+#include <commdlg.h>
+
+typedef __int64 QWORD;
+#define GL_TRUE 1
+#define GL_FALSE 0
 
 #ifndef GL_TRUE
 #define GL_TRUE 1
@@ -3180,1052 +2204,49 @@ typedef HRESULT(WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, uint32_
 #define PFD_DIRECT3D_ACCELERATED 0x00004000
 #define PFD_SUPPORT_COMPOSITION 0x00008000
 
-/*
- *
- * WINAPI, HANDLES, TYPES BEGIN
- *
- */
+typedef PROC(WINAPI *PFN_wglGetProcAddress)(LPCSTR);
+typedef HGLRC(WINAPI *PFN_wglCreateContext)(HDC);
+typedef BOOL(WINAPI *PFN_wglMakeCurrent)(HDC, HGLRC);
+typedef BOOL(WINAPI *PFN_wglDeleteContext)(HGLRC);
+typedef BOOL(WINAPI *PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB)(HDC, const int *, const FLOAT *, UINT, int *, UINT *);
+typedef HGLRC(WINAPI *PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB)(HDC, HGLRC, const int *);
+typedef BOOL(WINAPI *PFN_WGL_SWAP_INTERVAL_EXT)(int);
 
-typedef struct _GUID {
-    unsigned long Data1;
-    unsigned short Data2;
-    unsigned short Data3;
-    unsigned char Data4[8];
-} GUID;
+/* WGL function pointers */
+static HMODULE g_opengl32;
+static HMODULE g_hid_dll;
+
+static BOOL(WINAPI *p_HidD_SetOutputReport)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
+static BOOL(WINAPI *p_HidD_GetFeature)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
+static BOOL(WINAPI *p_HidD_SetFeature)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
+static BOOL(WINAPI *p_HidD_GetPreparsedData)(HANDLE File, PHIDP_PREPARSED_DATA *PreparsedData);
+static BOOL(WINAPI *p_HidD_FreePreparsedData)(PHIDP_PREPARSED_DATA PreparsedData);
+static NTSTATUS(WINAPI *p_HidP_GetCaps)(PHIDP_PREPARSED_DATA PreparsedData, PHIDP_CAPS Capabilities);
+static LONG(WINAPI *p_HidP_GetValueCaps)(int ReportType, void *ValueCaps, USHORT *ValueCapsLength, void *PreparsedData);
+static LONG(WINAPI *p_HidP_GetButtonCaps)(int ReportType, void *ButtonCaps, USHORT *ButtonCapsLength, void *PreparsedData) = NULL;
+static NTSTATUS(WINAPI *p_HidP_GetUsages)(int ReportType, USAGE UsagePage, USHORT LinkCollection, USAGE *UsageList, ULONG *UsageLength, PHIDP_PREPARSED_DATA PreparsedData, PCHAR Report, ULONG ReportLength);
+static NTSTATUS(WINAPI *p_HidP_GetUsageValue)(int ReportType, USAGE UsagePage, USHORT LinkCollection, USAGE Usage, ULONG *UsageValue, PHIDP_PREPARSED_DATA PreparsedData, PCHAR Report, ULONG ReportLength);
+static BOOL(WINAPI *p_HidD_GetInputReport)(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
+static HMODULE g_setupapi_dll;
+static void *(WINAPI *p_SetupDiGetClassDevsW)(void *ClassGuid, LPCWSTR Enumerator, HWND hwnd, DWORD Flags);
+static BOOL(WINAPI *p_SetupDiEnumDeviceInterfaces)(void *DeviceInfoSet, void *DeviceInfoData, void *InterfaceClassGuid, DWORD MemberIndex, void *DeviceInterfaceData);
+static BOOL(WINAPI *p_SetupDiGetDeviceInterfaceDetailW)(void *DeviceInfoSet, void *DeviceInterfaceData, void *DeviceInterfaceDetailData, DWORD DeviceInterfaceDetailDataSize, PDWORD RequiredSize, void *DeviceInfoData);
+static BOOL(WINAPI *p_SetupDiDestroyDeviceInfoList)(void *DeviceInfoSet);
+static pal_bool g_wgl_loaded = pal_false;
+static PFN_wglGetProcAddress p_wglGetProcAddress;
+static PFN_wglCreateContext p_wglCreateContext;
+static PFN_wglMakeCurrent p_wglMakeCurrent;
+static PFN_wglDeleteContext p_wglDeleteContext;
+static PFN_WGL_CHOOSE_PIXEL_FORMAT_ARB p_wglChoosePixelFormatARB;
+static PFN_WGL_CREATE_CONTEXT_ATTRIBS_ARB p_wglCreateContextAttribsARB;
+static PFN_WGL_SWAP_INTERVAL_EXT p_wglSwapIntervalEXT;
+typedef HRESULT(WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, uint32_t);
 
 static const GUID GUID_DEVINTERFACE_HID = {0x4D1E55B2, 0xF16F, 0x11CF, {0x88, 0xCB, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30}};
-
 /* Device notification handles */
 static HDEVNOTIFY g_hDevNotify_HID = NULL;
-
 /* Message-only window for raw input (receives input regardless of focus) */
 static HWND g_input_window = NULL;
-
-typedef struct tagRAWINPUTHEADER {
-    DWORD dwType;
-    DWORD dwSize;
-    HANDLE hDevice;
-    WPARAM wParam;
-} RAWINPUTHEADER, *PRAWINPUTHEADER, *LPRAWINPUTHEADER;
-
-typedef struct tagRAWMOUSE {
-    USHORT usFlags;
-    union {
-        ULONG ulButtons;
-        struct {
-            USHORT usButtonFlags;
-            USHORT usButtonData;
-        } DUMMYSTRUCTNAME;
-    } DUMMYUNIONNAME;
-    ULONG ulRawButtons;
-    LONG lLastX;
-    LONG lLastY;
-    ULONG ulExtraInformation;
-} RAWMOUSE, *PRAWMOUSE, *LPRAWMOUSE;
-
-typedef struct tagRAWKEYBOARD {
-    USHORT MakeCode;
-    USHORT Flags;
-    USHORT Reserved;
-    USHORT VKey;
-    UINT Message;
-    ULONG ExtraInformation;
-} RAWKEYBOARD, *PRAWKEYBOARD, *LPRAWKEYBOARD;
-
-typedef struct tagRAWHID {
-    DWORD dwSizeHid;
-    DWORD dwCount;
-    BYTE bRawData[1];
-} RAWHID, *PRAWHID, *LPRAWHID;
-
-typedef struct tagRAWINPUT {
-    RAWINPUTHEADER header;
-    union {
-        RAWMOUSE mouse;
-        RAWKEYBOARD keyboard;
-        RAWHID hid;
-    } data;
-} RAWINPUT, *PRAWINPUT, *LPRAWINPUT;
-
-typedef struct tagRAWINPUTDEVICE {
-    USHORT usUsagePage; /* Toplevel collection UsagePage */
-    USHORT usUsage;     /* Toplevel collection Usage */
-    DWORD dwFlags;
-    HWND hwndTarget; /* Target hwnd. NULL = follows keyboard focus */
-} RAWINPUTDEVICE, *PRAWINPUTDEVICE, *LPRAWINPUTDEVICE;
-
-typedef struct tagMOUSEINPUT {
-    LONG dx;
-    LONG dy;
-    DWORD mouseData;
-    DWORD dwFlags;
-    DWORD time;
-    ULONG_PTR dwExtraInfo;
-} MOUSEINPUT, *PMOUSEINPUT, FAR *LPMOUSEINPUT;
-
-typedef struct tagKEYBDINPUT {
-    WORD wVk;
-    WORD wScan;
-    DWORD dwFlags;
-    DWORD time;
-
-    /*
-     * When dwFlags has KEYEVENTF_SYSTEMINJECTION specified this field may carry
-     * KEY_UNICODE_SEQUENCE_ITEM or KEY_UNICODE_SEQUENCE_END which are used by InputService
-     * to distinguish injected unicode sequences. Those flags are stored in low word.
-     * When dwFlags has KEYEVENTF_ATTRIBUTED_INPUT specified this field carries in its high word
-     * ID of attributes associated with injected input. This ID is assigned by InputService and
-     * recognized only by it.
-     * For all other usage scenarios please refer to official documentation.
-     */
-    ULONG_PTR dwExtraInfo;
-} KEYBDINPUT, *PKEYBDINPUT, FAR *LPKEYBDINPUT;
-
-typedef struct tagHARDWAREINPUT {
-    DWORD uMsg;
-    WORD wParamL;
-    WORD wParamH;
-} HARDWAREINPUT, *PHARDWAREINPUT, FAR *LPHARDWAREINPUT;
-
-typedef struct tagINPUT {
-    DWORD type;
-
-    union {
-        MOUSEINPUT mi;
-        KEYBDINPUT ki;
-        HARDWAREINPUT hi;
-    } DUMMYUNIONNAME;
-} INPUT, *PINPUT, FAR *LPINPUT;
-#define INPUT_MOUSE 0
-
-#define MOUSEEVENTF_MOVE 0x0001 /* mouse move */
-
-typedef struct tagTRACKMOUSEEVENT {
-    DWORD cbSize;
-    DWORD dwFlags;
-    HWND hwndTrack;
-    DWORD dwHoverTime;
-} TRACKMOUSEEVENT, *LPTRACKMOUSEEVENT;
-
-#if (WINVER >= 0x0400)
-typedef struct tagWNDCLASSEXA {
-    UINT cbSize;
-    /* Win 3.x */
-    UINT style;
-    WNDPROC lpfnWndProc;
-    int cbClsExtra;
-    int cbWndExtra;
-    HINSTANCE hInstance;
-    HICON hIcon;
-    HCURSOR hCursor;
-    HBRUSH hbrBackground;
-    LPCSTR lpszMenuName;
-    LPCSTR lpszClassName;
-    /* Win 4.0 */
-    HICON hIconSm;
-} WNDCLASSEXA, *PWNDCLASSEXA, NEAR *NPWNDCLASSEXA, FAR *LPWNDCLASSEXA;
-typedef struct tagWNDCLASSEXW {
-    UINT cbSize;
-    /* Win 3.x */
-    UINT style;
-    WNDPROC lpfnWndProc;
-    int cbClsExtra;
-    int cbWndExtra;
-    HINSTANCE hInstance;
-    HICON hIcon;
-    HCURSOR hCursor;
-    HBRUSH hbrBackground;
-    LPCWSTR lpszMenuName;
-    LPCWSTR lpszClassName;
-    /* Win 4.0 */
-    HICON hIconSm;
-} WNDCLASSEXW, *PWNDCLASSEXW, NEAR *NPWNDCLASSEXW, FAR *LPWNDCLASSEXW;
-#ifdef UNICODE
-typedef WNDCLASSEXW WNDCLASSEX;
-typedef PWNDCLASSEXW PWNDCLASSEX;
-typedef NPWNDCLASSEXW NPWNDCLASSEX;
-typedef LPWNDCLASSEXW LPWNDCLASSEX;
-#else
-typedef WNDCLASSEXA WNDCLASSEX;
-typedef PWNDCLASSEXA PWNDCLASSEX;
-typedef NPWNDCLASSEXA NPWNDCLASSEX;
-typedef LPWNDCLASSEXA LPWNDCLASSEX;
-#endif /* UNICODE */
-#endif /* WINVER >= 0x0400 */
-
-typedef CONST RAWINPUTDEVICE *PCRAWINPUTDEVICE;
-
-typedef struct tagRAWINPUTDEVICELIST {
-    HANDLE hDevice;
-    DWORD dwType;
-} RAWINPUTDEVICELIST, *PRAWINPUTDEVICELIST;
-
-#define RI_KEY_MAKE 0
-#define RI_KEY_BREAK 1
-#define RI_KEY_E0 2
-#define RI_KEY_E1 4
-#define RI_KEY_TERMSRV_SET_LED 8
-#define RI_KEY_TERMSRV_SHADOW 0x10
-
-#define RI_MOUSE_WHEEL 0x0400
-#define WHEEL_DELTA 120
-
-#if (WINVER >= 0x0600)
-#define RI_MOUSE_HWHEEL 0x0800
-#endif /* WINVER >= 0x0600 */
-
-#pragma pack(push, 1)
-typedef struct {
-    uint16_t idReserved; /* Must be 0 */
-    uint16_t idType;     /* Must be 1 for icons */
-    uint16_t idCount;    /* Number of images */
-} ICONDIR;
-
-typedef struct {
-    uint8_t bWidth;         /* Width in pixels */
-    uint8_t bHeight;        /* Height in pixels */
-    uint8_t bColorCount;    /* 0 if >= 8bpp */
-    uint8_t bReserved;      /* Must be 0 */
-    uint16_t wPlanes;       /* Should be 1 */
-    uint16_t wBitCount;     /* Usually 32 */
-    uint32_t dwBytesInRes;  /* Size of PNG data */
-    uint32_t dwImageOffset; /* Offset to PNG data (after header) */
-} ICONDIRENTRY;
-#pragma pack(pop)
-
-typedef struct _ICONINFO {
-    BOOL fIcon;
-    DWORD xHotspot;
-    DWORD yHotspot;
-    HBITMAP hbmMask;
-    HBITMAP hbmColor;
-} ICONINFO;
-typedef ICONINFO *PICONINFO;
-
-#if defined(MIDL_PASS)
-typedef struct _LARGE_INTEGER {
-    LONGLONG QuadPart;
-} LARGE_INTEGER;
-#else  /* MIDL_PASS */
-
-typedef union _LARGE_INTEGER {
-    struct {
-        DWORD LowPart;
-        LONG HighPart;
-    } DUMMYSTRUCTNAME;
-    struct {
-        DWORD LowPart;
-        LONG HighPart;
-    } u;
-    LONGLONG QuadPart;
-} LARGE_INTEGER;
-#endif /*MIDL_PASS */
-
-typedef LARGE_INTEGER *PLARGE_INTEGER;
-
-typedef enum _GET_FILEEX_INFO_LEVELS {
-    GetFileExInfoStandard,
-    GetFileExMaxInfoLevel
-} GET_FILEEX_INFO_LEVELS;
-
-typedef struct tagBITMAPINFOHEADER {
-    DWORD biSize;
-    LONG biWidth;
-    LONG biHeight;
-    WORD biPlanes;
-    WORD biBitCount;
-    DWORD biCompression;
-    DWORD biSizeImage;
-    LONG biXPelsPerMeter;
-    LONG biYPelsPerMeter;
-    DWORD biClrUsed;
-    DWORD biClrImportant;
-} BITMAPINFOHEADER, FAR *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
-
-typedef struct tagRGBQUAD {
-    BYTE rgbBlue;
-    BYTE rgbGreen;
-    BYTE rgbRed;
-    BYTE rgbReserved;
-} RGBQUAD;
-
-typedef struct tagBITMAPINFO {
-    BITMAPINFOHEADER bmiHeader;
-    RGBQUAD bmiColors[1];
-} BITMAPINFO, FAR *LPBITMAPINFO, *PBITMAPINFO;
-
-typedef long FXPT16DOT16, FAR *LPFXPT16DOT16;
-typedef long FXPT2DOT30, FAR *LPFXPT2DOT30;
-
-typedef struct tagCIEXYZ {
-    FXPT2DOT30 ciexyzX;
-    FXPT2DOT30 ciexyzY;
-    FXPT2DOT30 ciexyzZ;
-} CIEXYZ;
-
-typedef struct tagICEXYZTRIPLE {
-    CIEXYZ ciexyzRed;
-    CIEXYZ ciexyzGreen;
-    CIEXYZ ciexyzBlue;
-} CIEXYZTRIPLE;
-
-typedef struct {
-    DWORD bV5Size;
-    LONG bV5Width;
-    LONG bV5Height;
-    WORD bV5Planes;
-    WORD bV5BitCount;
-    DWORD bV5Compression;
-    DWORD bV5SizeImage;
-    LONG bV5XPelsPerMeter;
-    LONG bV5YPelsPerMeter;
-    DWORD bV5ClrUsed;
-    DWORD bV5ClrImportant;
-    DWORD bV5RedMask;
-    DWORD bV5GreenMask;
-    DWORD bV5BlueMask;
-    DWORD bV5AlphaMask;
-    DWORD bV5CSType;
-    CIEXYZTRIPLE bV5Endpoints;
-    DWORD bV5GammaRed;
-    DWORD bV5GammaGreen;
-    DWORD bV5GammaBlue;
-    DWORD bV5Intent;
-    DWORD bV5ProfileData;
-    DWORD bV5ProfileSize;
-    DWORD bV5Reserved;
-} BITMAPV5HEADER, FAR *LPBITMAPV5HEADER, *PBITMAPV5HEADER;
-
-typedef struct tagMSG {
-    HWND hwnd;
-    UINT message;
-    WPARAM wParam;
-    LPARAM lParam;
-    DWORD time;
-    POINT pt;
-#ifdef _MAC
-    DWORD lPrivate;
-#endif
-} MSG, *PMSG, NEAR *NPMSG, FAR *LPMSG;
-
-typedef struct _SECURITY_ATTRIBUTES {
-    DWORD nLength;
-    LPVOID lpSecurityDescriptor;
-    BOOL bInheritHandle;
-} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
-
-typedef struct _OVERLAPPED {
-    ULONG_PTR Internal;
-    ULONG_PTR InternalHigh;
-    union {
-        struct {
-            DWORD Offset;
-            DWORD OffsetHigh;
-        } DUMMYSTRUCTNAME;
-        PVOID Pointer;
-    } DUMMYUNIONNAME;
-
-    HANDLE hEvent;
-} OVERLAPPED, *LPOVERLAPPED;
-
-typedef struct _OVERLAPPED_ENTRY {
-    ULONG_PTR lpCompletionKey;
-    LPOVERLAPPED lpOverlapped;
-    ULONG_PTR Internal;
-    DWORD dwNumberOfBytesTransferred;
-} OVERLAPPED_ENTRY, *LPOVERLAPPED_ENTRY;
-
-typedef struct tagPIXELFORMATDESCRIPTOR {
-    WORD nSize;
-    WORD nVersion;
-    DWORD dwFlags;
-    BYTE iPixelType;
-    BYTE cColorBits;
-    BYTE cRedBits;
-    BYTE cRedShift;
-    BYTE cGreenBits;
-    BYTE cGreenShift;
-    BYTE cBlueBits;
-    BYTE cBlueShift;
-    BYTE cAlphaBits;
-    BYTE cAlphaShift;
-    BYTE cAccumBits;
-    BYTE cAccumRedBits;
-    BYTE cAccumGreenBits;
-    BYTE cAccumBlueBits;
-    BYTE cAccumAlphaBits;
-    BYTE cDepthBits;
-    BYTE cStencilBits;
-    BYTE cAuxBuffers;
-    BYTE iLayerType;
-    BYTE bReserved;
-    DWORD dwLayerMask;
-    DWORD dwVisibleMask;
-    DWORD dwDamageMask;
-} PIXELFORMATDESCRIPTOR, *PPIXELFORMATDESCRIPTOR, FAR *LPPIXELFORMATDESCRIPTOR;
-
-typedef UINT_PTR(CALLBACK *LPOFNHOOKPROC)(HWND, UINT, WPARAM, LPARAM);
-
-typedef struct tagOFNA {
-    DWORD lStructSize;
-    HWND hwndOwner;
-    HINSTANCE hInstance;
-    LPCSTR lpstrFilter;
-    LPSTR lpstrCustomFilter;
-    DWORD nMaxCustFilter;
-    DWORD nFilterIndex;
-    LPSTR lpstrFile;
-    DWORD nMaxFile;
-    LPSTR lpstrFileTitle;
-    DWORD nMaxFileTitle;
-    LPCSTR lpstrInitialDir;
-    LPCSTR lpstrTitle;
-    DWORD Flags;
-    WORD nFileOffset;
-    WORD nFileExtension;
-    LPCSTR lpstrDefExt;
-    LPARAM lCustData;
-    LPOFNHOOKPROC lpfnHook;
-    LPCSTR lpTemplateName;
-#ifdef _MAC
-    LPEDITMENU lpEditInfo;
-    LPCSTR lpstrPrompt;
-#endif
-#if (_WIN32_WINNT >= 0x0500)
-    void *pvReserved;
-    DWORD dwReserved;
-    DWORD FlagsEx;
-#endif /* (_WIN32_WINNT >= 0x0500) */
-} OPENFILENAMEA, *LPOPENFILENAMEA;
-typedef struct tagOFNW {
-    DWORD lStructSize;
-    HWND hwndOwner;
-    HINSTANCE hInstance;
-    LPCWSTR lpstrFilter;
-    LPWSTR lpstrCustomFilter;
-    DWORD nMaxCustFilter;
-    DWORD nFilterIndex;
-    LPWSTR lpstrFile;
-    DWORD nMaxFile;
-    LPWSTR lpstrFileTitle;
-    DWORD nMaxFileTitle;
-    LPCWSTR lpstrInitialDir;
-    LPCWSTR lpstrTitle;
-    DWORD Flags;
-    WORD nFileOffset;
-    WORD nFileExtension;
-    LPCWSTR lpstrDefExt;
-    LPARAM lCustData;
-    LPOFNHOOKPROC lpfnHook;
-    LPCWSTR lpTemplateName;
-#ifdef _MAC
-    LPEDITMENU lpEditInfo;
-    LPCSTR lpstrPrompt;
-#endif
-#if (_WIN32_WINNT >= 0x0500)
-    void *pvReserved;
-    DWORD dwReserved;
-    DWORD FlagsEx;
-#endif /* (_WIN32_WINNT >= 0x0500) */
-} OPENFILENAMEW, *LPOPENFILENAMEW;
-#ifdef UNICODE
-typedef OPENFILENAMEW OPENFILENAME;
-typedef LPOPENFILENAMEW LPOPENFILENAME;
-#else
-typedef OPENFILENAMEA OPENFILENAME;
-typedef LPOPENFILENAMEA LPOPENFILENAME;
-#endif /* UNICODE */
-
-typedef DWORD(WINAPI *PTHREAD_START_ROUTINE)(
-    LPVOID lpThreadParameter);
-typedef PTHREAD_START_ROUTINE LPTHREAD_START_ROUTINE;
-
-#if defined(_M_MRX000) && !(defined(MIDL_PASS) || defined(RC_INVOKED)) && defined(ENABLE_RESTRICTED)
-#define RESTRICTED_POINTER __restrict
-#else
-#define RESTRICTED_POINTER
-#endif
-
-typedef struct _LIST_ENTRY {
-    struct _LIST_ENTRY *Flink;
-    struct _LIST_ENTRY *Blink;
-} LIST_ENTRY, *PLIST_ENTRY, *RESTRICTED_POINTER PRLIST_ENTRY;
-
-typedef struct _RTL_CRITICAL_SECTION_DEBUG {
-    WORD Type;
-    WORD CreatorBackTraceIndex;
-    struct _RTL_CRITICAL_SECTION *CriticalSection;
-    LIST_ENTRY ProcessLocksList;
-    DWORD EntryCount;
-    DWORD ContentionCount;
-    DWORD Flags;
-    WORD CreatorBackTraceIndexHigh;
-    WORD Identifier;
-} RTL_CRITICAL_SECTION_DEBUG, *PRTL_CRITICAL_SECTION_DEBUG, RTL_RESOURCE_DEBUG, *PRTL_RESOURCE_DEBUG;
-
-#pragma pack(push, 8)
-
-typedef struct _RTL_CRITICAL_SECTION {
-    PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
-
-    /* */
-    /*  The following three fields control entering and exiting the critical */
-    /*  section for the resource */
-    /* */
-
-    LONG LockCount;
-    LONG RecursionCount;
-    HANDLE OwningThread; /* from the thread's ClientId->UniqueThread */
-    HANDLE LockSemaphore;
-    ULONG_PTR SpinCount; /* force size on 64-bit systems when packed */
-} RTL_CRITICAL_SECTION, *PRTL_CRITICAL_SECTION;
-
-#pragma pack(pop)
-
-typedef RTL_CRITICAL_SECTION CRITICAL_SECTION;
-typedef PRTL_CRITICAL_SECTION LPCRITICAL_SECTION;
-
-struct pal_mutex {
-    CRITICAL_SECTION cs;
-};
-
-#define IMAGE_BITMAP 0
-#define IMAGE_ICON 1
-#define IMAGE_CURSOR 2
-
-#define GCLP_MENUNAME (-8)
-#define GCLP_HBRBACKGROUND (-10)
-#define GCLP_HCURSOR (-12)
-#define GCLP_HICON (-14)
-#define GCLP_HMODULE (-16)
-#define GCLP_WNDPROC (-24)
-#define GCLP_HICONSM (-34)
-
-/* constants for the biCompression field */
-#define BI_RGB 0L
-#define BI_RLE8 1L
-#define BI_RLE4 2L
-#define BI_BITFIELDS 3L
-#define BI_JPEG 4L
-#define BI_PNG 5L
-#if (_WIN32_WINNT >= _WIN32_WINNT_NT4)
-#endif
-
-#define DIB_RGB_COLORS 0 /* color table in RGBs */
-#define DIB_PAL_COLORS 1 /* color table in palette indices */
-
-#define DACL_SECURITY_INFORMATION (0x00000004L)
-#define READ_CONTROL (0x00020000L)
-#define SYNCHRONIZE (0x00100000L)
-
-#define STANDARD_RIGHTS_REQUIRED (0x000F0000L)
-
-#define STANDARD_RIGHTS_READ (READ_CONTROL)
-#define STANDARD_RIGHTS_WRITE (READ_CONTROL)
-#define STANDARD_RIGHTS_EXECUTE (READ_CONTROL)
-#define FILE_READ_DATA (0x0001)        /* file & pipe */
-#define FILE_READ_ATTRIBUTES (0x0080)  /* all */
-#define FILE_READ_EA (0x0008)          /* file & directory */
-#define FILE_WRITE_DATA (0x0002)       /* file & pipe */
-#define FILE_WRITE_ATTRIBUTES (0x0100) /* all */
-#define FILE_WRITE_EA (0x0010)         /* file & directory */
-#define FILE_APPEND_DATA (0x0004)      /* file */
-#define FILE_EXECUTE (0x0020)          /* file */
-
-#define FILE_GENERIC_READ (STANDARD_RIGHTS_READ | FILE_READ_DATA | FILE_READ_ATTRIBUTES | FILE_READ_EA | SYNCHRONIZE)
-
-#define FILE_GENERIC_WRITE (STANDARD_RIGHTS_WRITE | FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA | SYNCHRONIZE)
-
-#define FILE_GENERIC_EXECUTE (STANDARD_RIGHTS_EXECUTE | FILE_READ_ATTRIBUTES | FILE_EXECUTE | SYNCHRONIZE)
-#define FILE_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x1FF)
-
-#define KEY_QUERY_VALUE (0x0001)
-#define KEY_ENUMERATE_SUB_KEYS (0x0008)
-#define KEY_NOTIFY (0x0010)
-
-#define KEY_READ ((STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS | KEY_NOTIFY) & (~SYNCHRONIZE))
-#define FILE_BEGIN 0
-
-typedef enum _TOKEN_INFORMATION_CLASS {
-    TokenUser = 1,
-    TokenGroups,
-    TokenPrivileges,
-    TokenOwner,
-    TokenPrimaryGroup,
-    TokenDefaultDacl,
-    TokenSource,
-    TokenType,
-    TokenImpersonationLevel,
-    TokenStatistics,
-    TokenRestrictedSids,
-    TokenSessionId,
-    TokenGroupsAndPrivileges,
-    TokenSessionReference,
-    TokenSandBoxInert,
-    TokenAuditPolicy,
-    TokenOrigin,
-    TokenElevationType,
-    TokenLinkedToken,
-    TokenElevation,
-    TokenHasRestrictions,
-    TokenAccessInformation,
-    TokenVirtualizationAllowed,
-    TokenVirtualizationEnabled,
-    TokenIntegrityLevel,
-    TokenUIAccess,
-    TokenMandatoryPolicy,
-    TokenLogonSid,
-    TokenIsAppContainer,
-    TokenCapabilities,
-    TokenAppContainerSid,
-    TokenAppContainerNumber,
-    TokenUserClaimAttributes,
-    TokenDeviceClaimAttributes,
-    TokenRestrictedUserClaimAttributes,
-    TokenRestrictedDeviceClaimAttributes,
-    TokenDeviceGroups,
-    TokenRestrictedDeviceGroups,
-    TokenSecurityAttributes,
-    TokenIsRestricted,
-    TokenProcessTrustLevel,
-    TokenPrivateNameSpace,
-    TokenSingletonAttributes,
-    TokenBnoIsolation,
-    TokenChildProcessFlags,
-    TokenIsLessPrivilegedAppContainer,
-    TokenIsSandboxed,
-    TokenIsAppSilo,
-    TokenLoggingInformation,
-    MaxTokenInfoClass /* MaxTokenInfoClass should always be the last enum */
-} TOKEN_INFORMATION_CLASS,
-    *PTOKEN_INFORMATION_CLASS;
-
-#define TOKEN_QUERY (0x0008)
-
-#define DISP_CHANGE_SUCCESSFUL 0
-#define CDS_FULLSCREEN 0x00000004
-#define GWL_STYLE (-16)
-#define MB_OK 0x00000000L
-#define MB_OKCANCEL 0x00000001L
-
-#define MB_ICONHAND 0x00000010L
-#define MB_ICONQUESTION 0x00000020L
-#define MB_ICONEXCLAMATION 0x00000030L
-#define MB_ICONASTERISK 0x00000040L
-
-#if (WINVER >= 0x0400)
-#define MB_USERICON 0x00000080L
-#define MB_ICONWARNING MB_ICONEXCLAMATION
-#define MB_ICONERROR MB_ICONHAND
-#endif /* WINVER >= 0x0400 */
-
-#define LR_LOADFROMFILE 0x00000010
-
-#define HWND_TOP ((HWND)0)
-#define HWND_BOTTOM ((HWND)1)
-#define HWND_TOPMOST ((HWND) - 1)
-#define HWND_NOTOPMOST ((HWND) - 2)
-
-#define SWP_NONE 0x0000
-#define SWP_NOSIZE 0x0001
-#define SWP_NOMOVE 0x0002
-#define SWP_NOZORDER 0x0004
-#define SWP_NOREDRAW 0x0008
-#define SWP_NOACTIVATE 0x0010
-#define SWP_FRAMECHANGED 0x0020 /* The frame changed: send WM_NCCALCSIZE */
-#define SWP_SHOWWINDOW 0x0040
-#define SWP_HIDEWINDOW 0x0080
-#define SWP_NOCOPYBITS 0x0100
-#define SWP_NOOWNERZORDER 0x0200  /* Don't do owner Z ordering */
-#define SWP_NOSENDCHANGING 0x0400 /* Don't send WM_WINDOWPOSCHANGING */
-
-#define SWP_DRAWFRAME SWP_FRAMECHANGED
-#define SWP_NOREPOSITION SWP_NOOWNERZORDER
-
-#if (WINVER >= 0x0400)
-#define SWP_DEFERERASE 0x2000     /* same as SWP_DEFERDRAWING */
-#define SWP_ASYNCWINDOWPOS 0x4000 /* same as SWP_CREATESPB */
-#endif                            /* WINVER >= 0x0400 */
-#define MONITOR_DEFAULTTOPRIMARY 0x00000001
-#define MONITOR_DEFAULTTONEAREST 0x00000002
-#define LR_DEFAULTCOLOR 0x00000000
-#define LR_MONOCHROME 0x00000001
-#define LR_COLOR 0x00000002
-#define LR_COPYRETURNORG 0x00000004
-#define LR_COPYDELETEORG 0x00000008
-#define LR_LOADFROMFILE 0x00000010
-#define LR_LOADTRANSPARENT 0x00000020
-#define LR_DEFAULTSIZE 0x00000040
-#define LR_VGACOLOR 0x00000080
-#define LR_LOADMAP3DCOLORS 0x00001000
-#define LR_CREATEDIBSECTION 0x00002000
-#define LR_COPYFROMRESOURCE 0x00004000
-#define LR_SHARED 0x00008000
-
-#define ENUM_CURRENT_SETTINGS ((DWORD) - 1)
-#define ENUM_REGISTRY_SETTINGS ((DWORD) - 2)
-
-#define OFN_OVERWRITEPROMPT 0x00000002
-#define OFN_FILEMUSTEXIST 0x00001000
-#define OFN_PATHMUSTEXIST 0x00000800
-#define OFN_NOCHANGEDIR 0x00000008
-
-#define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
-#define HEAP_ZERO_MEMORY 0x00000008
-
-#define MAPVK_VK_TO_VSC (0)
-#define CP_UTF8 65001 /* UTF-8 translation */
-#define VK_SHIFT 0x10
-#define VK_CONTROL 0x11
-#define VK_MENU 0x12
-#define VK_CAPITAL 0x14
-#define VK_NUMLOCK 0x90
-#define VK_SCROLL 0x91
-#define VK_LSHIFT 0xA0
-#define VK_RSHIFT 0xA1
-#define VK_LCONTROL 0xA2
-#define VK_RCONTROL 0xA3
-#define VK_LMENU 0xA4
-#define VK_RMENU 0xA5
-
-#define ERROR_CLASS_ALREADY_EXISTS 1410L
-
-#if (WINVER >= 0x0500)
-#define HWND_MESSAGE ((HWND) - 3)
-#endif /* WINVER >= 0x0500 */
-
-#define RIDEV_REMOVE 0x00000001
-#define RIDEV_EXCLUDE 0x00000010
-#define RIDEV_PAGEONLY 0x00000020
-#define RIDEV_NOLEGACY 0x00000030
-#define RIDEV_INPUTSINK 0x00000100
-#define RIDEV_CAPTUREMOUSE 0x00000200 /* effective when mouse nolegacy is specified, otherwise it would be an error */
-#define RIDEV_NOHOTKEYS 0x00000200    /* effective for keyboard. */
-#define RIDEV_APPKEYS 0x00000400      /* effective for keyboard. */
-#if (_WIN32_WINNT >= 0x0501)
-#define RIDEV_EXINPUTSINK 0x00001000
-#define RIDEV_DEVNOTIFY 0x00002000
-#endif /* _WIN32_WINNT >= 0x0501 */
-
-#define RAW_INPUT_BUFFER_CAPACITY (128 * 1024) /* 64 KB */
-
-#ifdef _WIN64
-#define RAWINPUT_ALIGN(x) (((x) + sizeof(QWORD) - 1) & ~(sizeof(QWORD) - 1))
-#else // _WIN64
-#define RAWINPUT_ALIGN(x) (((x) + sizeof(DWORD) - 1) & ~(sizeof(DWORD) - 1))
-#endif // _WIN64
-
-#define NEXTRAWINPUTBLOCK(ptr) ((PRAWINPUT)RAWINPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
-#define QS_KEY 0x0001
-#define QS_MOUSEMOVE 0x0002
-#define QS_MOUSEBUTTON 0x0004
-#define QS_POSTMESSAGE 0x0008
-#define QS_TIMER 0x0010
-#define QS_PAINT 0x0020
-#define QS_SENDMESSAGE 0x0040
-#define QS_HOTKEY 0x0080
-#define QS_ALLPOSTMESSAGE 0x0100
-#define QS_RAWINPUT 0x0400
-#define QS_TOUCH 0x0800
-#define QS_POINTER 0x1000
-#define QS_MOUSE (QS_MOUSEMOVE | QS_MOUSEBUTTON)
-#define QS_INPUT (QS_MOUSE | QS_KEY | QS_RAWINPUT | QS_TOUCH | QS_POINTER)
-#define QS_ALLEVENTS (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY)
-#define QS_ALLINPUT (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE)
-
-WINUSERAPI LONG WINAPI ChangeDisplaySettingsExW(LPCWSTR lpszDeviceName, DEVMODEW *lpDevMode, HWND hwnd, DWORD dwflags, LPVOID lParam);
-WINUSERAPI LONG WINAPI ChangeDisplaySettingsW(DEVMODEW *lpDevMode, DWORD dwFlags);
-WINUSERAPI BOOL WINAPI EnumDisplaySettingsW(LPCWSTR lpszDeviceName, DWORD iModeNum, DEVMODEW *lpDevMode);
-
-WINGDIAPI HBITMAP WINAPI CreateBitmap(int nWidth, int nHeight, UINT nPlanes, UINT nBitCount, CONST VOID *lpBits);
-WINUSERAPI HICON WINAPI CreateIconFromResourceEx(PBYTE presbits, DWORD dwResSize, BOOL fIcon, DWORD dwVer, int cxDesired, int cyDesired, UINT Flags);
-WINUSERAPI HWND WINAPI GetFocus(VOID);
-WINUSERAPI HWND WINAPI SetFocus(HWND hWnd);
-WINBASEAPI BOOL WINAPI FreeLibrary(HMODULE hLibModule);
-WINUSERAPI LONG WINAPI SetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong);
-WINUSERAPI BOOL WINAPI SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
-WINUSERAPI int WINAPI ToUnicode(UINT wVirtKey, UINT wScanCode, CONST BYTE *lpKeyState, LPWSTR pwszBuff, int cchBuff, UINT wFlags);
-WINUSERAPI HCURSOR WINAPI SetCursor(HCURSOR hCursor);
-WINUSERAPI BOOL WINAPI DestroyCursor(HCURSOR hCursor);
-WINUSERAPI BOOL WINAPI SetCursorPos(int X, int Y);
-WINUSERAPI ULONG_PTR WINAPI SetClassLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
-WINUSERAPI int WINAPI ReleaseDC(HWND hWnd, HDC hDC);
-WINUSERAPI BOOL WINAPI ScreenToClient(HWND hWnd, LPPOINT lpPoint);
-WINUSERAPI BOOL WINAPI ClientToScreen(HWND hWnd, LPPOINT lpPoint);
-WINUSERAPI LRESULT WINAPI SendMessageA(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
-WINUSERAPI HWND WINAPI WindowFromPoint(POINT Point);
-WINUSERAPI BOOL WINAPI GetWindowRect(HWND hWnd, LPRECT lpRect);
-WINUSERAPI LONG WINAPI GetWindowLongW(HWND hWnd, int nIndex);
-WINUSERAPI UINT WINAPI GetRawInputDeviceList(PRAWINPUTDEVICELIST pRawInputDeviceList, PUINT puiNumDevices, UINT cbSize);
-WINUSERAPI UINT WINAPI GetRawInputBuffer(PRAWINPUT pData, PUINT pcbSize, UINT cbSizeHeader);
-WINUSERAPI int WINAPI MessageBoxW(HWND hWnd, LPCWSTR lpText, LPWSTR lpCaption, UINT uType); /* TODO: we should prbably remove messagebox altogether. */
-WINUSERAPI UINT WINAPI MapVirtualKeyA(UINT uCode, UINT uMapType);
-WINUSERAPI HANDLE WINAPI LoadImageA(HINSTANCE hInst, LPCSTR name, UINT type, int cx, int cy, UINT fuLoad);
-WINGDIAPI BOOL WINAPI DeleteObject(HGDIOBJ ho);
-WINUSERAPI LRESULT WINAPI DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
-WINUSERAPI HICON WINAPI CreateIconIndirect(PICONINFO piconinfo);
-WINGDIAPI HBITMAP WINAPI CreateDIBSection(HDC hdc, const BITMAPINFO *pbmi, UINT usage, VOID **ppvBits, HANDLE hSection, DWORD offset);
-WINUSERAPI BOOL SetForegroundWindow(HWND hWnd);
-WINUSERAPI BOOL WINAPI UnregisterDeviceNotification(HDEVNOTIFY Handle);
-WINUSERAPI HCURSOR WINAPI LoadCursorW(HINSTANCE hInstance, LPCWSTR lpCursorName);
-WINUSERAPI HMONITOR WINAPI MonitorFromWindow(HWND hwnd, DWORD dwFlags);
-WINUSERAPI HMONITOR WINAPI MonitorFromPoint(POINT pt, DWORD dwFlags);
-WINBASEAPI HMODULE WINAPI LoadLibraryW(LPCWSTR lpLibFileName);
-WINUSERAPI BOOL WINAPI TranslateMessage(CONST MSG *lpMsg);
-WINUSERAPI LRESULT WINAPI DispatchMessageA(CONST MSG *lpMsg);
-int WINAPI MultiByteToWideChar(UINT CodePage, DWORD dwFlags, LPCCH lpMultiByteStr, int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar);
-int WINAPI WideCharToMultiByte(UINT CodePage, DWORD dwFlags, LPCWCH lpWideCharStr, int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte, LPCCH lpDefaultChar, LPBOOL lpUsedDefault);
-WINBASEAPI HLOCAL WINAPI LocalFree(HLOCAL hMem);
-WINBASEAPI HGLOBAL WINAPI GlobalFree(HGLOBAL hMem);
-
-WINADVAPI LSTATUS APIENTRY RegOpenKeyExA(HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult);
-WINADVAPI LSTATUS APIENTRY RegQueryValueExA(HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData);
-WINADVAPI LSTATUS APIENTRY RegCloseKey(HKEY hKey);
-WINUSERAPI BOOL WINAPI PeekMessageA(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
-WINUSERAPI ATOM WINAPI RegisterClassExW(CONST WNDCLASSEXW *);
-WINUSERAPI BOOL WINAPI UnregisterClassW(LPCWSTR lpClassName, HINSTANCE hInstance);
-WINUSERAPI HWND WINAPI CreateWindowExW(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
-WINUSERAPI BOOL WINAPI RegisterRawInputDevices(PCRAWINPUTDEVICE pRawInputDevices, UINT uiNumDevices, UINT cbSize);
-WINUSERAPI BOOL WINAPI ShowWindow(HWND hWnd, int nCmdShow);
-WINUSERAPI BOOL WINAPI OpenClipboard(HWND hWndNewOwner);
-WINUSERAPI BOOL WINAPI CloseClipboard(VOID);
-WINBASEAPI HANDLE WINAPI GetCurrentProcess(VOID);
-WINUSERAPI BOOL WINAPI TrackMouseEvent(LPTRACKMOUSEEVENT lpEventTrack);
-WINUSERAPI BOOL WINAPI GetClientRect(HWND hWnd, LPRECT lpRect);
-WINUSERAPI BOOL WINAPI ClipCursor(CONST RECT *lpRect);
-WINBASEAPI FARPROC WINAPI GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
-WINGDIAPI BOOL WINAPI SwapBuffers(HDC);
-WINUSERAPI int WINAPI ShowCursor(BOOL bShow);
-WINUSERAPI BOOL WINAPI SetWindowTextW(HWND hWnd, LPCWSTR lpString);
-WINUSERAPI UINT WINAPI GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
-HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
-WINBASEAPI BOOL WINAPI HidD_SetOutputReport(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-WINBASEAPI BOOL WINAPI HidD_GetFeature(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-WINBASEAPI BOOL WINAPI HidD_SetFeature(HANDLE File, PVOID ReportBuffer, ULONG ReportBufferLength);
-typedef void *PHIDP_PREPARSED_DATA;
-typedef void *HDEVINFO;
-typedef struct _SP_DEVINFO_DATA {
-    DWORD cbSize;
-    GUID  ClassGuid;
-    DWORD DevInst;
-    ULONG_PTR Reserved;
-} SP_DEVINFO_DATA, *PSP_DEVINFO_DATA;
-typedef struct _SP_DEVICE_INTERFACE_DATA {
-    DWORD cbSize;
-    GUID  InterfaceClassGuid;
-    DWORD Flags;
-    ULONG_PTR Reserved;
-} SP_DEVICE_INTERFACE_DATA, *PSP_DEVICE_INTERFACE_DATA;
-
-typedef struct _SP_DEVICE_INTERFACE_DETAIL_DATA_W {
-    DWORD  cbSize;
-    WCHAR  DevicePath[1]; /* variable length */
-} SP_DEVICE_INTERFACE_DETAIL_DATA_W, *PSP_DEVICE_INTERFACE_DETAIL_DATA_W;
-typedef const wchar_t *PCWSTR;
-WINBASEAPI BOOL WINAPI HidD_GetPreparsedData(HANDLE File, PHIDP_PREPARSED_DATA *PreparsedData);
-WINBASEAPI BOOL WINAPI HidD_FreePreparsedData(PHIDP_PREPARSED_DATA PreparsedData);
-WINBASEAPI NTSTATUS WINAPI HidP_GetCaps(PHIDP_PREPARSED_DATA PreparsedData, PHIDP_CAPS Capabilities);
-WINBASEAPI HDEVINFO WINAPI SetupDiGetClassDevsW(const GUID *ClassGuid, PCWSTR Enumerator, HWND hwnd, DWORD Flags);
-WINBASEAPI BOOL WINAPI SetupDiEnumDeviceInterfaces(HDEVINFO DeviceInfoSet, PSP_DEVINFO_DATA DeviceInfoData, const GUID *InterfaceClassGuid, DWORD MemberIndex, PSP_DEVICE_INTERFACE_DATA DeviceInterfaceData);
-WINBASEAPI BOOL WINAPI SetupDiGetDeviceInterfaceDetailW(HDEVINFO DeviceInfoSet, PSP_DEVICE_INTERFACE_DATA DeviceInterfaceData, PSP_DEVICE_INTERFACE_DETAIL_DATA_W DeviceInterfaceDetailData, DWORD DeviceInterfaceDetailDataSize, PDWORD RequiredSize, PSP_DEVINFO_DATA DeviceInfoData);
-WINBASEAPI BOOL WINAPI SetupDiDestroyDeviceInfoList(HDEVINFO DeviceInfoSet);
-WINUSERAPI BOOL WINAPI DestroyWindow(HWND hWnd);
-WINUSERAPI BOOL WINAPI GetCursorPos(LPPOINT lpPoint);
-WINUSERAPI HDC WINAPI GetDC(HWND hWnd);
-WINUSERAPI HWND WINAPI GetForegroundWindow(VOID);
-WINUSERAPI HWND WINAPI GetParent(HWND hWnd);
-WINUSERAPI BOOL WINAPI GetMonitorInfoA(HMONITOR hMonitor, LPMONITORINFO lpmi);
-WINUSERAPI BOOL WINAPI GetMonitorInfoW(HMONITOR hMonitor, LPMONITORINFO lpmi);
-#ifdef UNICODE
-#define GetMonitorInfo GetMonitorInfoW
-#else
-#define GetMonitorInfo GetMonitorInfoA
-#endif /* !UNICODE */
-WINUSERAPI UINT WINAPI SendInput(UINT cInputs, LPINPUT pInputs, int cbSize);
-WINUSERAPI HANDLE WINAPI SetClipboardData(UINT uFormat, HANDLE hMem);
-WINUSERAPI HANDLE WINAPI GetClipboardData(UINT uFormat);
-WINUSERAPI BOOL WINAPI EmptyClipboard(VOID);
-SHSTDAPI_(HINSTANCE) ShellExecuteW(HWND hwnd, LPCWSTR lpOperation, LPCWSTR lpFile, LPCWSTR lpParameters, LPCWSTR lpDirectory, INT nShowCmd);
-SHSTDAPI_(UINT) DragQueryFileW(HDROP hDrop, UINT iFile, LPWSTR lpszFile, UINT cch);
-SHSTDAPI_(void) DragFinish(HDROP hDrop);
-WINBASEAPI BOOL WINAPI GetFileAttributesExW(LPCWSTR lpFileName, GET_FILEEX_INFO_LEVELS fInfoLevelId, LPVOID lpFileInformation);
-WINBASEAPI BOOL WINAPI GlobalUnlock(_In_ HGLOBAL hMem);
-WINBASEAPI LPVOID WINAPI GlobalLock(HGLOBAL hMem);
-#if _MSC_VER < 1900
-#define DECLSPEC_ALLOCATOR
-#else
-#define DECLSPEC_ALLOCATOR __declspec(allocator)
-#endif
-
-WINBASEAPI DECLSPEC_ALLOCATOR HGLOBAL WINAPI GlobalAlloc(UINT uFlags, SIZE_T dwBytes);
-WINBASEAPI DECLSPEC_ALLOCATOR HLOCAL WINAPI LocalAlloc(UINT uFlags, SIZE_T uBytes);
-WINBASEAPI HLOCAL WINAPI LocalFree(HLOCAL hMem);
-int _wcsicmp(const wchar_t *s1, const wchar_t *s2);
-WINBASEAPI wchar_t *wcsncpy(wchar_t *dest, const wchar_t *src, size_t count);
-WINBASEAPI BOOL WINAPI GetFileSizeEx(HANDLE hFile, PLARGE_INTEGER lpFileSize);
-WINBASEAPI DWORD WINAPI GetFileAttributesW(LPCWSTR lpFileName);
-WINBASEAPI wchar_t *wcsstr(const wchar_t *str, const wchar_t *search);
-WINGDIAPI int WINAPI GetDeviceCaps(HDC hdc, int index);
-WINBASEAPI DWORD WINAPI GetLastError(VOID);
-WINUSERAPI BOOL WINAPI GetKeyboardState(PBYTE lpKeyState);
-WINBASEAPI BOOL WINAPI SetFilePointerEx(HANDLE hFile, LARGE_INTEGER liDistanceToMove, PLARGE_INTEGER lpNewFilePointer, DWORD dwMoveMethod);
-
-WINUSERAPI UINT WINAPI GetRawInputDeviceInfoA(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
-WINUSERAPI UINT WINAPI GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize);
-#ifdef UNICODE
-#define GetRawInputDeviceInfo GetRawInputDeviceInfoW
-#else
-#define GetRawInputDeviceInfo GetRawInputDeviceInfoA
-#endif /* !UNICODE */
-
-WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationA(HANDLE hRecipient, LPVOID NotificationFilter, DWORD Flags);
-WINUSERAPI HDEVNOTIFY WINAPI RegisterDeviceNotificationW(HANDLE hRecipient, LPVOID NotificationFilter, DWORD Flags);
-#ifdef UNICODE
-#define RegisterDeviceNotification RegisterDeviceNotificationW
-#else
-#define RegisterDeviceNotification RegisterDeviceNotificationA
-#endif /* !UNICODE */
-WINBASEAPI BOOL WINAPI CloseHandle(HANDLE hObject);
-WINBASEAPI BOOL WINAPI DeviceIoControl(HANDLE hDevice, DWORD dwIoControlCode, LPVOID lpInBuffer, DWORD nInBufferSize, LPVOID lpOutBuffer, DWORD nOutBufferSize, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped);
-WINBASEAPI HANDLE WINAPI CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-WINBASEAPI BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
-WINGDIAPI int WINAPI ChoosePixelFormat(HDC hdc, CONST PIXELFORMATDESCRIPTOR *ppfd);
-WINGDIAPI BOOL WINAPI SetPixelFormat(HDC hdc, int format, CONST PIXELFORMATDESCRIPTOR *ppfd);
-WINGDIAPI int WINAPI DescribePixelFormat(HDC hdc, int iPixelFormat, UINT nBytes, LPPIXELFORMATDESCRIPTOR ppfd);
-WINBASEAPI BOOL WINAPI ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
-WINBASEAPI BOOL WINAPI CopyFileW(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists);
-WINBASEAPI BOOL WINAPI WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
-WINADVAPI BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle);
-WINADVAPI BOOL WINAPI GetTokenInformation(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
-WINBASEAPI HANDLE WINAPI CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
-WINBASEAPI DWORD WINAPI ResumeThread(HANDLE hThread);
-WINBASEAPI DWORD WINAPI WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
-WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
-WINBASEAPI BOOL WINAPI ResetEvent(HANDLE hEvent);
-WINBASEAPI BOOL WINAPI SetEvent(HANDLE hEvent);
-WINCOMMDLGAPI BOOL APIENTRY GetSaveFileNameA(LPOPENFILENAMEA);
-WINCOMMDLGAPI BOOL APIENTRY GetOpenFileNameA(LPOPENFILENAMEA);
-WINBASEAPI DECLSPEC_ALLOCATOR LPVOID WINAPI HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes);
-WINBASEAPI HANDLE WINAPI GetProcessHeap(VOID);
-WINBASEAPI BOOL WINAPI HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem);
-WINBASEAPI VOID WINAPI InitializeCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
-WINBASEAPI VOID WINAPI EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
-WINBASEAPI BOOL WINAPI TryEnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
-WINBASEAPI VOID WINAPI LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
-WINBASEAPI VOID WINAPI DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection);
-WINUSERAPI BOOL WINAPI DestroyIcon(HICON hIcon);
-ULONG_PTR GetClassLongPtrW(HWND hWnd, int nIndex);
-WINBASEAPI DWORD WINAPI TlsAlloc(VOID);
-WINBASEAPI LPVOID WINAPI TlsGetValue(DWORD dwTlsIndex);
-WINBASEAPI BOOL WINAPI TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue);
-VOID Sleep(DWORD dwMilliseconds);
-DWORD MsgWaitForMultipleObjects(DWORD nCount, const HANDLE *pHandles, BOOL fWaitAll, DWORD dwMilliseconds, DWORD dwWakeMask);
-
-/*
- * windows.h END
- */
-
-/*
-    Dev notify BEGIN
-*/
-
-#ifdef IS_32
-#define DBTFAR
-#else
-#define DBTFAR far
-#endif
-
-#define DBT_DEVICEARRIVAL 0x8000        /* system detected a new device */
-#define DBT_DEVICEREMOVECOMPLETE 0x8004 /* device is gone */
-
-#if (WINVER >= 0x040A)
-#define DBT_DEVTYP_DEVICEINTERFACE 0x00000005 /* device interface class */
-#endif                                        /* WINVER >= 0x040A */
-
-struct _DEV_BROADCAST_HDR { /* */
-    DWORD dbch_size;
-    DWORD dbch_devicetype;
-    DWORD dbch_reserved;
-};
-
-typedef struct _DEV_BROADCAST_HDR DEV_BROADCAST_HDR;
-typedef DEV_BROADCAST_HDR DBTFAR *PDEV_BROADCAST_HDR;
-
-#if (WINVER >= 0x040A)
-
-typedef struct _DEV_BROADCAST_DEVICEINTERFACE_A {
-    DWORD dbcc_size;
-    DWORD dbcc_devicetype;
-    DWORD dbcc_reserved;
-    GUID dbcc_classguid;
-    char dbcc_name[1];
-} DEV_BROADCAST_DEVICEINTERFACE_A, *PDEV_BROADCAST_DEVICEINTERFACE_A;
-
-typedef struct _DEV_BROADCAST_DEVICEINTERFACE_W {
-    DWORD dbcc_size;
-    DWORD dbcc_devicetype;
-    DWORD dbcc_reserved;
-    GUID dbcc_classguid;
-    wchar_t dbcc_name[1];
-} DEV_BROADCAST_DEVICEINTERFACE_W, *PDEV_BROADCAST_DEVICEINTERFACE_W;
-
-#ifdef UNICODE
-typedef DEV_BROADCAST_DEVICEINTERFACE_W DEV_BROADCAST_DEVICEINTERFACE;
-typedef PDEV_BROADCAST_DEVICEINTERFACE_W PDEV_BROADCAST_DEVICEINTERFACE;
-#else
-typedef DEV_BROADCAST_DEVICEINTERFACE_A DEV_BROADCAST_DEVICEINTERFACE;
-typedef PDEV_BROADCAST_DEVICEINTERFACE_A PDEV_BROADCAST_DEVICEINTERFACE;
-#endif
-
-typedef struct _DEV_BROADCAST_HANDLE {
-    DWORD dbch_size;
-    DWORD dbch_devicetype;
-    DWORD dbch_reserved;
-    HANDLE dbch_handle;         /* file handle used in call to RegisterDeviceNotification */
-    HDEVNOTIFY dbch_hdevnotify; /* returned from RegisterDeviceNotification */
-    /* */
-    /* The following 3 fields are only valid if wParam is DBT_CUSTOMEVENT. */
-    /* */
-    GUID dbch_eventguid;
-    LONG dbch_nameoffset; /* offset (bytes) of variable-length string buffer (-1 if none) */
-    BYTE dbch_data[1];    /* variable-sized buffer, potentially containing binary and/or text data */
-} DEV_BROADCAST_HANDLE, *PDEV_BROADCAST_HANDLE;
-
-#if (WINVER >= 0x0501)
-
-/* */
-/* Define 32-bit and 64-bit versions of the DEV_BROADCAST_HANDLE structure */
-/* for WOW64.  These must be kept in sync with the above structure. */
-/* */
-
-typedef struct _DEV_BROADCAST_HANDLE32 {
-    DWORD dbch_size;
-    DWORD dbch_devicetype;
-    DWORD dbch_reserved;
-    ULONG32 dbch_handle;
-    ULONG32 dbch_hdevnotify;
-    GUID dbch_eventguid;
-    LONG dbch_nameoffset;
-    BYTE dbch_data[1];
-} DEV_BROADCAST_HANDLE32, *PDEV_BROADCAST_HANDLE32;
-
-typedef struct _DEV_BROADCAST_HANDLE64 {
-    DWORD dbch_size;
-    DWORD dbch_devicetype;
-    DWORD dbch_reserved;
-    ULONG64 dbch_handle;
-    ULONG64 dbch_hdevnotify;
-    GUID dbch_eventguid;
-    LONG dbch_nameoffset;
-    BYTE dbch_data[1];
-} DEV_BROADCAST_HANDLE64, *PDEV_BROADCAST_HANDLE64;
-
-#endif /* WINVER >= 0x0501 */
-
-#endif /* WINVER >= 0x040A */
-/*
-    Dev notify END
-*/
 
 /*
  *
@@ -4234,58 +2255,51 @@ typedef struct _DEV_BROADCAST_HANDLE64 {
  */
 
 /* GIP button bitmasks (GipGamepadButtons from the writeup) */
-#define GIP_SYNC              0x0001
-#define GIP_MENU              0x0004
-#define GIP_VIEW              0x0008
-#define GIP_A                 0x0010
-#define GIP_B                 0x0020
-#define GIP_X                 0x0040
-#define GIP_Y                 0x0080
-#define GIP_DPAD_UP           0x0100
-#define GIP_DPAD_DOWN         0x0200
-#define GIP_DPAD_LEFT         0x0400
-#define GIP_DPAD_RIGHT        0x0800
-#define GIP_LEFT_SHOULDER     0x1000
-#define GIP_RIGHT_SHOULDER    0x2000
-#define GIP_LEFT_THUMB        0x4000
-#define GIP_RIGHT_THUMB       0x8000
+#define GIP_SYNC 0x0001
+#define GIP_MENU 0x0004
+#define GIP_VIEW 0x0008
+#define GIP_A 0x0010
+#define GIP_B 0x0020
+#define GIP_X 0x0040
+#define GIP_Y 0x0080
+#define GIP_DPAD_UP 0x0100
+#define GIP_DPAD_DOWN 0x0200
+#define GIP_DPAD_LEFT 0x0400
+#define GIP_DPAD_RIGHT 0x0800
+#define GIP_LEFT_SHOULDER 0x1000
+#define GIP_RIGHT_SHOULDER 0x2000
+#define GIP_LEFT_THUMB 0x4000
+#define GIP_RIGHT_THUMB 0x8000
 
 /* GIP force-feedback flags */
-#define GIP_FF_RIGHT_MOTOR    0x01
-#define GIP_FF_LEFT_MOTOR     0x02
-#define GIP_FF_RIGHT_TRIGGER  0x04
-#define GIP_FF_LEFT_TRIGGER   0x08
+#define GIP_FF_RIGHT_MOTOR 0x01
+#define GIP_FF_LEFT_MOTOR 0x02
+#define GIP_FF_RIGHT_TRIGGER 0x04
+#define GIP_FF_LEFT_TRIGGER 0x08
 
 /* GIP message IDs */
-#define GIP_MSG_ARRIVAL       0x02
-#define GIP_MSG_STATUS        0x03
-#define GIP_MSG_INPUT         0x20
-#define GIP_MSG_SET_STATE     0x09
+#define GIP_MSG_ARRIVAL 0x02
+#define GIP_MSG_STATUS 0x03
+#define GIP_MSG_INPUT 0x20
+#define GIP_MSG_SET_STATE 0x09
 
 /* GIP re-enumeration IOCTL */
 #define GIP_ADD_REENUMERATE_CALLER_CONTEXT 0x40001CD0
 
 /* XUSB IOCTLs */
-#define XBOX_IOCTL_GET_STATE  0x8000e00c
-#define XBOX_IOCTL_SET_STATE  0x8000a010
+#define XBOX_IOCTL_GET_STATE 0x8000e00c
+#define XBOX_IOCTL_SET_STATE 0x8000a010
 
 /* Dead-zone thresholds */
-#define XBOX_LEFT_THUMB_DEADZONE   7849
-#define XBOX_RIGHT_THUMB_DEADZONE  8689
-#define XBOX_TRIGGER_THRESHOLD       30
+#define XBOX_LEFT_THUMB_DEADZONE 7849
+#define XBOX_RIGHT_THUMB_DEADZONE 8689
+#define XBOX_TRIGGER_THRESHOLD 30
 
 /* HID usage page / usages */
-#define HID_USAGE_PAGE_GENERIC      0x01
-#define HID_USAGE_GENERIC_POINTER   0x01
-#define HID_USAGE_GENERIC_MOUSE     0x02
-#define HID_USAGE_GENERIC_JOYSTICK  0x04
-#define HID_USAGE_GENERIC_GAMEPAD   0x05
-#define HID_USAGE_GENERIC_KEYBOARD  0x06
-#define HID_USAGE_GENERIC_KEYPAD    0x07
 
 /* VID/PID reported for XUSB controllers */
-#define XUSB_CONTROLLER_VID      0x045E
-#define XUSB_CONTROLLER_PID_360  0x028E
+#define XUSB_CONTROLLER_VID 0x045E
+#define XUSB_CONTROLLER_PID_360 0x028E
 
 #define SDL_CONTROLLER_DB_MAX_ENTRIES 4096
 #define SDL_MAPPING_MAX_TOKENS 64
@@ -4296,30 +2310,30 @@ typedef struct _DEV_BROADCAST_HANDLE64 {
 #define MAX_GAMEPADS (XBOX_MAX_CONTROLLERS + MAX_GIP_CONTROLLERS + MAX_HID_CONTROLLERS)
 
 /* Button bitmask constants (same as xbox_test.c) */
-#define XBOX_DPAD_UP          0x0001
-#define XBOX_DPAD_DOWN        0x0002
-#define XBOX_DPAD_LEFT        0x0004
-#define XBOX_DPAD_RIGHT       0x0008
-#define XBOX_START            0x0010
-#define XBOX_BACK             0x0020
-#define XBOX_LEFT_THUMB       0x0040
-#define XBOX_RIGHT_THUMB      0x0080
-#define XBOX_LEFT_SHOULDER    0x0100
-#define XBOX_RIGHT_SHOULDER   0x0200
-#define XBOX_GUIDE            0x0400
-#define XBOX_A                0x1000
-#define XBOX_B                0x2000
-#define XBOX_X                0x4000
-#define XBOX_Y                0x8000
- 
+#define XBOX_DPAD_UP 0x0001
+#define XBOX_DPAD_DOWN 0x0002
+#define XBOX_DPAD_LEFT 0x0004
+#define XBOX_DPAD_RIGHT 0x0008
+#define XBOX_START 0x0010
+#define XBOX_BACK 0x0020
+#define XBOX_LEFT_THUMB 0x0040
+#define XBOX_RIGHT_THUMB 0x0080
+#define XBOX_LEFT_SHOULDER 0x0100
+#define XBOX_RIGHT_SHOULDER 0x0200
+#define XBOX_GUIDE 0x0400
+#define XBOX_A 0x1000
+#define XBOX_B 0x2000
+#define XBOX_X 0x4000
+#define XBOX_Y 0x8000
+
 #define XBOX_LEFT_THUMB_DEADZONE 7849
 #define XBOX_RIGHT_THUMB_DEADZONE 8689
 #define XBOX_TRIGGER_THRESHOLD 30
 
 /* IOCTL codes from xbox_test.c */
-#define XBOX_IOCTL_GET_STATE  0x8000e00c
-#define XBOX_IOCTL_SET_STATE  0x8000a010
-#define XBOX_IOCTL_GET_CAPS   0x8000e004
+#define XBOX_IOCTL_GET_STATE 0x8000e00c
+#define XBOX_IOCTL_SET_STATE 0x8000a010
+#define XBOX_IOCTL_GET_CAPS 0x8000e004
 
 /* XUSB structures for Xbox 360 controllers (xusb22.sys) */
 #define XUSB_CONTROLLER_VID 0x045E
@@ -4329,7 +2343,6 @@ typedef struct _DEV_BROADCAST_HANDLE64 {
 /* 8BitDo controllers in XInput mode */
 #define XUSB_CONTROLLER_VID_8BITDO 0x2DC8
 #define XUSB_CONTROLLER_PID_8BITDO_XINPUT 0x310A
-
 
 typedef struct _XUSB_GAMEPAD {
     WORD wButtons;
@@ -4345,11 +2358,11 @@ typedef struct _XUSB_GAMEPAD {
 } XUSB_GAMEPAD, *PXUSB_GAMEPAD;
 
 typedef struct {
-    BYTE  report_id;      /* always 0x00 */
-    BYTE  reserved1;
-    WORD  buttons;        /* same bitmask as XINPUT_GAMEPAD */
-    BYTE  left_trigger;
-    BYTE  right_trigger;
+    BYTE report_id; /* always 0x00 */
+    BYTE reserved1;
+    WORD buttons; /* same bitmask as XINPUT_GAMEPAD */
+    BYTE left_trigger;
+    BYTE right_trigger;
     SHORT thumb_lx;
     SHORT thumb_ly;
     SHORT thumb_rx;
@@ -4357,9 +2370,9 @@ typedef struct {
 } XUSB_HID_REPORT;
 
 typedef struct _XUSB_STATE {
-    WORD  wVersion;      // 2 bytes
-    BYTE  bIndex;        // slot (0-3)
-    BYTE  bStatus;       // connection status
+    WORD wVersion; // 2 bytes
+    BYTE bIndex;   // slot (0-3)
+    BYTE bStatus;  // connection status
     DWORD dwPacketNumber;
     XUSB_GAMEPAD Gamepad;
 } XUSB_STATE, *PXUSB_STATE;
@@ -4407,7 +2420,7 @@ typedef struct _GIP_VIBRATION {
 
 /* SetupAPI for XUSB/GIP enumeration */
 static const GUID GUID_DEVINTERFACE_XUSB = {0xEC87F1B7, 0x0E41, 0x4D99, {0xB9, 0xB8, 0xE5, 0x9B, 0x7D, 0x4C, 0xA2, 0xD0}};
-static const GUID gip_guid = { 0x020BC73C, 0x0DCA, 0x4EE3, { 0x96, 0xD5, 0xAB, 0x00, 0x6A, 0xDA, 0x59, 0x38 } };
+static const GUID gip_guid = {0x020BC73C, 0x0DCA, 0x4EE3, {0x96, 0xD5, 0xAB, 0x00, 0x6A, 0xDA, 0x59, 0x38}};
 
 typedef struct _XUSB_DEVICE_NODE {
     HANDLE handle;
@@ -4451,234 +2464,12 @@ typedef struct _XINPUT_STATE {
  *
  */
 
-/*
- *
- * FILE SHIT BEGIN
- *
- */
-typedef enum _ACCESS_MODE {
-    NOT_USED_ACCESS = 0,
-    GRANT_ACCESS,
-    SET_ACCESS,
-    DENY_ACCESS,
-    REVOKE_ACCESS,
-    SET_AUDIT_SUCCESS,
-    SET_AUDIT_FAILURE
-} ACCESS_MODE;
-
-typedef enum _TRUSTEE_FORM {
-    TRUSTEE_IS_SID,
-    TRUSTEE_IS_NAME,
-    TRUSTEE_BAD_FORM,
-    TRUSTEE_IS_OBJECTS_AND_SID,
-    TRUSTEE_IS_OBJECTS_AND_NAME
-} TRUSTEE_FORM;
-
-typedef enum _TRUSTEE_TYPE {
-    TRUSTEE_IS_UNKNOWN,
-    TRUSTEE_IS_USER,
-    TRUSTEE_IS_GROUP,
-    TRUSTEE_IS_DOMAIN,
-    TRUSTEE_IS_ALIAS,
-    TRUSTEE_IS_WELL_KNOWN_GROUP,
-    TRUSTEE_IS_DELETED,
-    TRUSTEE_IS_INVALID,
-    TRUSTEE_IS_COMPUTER
-} TRUSTEE_TYPE;
-
-typedef enum _MULTIPLE_TRUSTEE_OPERATION {
-    NO_MULTIPLE_TRUSTEE,
-    TRUSTEE_IS_IMPERSONATE,
-} MULTIPLE_TRUSTEE_OPERATION;
-
-typedef enum _SE_OBJECT_TYPE {
-    SE_UNKNOWN_OBJECT_TYPE,
-    SE_FILE_OBJECT,
-    SE_SERVICE,
-    SE_PRINTER,
-    SE_REGISTRY_KEY,
-    SE_LMSHARE,
-    SE_KERNEL_OBJECT,
-    SE_WINDOW_OBJECT,
-    SE_DS_OBJECT,
-    SE_DS_OBJECT_ALL,
-    SE_PROVIDER_DEFINED_OBJECT,
-    SE_WMIGUID_OBJECT,
-    SE_REGISTRY_WOW64_32KEY,
-    SE_REGISTRY_WOW64_64KEY
-} SE_OBJECT_TYPE;
-#define NO_INHERITANCE 0x0
-
-typedef struct _TRUSTEE_A {
-    struct _TRUSTEE_A *pMultipleTrustee;
-    MULTIPLE_TRUSTEE_OPERATION MultipleTrusteeOperation;
-    TRUSTEE_FORM TrusteeForm;
-    TRUSTEE_TYPE TrusteeType;
-#ifdef __midl
-    [switch_is(TrusteeForm)] union {
-        [case (TRUSTEE_IS_NAME)] LPSTR ptstrName;
-        [case (TRUSTEE_IS_SID)] SID *pSid;
-        [case (TRUSTEE_IS_OBJECTS_AND_SID)] OBJECTS_AND_SID *pObjectsAndSid;
-        [case (TRUSTEE_IS_OBJECTS_AND_NAME)] OBJECTS_AND_NAME_A *pObjectsAndName;
-    };
-#else
-    /* This member is not null-terminated as it may be used to hold strings, which are null-terminated or  */
-    /* SIDs, which are not null-terminated. */
-    LPCH ptstrName;
-#endif
-} TRUSTEE_A, *PTRUSTEE_A, TRUSTEEA, *PTRUSTEEA;
-typedef struct _TRUSTEE_W {
-    struct _TRUSTEE_W *pMultipleTrustee;
-    MULTIPLE_TRUSTEE_OPERATION MultipleTrusteeOperation;
-    TRUSTEE_FORM TrusteeForm;
-    TRUSTEE_TYPE TrusteeType;
-#ifdef __midl
-    [switch_is(TrusteeForm)] union {
-        [case (TRUSTEE_IS_NAME)] LPWSTR ptstrName;
-        [case (TRUSTEE_IS_SID)] SID *pSid;
-        [case (TRUSTEE_IS_OBJECTS_AND_SID)] OBJECTS_AND_SID *pObjectsAndSid;
-        [case (TRUSTEE_IS_OBJECTS_AND_NAME)] OBJECTS_AND_NAME_W *pObjectsAndName;
-    };
-#else
-    /* This member is not null-terminated as it may be used to hold strings, which are null-terminated or  */
-    /* SID, which are not null-terminated. */
-    LPWCH ptstrName;
-#endif
-} TRUSTEE_W, *PTRUSTEE_W, TRUSTEEW, *PTRUSTEEW;
-#ifdef UNICODE
-typedef TRUSTEE_W TRUSTEE_;
-typedef PTRUSTEE_W PTRUSTEE_;
-typedef TRUSTEEW TRUSTEE;
-typedef PTRUSTEEW PTRUSTEE;
-#else
-typedef TRUSTEE_A TRUSTEE_;
-typedef PTRUSTEE_A PTRUSTEE_;
-typedef TRUSTEEA TRUSTEE;
-typedef PTRUSTEEA PTRUSTEE;
-#endif /* UNICODE */
-
-typedef struct _EXPLICIT_ACCESS_A {
-    DWORD grfAccessPermissions;
-    ACCESS_MODE grfAccessMode;
-    DWORD grfInheritance;
-    TRUSTEE_A Trustee;
-} EXPLICIT_ACCESS_A, *PEXPLICIT_ACCESS_A, EXPLICIT_ACCESSA, *PEXPLICIT_ACCESSA;
-typedef struct _EXPLICIT_ACCESS_W {
-    DWORD grfAccessPermissions;
-    ACCESS_MODE grfAccessMode;
-    DWORD grfInheritance;
-    TRUSTEE_W Trustee;
-} EXPLICIT_ACCESS_W, *PEXPLICIT_ACCESS_W, EXPLICIT_ACCESSW, *PEXPLICIT_ACCESSW;
-#ifdef UNICODE
-typedef EXPLICIT_ACCESS_W EXPLICIT_ACCESS_;
-typedef PEXPLICIT_ACCESS_W PEXPLICIT_ACCESS_;
-typedef EXPLICIT_ACCESSW EXPLICIT_ACCESS;
-typedef PEXPLICIT_ACCESSW PEXPLICIT_ACCESS;
-#else
-typedef EXPLICIT_ACCESS_A EXPLICIT_ACCESS_;
-typedef PEXPLICIT_ACCESS_A PEXPLICIT_ACCESS_;
-typedef EXPLICIT_ACCESSA EXPLICIT_ACCESS;
-typedef PEXPLICIT_ACCESSA PEXPLICIT_ACCESS;
-#endif /* UNICODE */
-
-typedef DWORD SECURITY_INFORMATION, *PSECURITY_INFORMATION;
-typedef PVOID PSID;
-typedef PVOID PACCESS_TOKEN;
-typedef PVOID PSECURITY_DESCRIPTOR;
-typedef PVOID PCLAIMS_BLOB;
-
-typedef struct _SID_AND_ATTRIBUTES {
-#ifdef MIDL_PASS
-    PISID Sid;
-#else  /* MIDL_PASS */
-    PSID Sid;
-#endif /* MIDL_PASS */
-    DWORD Attributes;
-} SID_AND_ATTRIBUTES, *PSID_AND_ATTRIBUTES;
-
-typedef struct _TOKEN_USER {
-    SID_AND_ATTRIBUTES User;
-} TOKEN_USER, *PTOKEN_USER;
-
-typedef struct _ACL {
-    BYTE AclRevision;
-    BYTE Sbz1;
-    WORD AclSize;
-    WORD AceCount;
-    WORD Sbz2;
-} ACL;
-typedef ACL *PACL;
-
-typedef struct _GENERIC_MAPPING {
-    ACCESS_MASK GenericRead;
-    ACCESS_MASK GenericWrite;
-    ACCESS_MASK GenericExecute;
-    ACCESS_MASK GenericAll;
-} GENERIC_MAPPING;
-typedef GENERIC_MAPPING *PGENERIC_MAPPING;
-
-/* it's offscreen? I don't care. you don't want to look at this trash code anyway. Fuck you microsoft. */
-
-WINADVAPI DWORD WINAPI GetSecurityInfo(HANDLE handle, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR *ppSecurityDescriptor);
-
-WINADVAPI DWORD WINAPI SetNamedSecurityInfoA(LPSTR pObjectName, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION SecurityInfo, PSID psidOwner, PSID psidGroup, PACL pDacl, PACL pSacl);
-WINADVAPI DWORD WINAPI SetNamedSecurityInfoW(LPWSTR pObjectName, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION SecurityInfo, PSID psidOwner, PSID psidGroup, PACL pDacl, PACL pSacl);
-#ifdef UNICODE
-#define SetNamedSecurityInfo SetNamedSecurityInfoW
-#else
-#define SetNamedSecurityInfo SetNamedSecurityInfoA
-#endif /* !UNICODE */
-
-WINADVAPI DWORD WINAPI GetNamedSecurityInfoA(LPCSTR pObjectName, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR *ppSecurityDescriptor);
-WINADVAPI DWORD WINAPI GetNamedSecurityInfoW(LPCWSTR pObjectName, SE_OBJECT_TYPE ObjectType, SECURITY_INFORMATION SecurityInfo, PSID *ppsidOwner, PSID *ppsidGroup, PACL *ppDacl, PACL *ppSacl, PSECURITY_DESCRIPTOR *ppSecurityDescriptor);
-#ifdef UNICODE
-#define GetNamedSecurityInfo GetNamedSecurityInfoW
-#else
-#define GetNamedSecurityInfo GetNamedSecurityInfoA
-#endif /* !UNICODE */
-
-WINADVAPI DWORD WINAPI SetEntriesInAclA(ULONG cCountOfExplicitEntries, PEXPLICIT_ACCESS_A pListOfExplicitEntries, PACL OldAcl, PACL *NewAcl);
-WINADVAPI DWORD WINAPI SetEntriesInAclW(ULONG cCountOfExplicitEntries, PEXPLICIT_ACCESS_W pListOfExplicitEntries, PACL OldAcl, PACL *NewAcl);
-#ifdef UNICODE
-#define SetEntriesInAcl SetEntriesInAclW
-#else
-#define SetEntriesInAcl SetEntriesInAclA
-#endif /* !UNICODE */
-
-WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclA(PACL pacl, PTRUSTEE_A pTrustee, PACCESS_MASK pAccessRights);
-WINADVAPI DWORD WINAPI GetEffectiveRightsFromAclW(PACL pacl, PTRUSTEE_W pTrustee, PACCESS_MASK pAccessRights);
-#ifdef UNICODE
-#define GetEffectiveRightsFromAcl GetEffectiveRightsFromAclW
-#else
-#define GetEffectiveRightsFromAcl GetEffectiveRightsFromAclA
-#endif /* !UNICODE */
-
-#define FILE_SHARE_READ 0x00000001
-#define FILE_SHARE_WRITE 0x00000002
-#define OPEN_EXISTING 3
-#define CREATE_ALWAYS 2
-
-#define GENERIC_READ (0x80000000L)
-#define GENERIC_WRITE (0x40000000L)
-#define GENERIC_EXECUTE (0x20000000L)
-#define GENERIC_ALL (0x10000000L)
-#define FILE_ATTRIBUTE_NORMAL 0x00000080
-
-#define LMEM_FIXED 0x000
-/*
- *
- * FILE SHIT END
- *
- */
-
-typedef unsigned __int64 QWORD;
-
 /* Global state */
 
 uint32_t g_next_window_id = 1;
-
 /* On windows, a message pump is specific to the gui thread (a thread that creates windows). */
 pal_bool g_message_pump_drained = pal_false; /* initiallly false because windows sends messages as soon as you call Create_WindowExA() */
+
 struct pal_window {
     HWND hwnd;
     HDC hdc;
@@ -4691,7 +2482,23 @@ struct pal_window {
     HCURSOR cursor;
     HICON icon;
 };
+struct pal_mutex {
+    CRITICAL_SECTION cs;
+};
+typedef struct {
+    WIN32_FIND_DATAA ffd;
+    void *file_search_handle;
+    pal_bool first_file;
+    char path[MAX_PATH]; // base path for this frame, to build child paths
+}pal_dir_frame;
 
+#define PAL_DIR_MAX_DEPTH 64
+
+struct pal_dir {
+    pal_dir_frame stack[PAL_DIR_MAX_DEPTH];
+    int depth;
+    char current_path[MAX_PATH]; // full path of the last returned file
+};
 struct pal_monitor {
     HMONITOR handle;
 };
@@ -5099,7 +2906,6 @@ typedef struct {
     pal_bool inverted;
 } win32_gamepad_axis;
 
-
 typedef enum {
     SDL_MAPPING_TYPE_BUTTON,
     SDL_MAPPING_TYPE_AXIS,
@@ -5133,7 +2939,7 @@ typedef struct {
 static sdl_controller_db_entry g_controller_db[SDL_CONTROLLER_DB_MAX_ENTRIES];
 static int g_controller_db_count = 0;
 
- /* =========================================================================
+/* =========================================================================
  * GIP structures (from writeup)
  * ========================================================================= */
 
@@ -5141,48 +2947,48 @@ static int g_controller_db_count = 0;
 
 typedef struct {
     uint64_t device_id;
-    uint8_t  command_id;
-    uint8_t  flags_and_client; /* low 4 bits = flags, high 4 bits = client */
-    uint8_t  sequence;
-    uint8_t  unknown1;
+    uint8_t command_id;
+    uint8_t flags_and_client; /* low 4 bits = flags, high 4 bits = client */
+    uint8_t sequence;
+    uint8_t unknown1;
     uint32_t length;
     uint32_t unknown2;
 } gip_header;
 
 typedef struct {
     gip_header header;
-    uint16_t   buttons;
-    uint16_t   left_trigger;   /* 0x000 – 0x3FF */
-    uint16_t   right_trigger;  /* 0x000 – 0x3FF */
-    int16_t    left_stick_x;
-    int16_t    left_stick_y;
-    int16_t    right_stick_x;
-    int16_t    right_stick_y;
+    uint16_t buttons;
+    uint16_t left_trigger;  /* 0x000 – 0x3FF */
+    uint16_t right_trigger; /* 0x000 – 0x3FF */
+    int16_t left_stick_x;
+    int16_t left_stick_y;
+    int16_t right_stick_x;
+    int16_t right_stick_y;
 } gip_input_report;
 
 typedef struct {
     gip_header header;
-    uint8_t    unknown1;
-    uint8_t    flags;         /* GIP_FF_* bitmask */
-    uint8_t    left_trigger;
-    uint8_t    right_trigger;
-    uint8_t    left_motor;
-    uint8_t    right_motor;
-    uint8_t    duration;      /* set to 0xFF for "hold until told otherwise" */
-    uint8_t    delay;         /* 0 */
-    uint8_t    repeat;        /* 0 */
+    uint8_t unknown1;
+    uint8_t flags; /* GIP_FF_* bitmask */
+    uint8_t left_trigger;
+    uint8_t right_trigger;
+    uint8_t left_motor;
+    uint8_t right_motor;
+    uint8_t duration; /* set to 0xFF for "hold until told otherwise" */
+    uint8_t delay;    /* 0 */
+    uint8_t repeat;   /* 0 */
 } gip_force_feedback;
 
 typedef struct {
     gip_header header;
-    uint8_t    status;        /* 0 = unfocused, 1 = focused */
-    uint8_t    unknown[7];
+    uint8_t status; /* 0 = unfocused, 1 = focused */
+    uint8_t unknown[7];
 } gip_focus_change;
 
 typedef struct {
     gip_header header;
-    uint8_t    battery_and_connected; /* bit7 = connected, bits 1:0 = battery level, bits 3:2 = battery type */
-    uint8_t    unknown[3];
+    uint8_t battery_and_connected; /* bit7 = connected, bits 1:0 = battery level, bits 3:2 = battery type */
+    uint8_t unknown[3];
 } gip_status;
 
 #pragma pack(pop)
@@ -5194,9 +3000,9 @@ typedef struct {
 /* Decoded state from XBOX_IOCTL_GET_STATE */
 typedef struct {
     DWORD packet;
-    WORD  buttons;
-    BYTE  left_trigger;
-    BYTE  right_trigger;
+    WORD buttons;
+    BYTE left_trigger;
+    BYTE right_trigger;
     SHORT left_thumb_x;
     SHORT left_thumb_y;
     SHORT right_thumb_x;
@@ -5205,14 +3011,14 @@ typedef struct {
 
 /* Cached state for one GIP controller */
 typedef struct {
-    uint64_t device_id;      /* 0 = slot is empty */
+    uint64_t device_id; /* 0 = slot is empty */
     uint16_t buttons;
-    uint16_t left_trigger;   /* raw 0–0x3FF */
+    uint16_t left_trigger; /* raw 0–0x3FF */
     uint16_t right_trigger;
-    int16_t  left_stick_x;
-    int16_t  left_stick_y;
-    int16_t  right_stick_x;
-    int16_t  right_stick_y;
+    int16_t left_stick_x;
+    int16_t left_stick_y;
+    int16_t right_stick_x;
+    int16_t right_stick_y;
 } gip_controller;
 
 /* Per-slot state for one generic (non-XInput) HID gamepad */
@@ -5225,51 +3031,96 @@ typedef struct {
     UINT raw_report_size;
     /* Preparsed data + top-level caps (from input_handle) */
     PHIDP_PREPARSED_DATA preparsed_data;
-    HIDP_CAPS            input_caps;
-    USHORT               input_report_length;
+    HIDP_CAPS input_caps;
+    USHORT input_report_length;
     /* Button caps array for SDL mapping */
     HIDP_BUTTON_CAPS *input_button_caps;
-    USHORT            input_button_caps_len;
-    USAGE             button_usage_min;
+    USHORT input_button_caps_len;
+    USAGE button_usage_min;
     /* Value caps array for SDL mapping */
     HIDP_VALUE_CAPS *input_value_caps;
-    USHORT           input_value_caps_len;
+    USHORT input_value_caps_len;
     /* Handle opened for reading input / fetching preparsed data */
     HANDLE input_handle;
     /* Separate handle opened for sending output (vibration) reports */
     HANDLE hid_handle;
-    BYTE   vib_report_id;
+    BYTE vib_report_id;
     USHORT vib_report_length;
     /* SDL controller-DB entry, NULL if not found */
     sdl_controller_db_entry *db_entry;
 } win32_hid_controller;
- 
+
 /* Central gamepad context – one global instance, zero-initialised */
 typedef struct {
     /* XUSB (Xbox 360 / XInput) – up to 4 */
     struct {
         HANDLE handle;
-        WCHAR  path[MAX_PATH];
+        WCHAR path[MAX_PATH];
     } xbox_devices[XBOX_MAX_CONTROLLERS];
 
     /* GIP (Xbox One / Series) – shared handle, per-device cached state */
-    HANDLE         gip_handle;                     /* \\.\XboxGIP */
+    HANDLE gip_handle; /* \\.\XboxGIP */
     gip_controller gip_devices[GIP_MAX_CONTROLLERS];
-    int            gip_count;                      /* number of live slots */
+    int gip_count; /* number of live slots */
 
     /* Generic HID gamepads */
-    uint8_t              hid_connected[MAX_HID_CONTROLLERS];
-    HANDLE               hid_handles[MAX_HID_CONTROLLERS];
+    uint8_t hid_connected[MAX_HID_CONTROLLERS];
+    HANDLE hid_handles[MAX_HID_CONTROLLERS];
     win32_hid_controller hid_state[MAX_HID_CONTROLLERS];
 } win32_gamepad_context;
 static win32_gamepad_context win32_gamepad_ctx;
- 
+
 /* Interface GUID for XUSB (xusb22.sys / xusb21.sys) – from xbox_test.c */
 static const GUID xbox_guid = {
-    0xec87f1e3, 0xc13b, 0x4100,
-    { 0xb5, 0xf7, 0x8b, 0x84, 0xd5, 0x42, 0x60, 0xcb }
-};
- 
+    0xec87f1e3,
+    0xc13b,
+    0x4100,
+    {0xb5, 0xf7, 0x8b, 0x84, 0xd5, 0x42, 0x60, 0xcb}};
+
+#ifdef PAL_USE_CALLBACKS
+int main(int argc, char *argv[]) {
+    pal_app_result app_result;
+    void *appstate = NULL;
+
+    app_result = pal_app_init(&appstate, argc, argv);
+
+    pal_event event;
+    while (app_result == PAL_APP_CONTINUE) {
+        while (pal_poll_events(&event)) {
+            app_result = pal_app_event(appstate, &event);
+        }
+        app_result = pal_app_iterate(appstate);
+    }
+
+    pal_app_quit(appstate, app_result);
+    return 0;
+}
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    pal_app_result app_result;
+    void *appstate = NULL;
+
+    int argc;
+    LPWSTR *argv_w = CommandLineToArgvW(GetCommandLineW(), &argc);
+    char **argv = (char **)malloc(argc);
+    for (int i = 0; i < argc; i++) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, argv_w[i], -1, NULL, 0, NULL, NULL);
+        argv[i] = (char *)malloc(len);
+        WideCharToMultiByte(CP_UTF8, 0, argv_w[i], -1, argv[i], len, NULL, NULL);
+    }
+    app_result = pal_app_init(&appstate, argc, argv);
+
+    pal_event event;
+    while (app_result == PAL_APP_CONTINUE) {
+        while (pal_poll_events(&event)) {
+            app_result = pal_app_event(appstate, &event);
+        }
+        app_result = pal_app_iterate(appstate);
+    }
+
+    pal_app_quit(appstate, app_result);
+    return 0;
+}
+#endif
 PALAPI pal_bool pal_set_window_display(pal_window *window, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int refresh_rate, unsigned int fullscreen_mode) {
     RECT rect;
     pal_rect pal_rect;
@@ -5323,7 +3174,7 @@ PALAPI pal_bool pal_set_window_display(pal_window *window, unsigned int x, unsig
     }
 
     ChangeDisplaySettingsW(NULL, 0);
-    if (SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle) == 0) {
+    if (!SetWindowLongA(window->hwnd, GWL_STYLE, window->windowedStyle)) {
         return pal_false;
     }
     if (!SetWindowPos(window->hwnd, NULL, pal_rect.x, pal_rect.y, pal_rect.width, pal_rect.height, SWP_NOZORDER | SWP_FRAMECHANGED)) {
@@ -5575,8 +3426,9 @@ static void gip_open(void) {
     HANDLE h;
 
     if (win32_gamepad_ctx.gip_handle != NULL &&
-        win32_gamepad_ctx.gip_handle != INVALID_HANDLE_VALUE)
+        win32_gamepad_ctx.gip_handle != INVALID_HANDLE_VALUE) {
         return; /* already open */
+    }
 
     h = CreateFileW(L"\\\\.\\XboxGIP", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -5593,8 +3445,7 @@ static void gip_open(void) {
     win32_gamepad_ctx.gip_handle = h;
 
     /* Ask the driver to re-send arrival messages for all connected devices */
-    DeviceIoControl(h, GIP_ADD_REENUMERATE_CALLER_CONTEXT,
-                    NULL, 0, NULL, 0, NULL, NULL);
+    DeviceIoControl(h, GIP_ADD_REENUMERATE_CALLER_CONTEXT, NULL, 0, NULL, 0, NULL, NULL);
 
     printf("[gip] opened XboxGIP handle\n");
 }
@@ -5613,8 +3464,9 @@ static void gip_close(void) {
 static int gip_find_slot(uint64_t device_id) {
     int i;
     for (i = 0; i < GIP_MAX_CONTROLLERS; i++) {
-        if (win32_gamepad_ctx.gip_devices[i].device_id == device_id)
+        if (win32_gamepad_ctx.gip_devices[i].device_id == device_id) {
             return i;
+        }
     }
     return -1;
 }
@@ -5622,16 +3474,18 @@ static int gip_find_slot(uint64_t device_id) {
 /* Find or allocate a slot for device_id */
 static int gip_get_or_alloc_slot(uint64_t device_id) {
     int i = gip_find_slot(device_id);
-    if (i >= 0) return i;
+    if (i >= 0) {
+        return i;
+    }
 
     /* Find a free slot */
     for (i = 0; i < GIP_MAX_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.gip_devices[i].device_id == 0) {
             win32_gamepad_ctx.gip_devices[i].device_id = device_id;
-            if (i >= win32_gamepad_ctx.gip_count)
+            if (i >= win32_gamepad_ctx.gip_count) {
                 win32_gamepad_ctx.gip_count = i + 1;
-            printf("[gip] slot %d allocated device_id=%llu\n", i,
-                   (unsigned long long)device_id);
+            }
+            printf("[gip] slot %d allocated device_id=%llu\n", i, (unsigned long long)device_id);
             return i;
         }
     }
@@ -5646,58 +3500,68 @@ static void gip_process_message(const BYTE *buf, DWORD bytes_read) {
     const gip_header *hdr;
     int slot;
 
-    if (bytes_read < sizeof(gip_header)) return;
+    if (bytes_read < sizeof(gip_header)) {
+        return;
+    }
 
     hdr = (const gip_header *)buf;
 
     switch (hdr->command_id) {
 
-    case GIP_MSG_ARRIVAL: {
-        slot = gip_get_or_alloc_slot(hdr->device_id);
-        if (slot >= 0)
-            printf("[gip] device arrived slot=%d\n", slot);
-        break;
-    }
-
-    case GIP_MSG_STATUS: {
-        const gip_status *s = (const gip_status *)buf;
-        if (bytes_read < sizeof(gip_status)) break;
-        slot = gip_find_slot(hdr->device_id);
-        /* connected bit is bit 7 of battery_and_connected */
-        if (slot >= 0 && !(s->battery_and_connected & 0x80)) {
-            printf("[gip] slot %d disconnected\n", slot);
-            pal_memset(&win32_gamepad_ctx.gip_devices[slot], 0,
-                   sizeof(gip_controller));
-            /* Recalculate gip_count */
-            {
-                int i, new_count = 0;
-                for (i = 0; i < GIP_MAX_CONTROLLERS; i++)
-                    if (win32_gamepad_ctx.gip_devices[i].device_id != 0)
-                        new_count = i + 1;
-                win32_gamepad_ctx.gip_count = new_count;
+        case GIP_MSG_ARRIVAL: {
+            slot = gip_get_or_alloc_slot(hdr->device_id);
+            if (slot >= 0) {
+                printf("[gip] device arrived slot=%d\n", slot);
             }
+            break;
         }
-        break;
-    }
 
-    case GIP_MSG_INPUT: {
-        const gip_input_report *r = (const gip_input_report *)buf;
-        if (bytes_read < sizeof(gip_input_report)) break;
-        slot = gip_get_or_alloc_slot(hdr->device_id);
-        if (slot < 0) break;
+        case GIP_MSG_STATUS: {
+            const gip_status *s = (const gip_status *)buf;
+            if (bytes_read < sizeof(gip_status)) {
+                break;
+            }
+            slot = gip_find_slot(hdr->device_id);
+            /* connected bit is bit 7 of battery_and_connected */
+            if (slot >= 0 && !(s->battery_and_connected & 0x80)) {
+                printf("[gip] slot %d disconnected\n", slot);
+                pal_memset(&win32_gamepad_ctx.gip_devices[slot], 0, sizeof(gip_controller));
+                /* Recalculate gip_count */
+                {
+                    int i, new_count = 0;
+                    for (i = 0; i < GIP_MAX_CONTROLLERS; i++) {
+                        if (win32_gamepad_ctx.gip_devices[i].device_id != 0) {
+                            new_count = i + 1;
+                        }
+                    }
+                    win32_gamepad_ctx.gip_count = new_count;
+                }
+            }
+            break;
+        }
 
-        win32_gamepad_ctx.gip_devices[slot].buttons       = r->buttons;
-        win32_gamepad_ctx.gip_devices[slot].left_trigger  = r->left_trigger;
-        win32_gamepad_ctx.gip_devices[slot].right_trigger = r->right_trigger;
-        win32_gamepad_ctx.gip_devices[slot].left_stick_x  = r->left_stick_x;
-        win32_gamepad_ctx.gip_devices[slot].left_stick_y  = r->left_stick_y;
-        win32_gamepad_ctx.gip_devices[slot].right_stick_x = r->right_stick_x;
-        win32_gamepad_ctx.gip_devices[slot].right_stick_y = r->right_stick_y;
-        break;
-    }
+        case GIP_MSG_INPUT: {
+            const gip_input_report *r = (const gip_input_report *)buf;
+            if (bytes_read < sizeof(gip_input_report)) {
+                break;
+            }
+            slot = gip_get_or_alloc_slot(hdr->device_id);
+            if (slot < 0) {
+                break;
+            }
 
-    default:
-        break;
+            win32_gamepad_ctx.gip_devices[slot].buttons = r->buttons;
+            win32_gamepad_ctx.gip_devices[slot].left_trigger = r->left_trigger;
+            win32_gamepad_ctx.gip_devices[slot].right_trigger = r->right_trigger;
+            win32_gamepad_ctx.gip_devices[slot].left_stick_x = r->left_stick_x;
+            win32_gamepad_ctx.gip_devices[slot].left_stick_y = r->left_stick_y;
+            win32_gamepad_ctx.gip_devices[slot].right_stick_x = r->right_stick_x;
+            win32_gamepad_ctx.gip_devices[slot].right_stick_y = r->right_stick_y;
+            break;
+        }
+
+        default:
+            break;
     }
 }
 
@@ -5711,22 +3575,23 @@ static void gip_set(uint64_t device_id, float left_motor, float right_motor, flo
     DWORD written;
 
     if (win32_gamepad_ctx.gip_handle == NULL ||
-        win32_gamepad_ctx.gip_handle == INVALID_HANDLE_VALUE)
+        win32_gamepad_ctx.gip_handle == INVALID_HANDLE_VALUE) {
         return;
+    }
 
     pal_memset(&ff, 0, sizeof(ff));
-    ff.header.device_id   = device_id;
-    ff.header.command_id  = GIP_MSG_SET_STATE;
-    ff.header.length      = sizeof(gip_force_feedback) - sizeof(gip_header);
-    ff.flags              = GIP_FF_LEFT_MOTOR | GIP_FF_RIGHT_MOTOR |
-                            GIP_FF_LEFT_TRIGGER | GIP_FF_RIGHT_TRIGGER;
-    ff.left_motor         = (BYTE)(left_motor   * 255.0f);
-    ff.right_motor        = (BYTE)(right_motor  * 255.0f);
-    ff.left_trigger       = (BYTE)(left_trigger  * 255.0f);
-    ff.right_trigger      = (BYTE)(right_trigger * 255.0f);
-    ff.duration           = 0xFF;
-    ff.delay              = 0x00;
-    ff.repeat             = 0x00;
+    ff.header.device_id = device_id;
+    ff.header.command_id = GIP_MSG_SET_STATE;
+    ff.header.length = sizeof(gip_force_feedback) - sizeof(gip_header);
+    ff.flags = GIP_FF_LEFT_MOTOR | GIP_FF_RIGHT_MOTOR |
+               GIP_FF_LEFT_TRIGGER | GIP_FF_RIGHT_TRIGGER;
+    ff.left_motor = (BYTE)(left_motor * 255.0f);
+    ff.right_motor = (BYTE)(right_motor * 255.0f);
+    ff.left_trigger = (BYTE)(left_trigger * 255.0f);
+    ff.right_trigger = (BYTE)(right_trigger * 255.0f);
+    ff.duration = 0xFF;
+    ff.delay = 0x00;
+    ff.repeat = 0x00;
 
     WriteFile(win32_gamepad_ctx.gip_handle, &ff, sizeof(ff), &written, NULL);
 }
@@ -5736,17 +3601,16 @@ static void gip_set(uint64_t device_id, float left_motor, float right_motor, flo
  * from the GIP handle. Returns pal_false if the handle has gone bad
  * (all devices disconnected), so the caller can close it.
  */
-static pal_bool gip_poll(void)
-{
-    BYTE  buf[1024];
+static pal_bool gip_poll(void) {
+    BYTE buf[1024];
     DWORD bytes_read;
 
     if (win32_gamepad_ctx.gip_handle == NULL ||
-        win32_gamepad_ctx.gip_handle == INVALID_HANDLE_VALUE)
+        win32_gamepad_ctx.gip_handle == INVALID_HANDLE_VALUE) {
         return pal_false;
+    }
 
-    if (!ReadFile(win32_gamepad_ctx.gip_handle, buf, sizeof(buf),
-                  &bytes_read, NULL) || bytes_read == 0) {
+    if (!ReadFile(win32_gamepad_ctx.gip_handle, buf, sizeof(buf), &bytes_read, NULL) || bytes_read == 0) {
         printf("[gip] ReadFile failed, closing handle err=%lu\n",
                (unsigned long)GetLastError());
         gip_close();
@@ -5768,19 +3632,20 @@ static pal_bool gip_poll(void)
 static int xusb_connect(LPWSTR path) {
     int i;
     HANDLE h;
- 
+
     /* Already registered? SetupDi and WM_DEVICECHANGE can give different case */
     for (i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.xbox_devices[i].handle != NULL &&
-            _wcsicmp(win32_gamepad_ctx.xbox_devices[i].path, path) == 0)
+            _wcsicmp(win32_gamepad_ctx.xbox_devices[i].path, path) == 0) {
             return i;
+        }
     }
- 
+
     h = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) {
         return -1;
     }
- 
+
     for (i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.xbox_devices[i].handle == NULL) {
             win32_gamepad_ctx.xbox_devices[i].handle = h;
@@ -5790,23 +3655,22 @@ static int xusb_connect(LPWSTR path) {
             return i;
         }
     }
- 
+
     CloseHandle(h); /* table full */
     return -1;
 }
- 
+
 /*
  * xusb_disconnect – close handle for path, clear slot.
  * Returns slot index on success, -1 if not found.
  */
-static int xusb_disconnect(LPWSTR path)
-{
+static int xusb_disconnect(LPWSTR path) {
     int i;
     for (i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.xbox_devices[i].handle != NULL &&
             _wcsicmp(win32_gamepad_ctx.xbox_devices[i].path, path) == 0) {
             CloseHandle(win32_gamepad_ctx.xbox_devices[i].handle);
-            win32_gamepad_ctx.xbox_devices[i].handle  = NULL;
+            win32_gamepad_ctx.xbox_devices[i].handle = NULL;
             win32_gamepad_ctx.xbox_devices[i].path[0] = L'\0';
             printf("[xbox] slot %d disconnected\n", i);
             return i;
@@ -5814,7 +3678,7 @@ static int xusb_disconnect(LPWSTR path)
     }
     return -1;
 }
- 
+
 /*
  * xusb_init – enumerate all present XUSB devices at startup.
  */
@@ -5829,18 +3693,19 @@ static void xusb_init(void) {
         return;
     }
 
-    dev = p_SetupDiGetClassDevsW((void*)&xbox_guid, NULL, NULL,
-                                 0x16 /* DIGCF_PRESENT | DIGCF_DEVICEINTERFACE */);
-    if (dev == INVALID_HANDLE_VALUE) return;
+    dev = p_SetupDiGetClassDevsW((void *)&xbox_guid, NULL, NULL, 0x16 /* DIGCF_PRESENT | DIGCF_DEVICEINTERFACE */);
+    if (dev == INVALID_HANDLE_VALUE) {
+        return;
+    }
 
     idata.cbSize = sizeof(idata);
 
-    for (index = 0; ; index++) {
+    for (index = 0;; index++) {
         DWORD size = 0;
         PSP_DEVICE_INTERFACE_DETAIL_DATA_W detail;
         SP_DEVINFO_DATA ddata;
 
-        if (!p_SetupDiEnumDeviceInterfaces(dev, NULL, (void*)&xbox_guid, index, &idata)) {
+        if (!p_SetupDiEnumDeviceInterfaces(dev, NULL, (void *)&xbox_guid, index, &idata)) {
             break;
         }
 
@@ -5855,7 +3720,7 @@ static void xusb_init(void) {
         }
 
         detail->cbSize = sizeof(*detail); /* struct size, NOT allocation size */
-        ddata.cbSize   = sizeof(ddata);
+        ddata.cbSize = sizeof(ddata);
 
         if (p_SetupDiGetDeviceInterfaceDetailW(dev, &idata, detail, size, &size, &ddata)) {
             xusb_connect(detail->DevicePath);
@@ -5866,81 +3731,90 @@ static void xusb_init(void) {
 
     p_SetupDiDestroyDeviceInfoList(dev);
 }
- 
+
 /*
  * xusb_get – read current controller state from physical slot 'index'.
  * Returns 0 on success, -1 on failure.
  */
 static int xusb_get(DWORD index, xbox_state *state) {
-    BYTE  in[3]  = { 0x01, 0x01, 0x00 };
-    BYTE  out[29];
-    DWORD size   = 0;
- 
+    BYTE in[3] = {0x01, 0x01, 0x00};
+    BYTE out[29];
+    DWORD size = 0;
+
     if (index >= XBOX_MAX_CONTROLLERS ||
-        win32_gamepad_ctx.xbox_devices[index].handle == NULL)
+        win32_gamepad_ctx.xbox_devices[index].handle == NULL) {
         return -1;
- 
+    }
+
     if (!DeviceIoControl(win32_gamepad_ctx.xbox_devices[index].handle,
                          XBOX_IOCTL_GET_STATE,
-                         in, sizeof(in), out, sizeof(out), &size, NULL)
-        || size != sizeof(out))
+                         in,
+                         sizeof(in),
+                         out,
+                         sizeof(out),
+                         &size,
+                         NULL) ||
+        size != sizeof(out)) {
         return -1;
- 
-    state->packet        = *(DWORD *)(out + 5);
-    state->buttons       = *(WORD  *)(out + 11);
-    state->left_trigger  =  out[13];
-    state->right_trigger =  out[14];
-    state->left_thumb_x  = *(SHORT *)(out + 15);
-    state->left_thumb_y  = *(SHORT *)(out + 17);
+    }
+
+    state->packet = *(DWORD *)(out + 5);
+    state->buttons = *(WORD *)(out + 11);
+    state->left_trigger = out[13];
+    state->right_trigger = out[14];
+    state->left_thumb_x = *(SHORT *)(out + 15);
+    state->left_thumb_y = *(SHORT *)(out + 17);
     state->right_thumb_x = *(SHORT *)(out + 19);
     state->right_thumb_y = *(SHORT *)(out + 21);
     return 0;
 }
- 
+
 /*
  * xusb_set – send rumble to physical slot 'index'.
  * low_freq = left motor (0-255), high_freq = right motor (0-255).
  */
 static int xusb_set(DWORD index, BYTE low_freq, BYTE high_freq) {
-    BYTE in[5] = { 0, 0, low_freq, high_freq, 2 };
- 
+    BYTE in[5] = {0, 0, low_freq, high_freq, 2};
+
     if (index >= XBOX_MAX_CONTROLLERS || win32_gamepad_ctx.xbox_devices[index].handle == NULL) {
         return -1;
     }
- 
+
     if (!DeviceIoControl(win32_gamepad_ctx.xbox_devices[index].handle, XBOX_IOCTL_SET_STATE, in, sizeof(in), NULL, 0, NULL, NULL)) {
         return -1;
     }
     return 0;
 }
- 
+
 /* Return the number of live XInput slots */
 static int xbox_count(void) {
     int n = 0, i;
     for (i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
-        if (win32_gamepad_ctx.xbox_devices[i].handle != NULL){
+        if (win32_gamepad_ctx.xbox_devices[i].handle != NULL) {
             n++;
         }
     }
     return n;
 }
- 
+
 /* Map public index n (0-based) to a physical slot index */
 static int xbox_nth(int n) {
     int seen = 0, i;
     for (i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.xbox_devices[i].handle != NULL) {
-            if (seen == n) return i;
+            if (seen == n) {
+                return i;
+            }
             seen++;
         }
     }
     return -1;
 }
- 
+
 /* =========================================================================
  * Generic HID gamepad helpers
  * ========================================================================= */
- 
+
 /*
  * hid_connect – open path, verify it is a gamepad/joystick, populate slot.
  * Returns slot index on success, -1 on failure or if the device should be
@@ -5967,7 +3841,8 @@ static void win32_discover_hid_vibration(int slot, HANDLE hid_handle) {
 
     if (!p_HidD_GetPreparsedData(hid_handle, &ppd) || !ppd) {
         printf("HID[%d]: HidD_GetPreparsedData failed err=%lu\n",
-               slot, (unsigned long)GetLastError());
+               slot,
+               (unsigned long)GetLastError());
         return;
     }
 
@@ -5979,7 +3854,9 @@ static void win32_discover_hid_vibration(int slot, HANDLE hid_handle) {
     }
 
     printf("HID[%d]: OutputReportByteLength=%d NumberOutputValueCaps=%d\n",
-           slot, caps.OutputReportByteLength, caps.NumberOutputValueCaps);
+           slot,
+           caps.OutputReportByteLength,
+           caps.NumberOutputValueCaps);
 
     win32_gamepad_ctx.hid_state[slot].vib_report_length = caps.OutputReportByteLength;
     if (caps.OutputReportByteLength == 0) {
@@ -5991,33 +3868,34 @@ static void win32_discover_hid_vibration(int slot, HANDLE hid_handle) {
    and use the full output byte length — common for 8BitDo and similar HID controllers */
     if (caps.NumberOutputValueCaps == 0) {
         printf("HID[%d]: no output value caps but OutputReportByteLength=%d — using raw report (ID=0)\n",
-               slot, caps.OutputReportByteLength);
+               slot,
+               caps.OutputReportByteLength);
         win32_gamepad_ctx.hid_state[slot].vib_report_id = 0x00;
         goto done;
     }
 
     value_caps_len = caps.NumberOutputValueCaps;
     value_caps = (HIDP_VALUE_CAPS *)malloc(value_caps_len * sizeof(HIDP_VALUE_CAPS));
-    if (!value_caps)
+    if (!value_caps) {
         goto done;
+    }
 
-    if (p_HidP_GetValueCaps(HidP_Output, value_caps, &value_caps_len, ppd)
-            != HIDP_STATUS_SUCCESS) {
+    if (p_HidP_GetValueCaps(HidP_Output, value_caps, &value_caps_len, ppd) != HIDP_STATUS_SUCCESS) {
         printf("HID[%d]: HidP_GetValueCaps failed\n", slot);
         goto done;
     }
 
     for (i = 0; i < value_caps_len; i++) {
-        printf("HID[%d]: output value[%d] UsagePage=%04X Usage=%04X ReportID=%d LogicalMin=%d LogicalMax=%d\n",
-               slot, i,
+        printf("HID[%d]: output value[%d] UsagePage=%04X Usage=%04X ReportID=%d LogicalMin=%ld LogicalMax=%ld\n",
+               slot,
+               i,
                value_caps[i].UsagePage,
                value_caps[i].NotRange.Usage,
                value_caps[i].ReportID,
-               value_caps[i].LogicalMinimum,
-               value_caps[i].LogicalMaximum);
-
+               value_caps[i].LogicalMin,
+               value_caps[i].LogicalMax);
     }
-    win32_gamepad_ctx.hid_state[slot].vib_report_id     = (BYTE)value_caps[0].ReportID; // NOTE: for debugging
+    win32_gamepad_ctx.hid_state[slot].vib_report_id = (BYTE)value_caps[0].ReportID; // NOTE: for debugging
 
     /* Also check output button caps */
     USHORT button_caps_len = caps.NumberOutputButtonCaps;
@@ -6025,11 +3903,11 @@ static void win32_discover_hid_vibration(int slot, HANDLE hid_handle) {
     if (button_caps_len > 0) {
         HIDP_BUTTON_CAPS *button_caps = (HIDP_BUTTON_CAPS *)malloc(button_caps_len * sizeof(HIDP_BUTTON_CAPS));
         if (button_caps) {
-            if (p_HidP_GetButtonCaps(HidP_Output, button_caps, &button_caps_len, ppd)
-                    == HIDP_STATUS_SUCCESS) {
+            if (p_HidP_GetButtonCaps(HidP_Output, button_caps, &button_caps_len, ppd) == HIDP_STATUS_SUCCESS) {
                 for (i = 0; i < button_caps_len; i++) {
                     printf("HID[%d]: output button[%d] UsagePage=%04X ReportID=%d\n",
-                           slot, i,
+                           slot,
+                           i,
                            button_caps[i].UsagePage,
                            button_caps[i].ReportID);
                 }
@@ -6038,8 +3916,12 @@ static void win32_discover_hid_vibration(int slot, HANDLE hid_handle) {
         }
     }
 done:
-    if (value_caps) free(value_caps);
-    if (ppd) p_HidD_FreePreparsedData(ppd);
+    if (value_caps) {
+        free(value_caps);
+    }
+    if (ppd) {
+        p_HidD_FreePreparsedData(ppd);
+    }
 }
 
 static uint16_t win32_parse_hex4(const wchar_t *s) {
@@ -6048,10 +3930,15 @@ static uint16_t win32_parse_hex4(const wchar_t *s) {
     for (i = 0; i < 4; i++) {
         wchar_t c = s[i];
         v <<= 4;
-        if      (c >= L'0' && c <= L'9') v |= (uint16_t)(c - L'0');
-        else if (c >= L'a' && c <= L'f') v |= (uint16_t)(c - L'a' + 10);
-        else if (c >= L'A' && c <= L'F') v |= (uint16_t)(c - L'A' + 10);
-        else break;
+        if (c >= L'0' && c <= L'9') {
+            v |= (uint16_t)(c - L'0');
+        } else if (c >= L'a' && c <= L'f') {
+            v |= (uint16_t)(c - L'a' + 10);
+        } else if (c >= L'A' && c <= L'F') {
+            v |= (uint16_t)(c - L'A' + 10);
+        } else {
+            break;
+        }
     }
     return v;
 }
@@ -6060,85 +3947,95 @@ static void win32_find_hid_output_interface(int slot, uint16_t vid, uint16_t pid
     void *dev_info = NULL;
     SP_DEVICE_INTERFACE_DATA idata;
     int idx;
- 
+
     printf("HID[%d]: win32_find_hid_output_interface VID=%04X PID=%04X\n", slot, vid, pid);
- 
+
     if (!p_SetupDiGetClassDevsW || !p_SetupDiEnumDeviceInterfaces ||
-        !p_SetupDiGetDeviceInterfaceDetailW || !p_SetupDiDestroyDeviceInfoList)
+        !p_SetupDiGetDeviceInterfaceDetailW || !p_SetupDiDestroyDeviceInfoList) {
         return;
- 
+    }
+
     dev_info = p_SetupDiGetClassDevsW(
-        (void*)&GUID_DEVINTERFACE_HID, NULL, NULL,
-        0x16 /* DIGCF_PRESENT | DIGCF_DEVICEINTERFACE */);
- 
-    if (!dev_info || dev_info == (void *)-1)
+        (void *)&GUID_DEVINTERFACE_HID, NULL, NULL, 0x16 /* DIGCF_PRESENT | DIGCF_DEVICEINTERFACE */);
+
+    if (!dev_info || dev_info == (void *)-1) {
         return;
- 
+    }
+
     idata.cbSize = sizeof(idata);
- 
+
     for (idx = 0; idx < 64; idx++) {
         DWORD detail_size = 0;
         PSP_DEVICE_INTERFACE_DETAIL_DATA_W detail = NULL;
         wchar_t *path = NULL;
         uint16_t d_vid = 0, d_pid = 0;
         HANDLE h = INVALID_HANDLE_VALUE;
- 
-        if (!p_SetupDiEnumDeviceInterfaces(dev_info, NULL,
-               (void*)&GUID_DEVINTERFACE_HID, idx, &idata))
+
+        if (!p_SetupDiEnumDeviceInterfaces(dev_info, NULL, (void *)&GUID_DEVINTERFACE_HID, idx, &idata)) {
             break;
- 
+        }
+
         p_SetupDiGetDeviceInterfaceDetailW(dev_info, &idata, NULL, 0, &detail_size, NULL);
-        if (detail_size == 0) continue;
- 
+        if (detail_size == 0) {
+            continue;
+        }
+
         detail = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalAlloc(LMEM_FIXED, detail_size);
-        if (!detail) continue;
- 
+        if (!detail) {
+            continue;
+        }
+
         detail->cbSize = sizeof(DWORD) + sizeof(WCHAR);
- 
-        if (!p_SetupDiGetDeviceInterfaceDetailW(dev_info, &idata,
-                detail, detail_size, NULL, NULL)) {
+
+        if (!p_SetupDiGetDeviceInterfaceDetailW(dev_info, &idata, detail, detail_size, NULL, NULL)) {
             printf("HID[%d]: idx=%d GetDeviceInterfaceDetailW failed err=%lu\n",
-                   slot, idx, (unsigned long)GetLastError());
+                   slot,
+                   idx,
+                   (unsigned long)GetLastError());
             LocalFree(detail);
             continue;
         }
- 
+
         path = detail->DevicePath;
- 
+
         /* Skip XInput devices – they are handled by xbox_devices[] */
         if (wcsstr(path, L"IG_") || wcsstr(path, L"ig_")) {
             LocalFree(detail);
             continue;
         }
- 
+
         /* Match by VID/PID */
         {
             const wchar_t *vp = wcsstr(path, L"VID_");
             const wchar_t *pp = wcsstr(path, L"PID_");
-            if (!vp) vp = wcsstr(path, L"vid_");
-            if (!pp) pp = wcsstr(path, L"pid_");
+            if (!vp) {
+                vp = wcsstr(path, L"vid_");
+            }
+            if (!pp) {
+                pp = wcsstr(path, L"pid_");
+            }
             if (vp) {
                 d_vid = win32_parse_hex4(vp + 4);
-            } 
+            }
             if (pp) {
                 d_pid = win32_parse_hex4(pp + 4);
             }
         }
- 
+
         if (d_vid != vid || d_pid != pid) {
             LocalFree(detail);
             continue;
         }
- 
+
         printf("HID[%d]: idx=%d VID=%04X PID=%04X path=%S\n", slot, idx, d_vid, d_pid, path);
- 
+
         h = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
- 
+
         if (h == INVALID_HANDLE_VALUE) {
             LocalFree(detail);
             continue;
         }
- 
+
         /* Only interested in interfaces that have output reports (vibration) */
         {
             PHIDP_PREPARSED_DATA ppd = NULL;
@@ -6146,7 +4043,7 @@ static void win32_find_hid_output_interface(int slot, uint16_t vid, uint16_t pid
                 HIDP_CAPS caps = {0};
                 if (p_HidP_GetCaps(ppd, &caps) == HIDP_STATUS_SUCCESS) {
                     printf("HID[%d]: idx=%d OutputReportByteLength=%d\n", slot, idx, caps.OutputReportByteLength);
- 
+
                     if (caps.OutputReportByteLength > 0 &&
                         !win32_gamepad_ctx.hid_state[slot].hid_handle) {
                         win32_gamepad_ctx.hid_state[slot].hid_handle = h;
@@ -6159,17 +4056,16 @@ static void win32_find_hid_output_interface(int slot, uint16_t vid, uint16_t pid
                 p_HidD_FreePreparsedData(ppd);
             }
         }
- 
+
         CloseHandle(h);
         LocalFree(detail);
     }
- 
+
     p_SetupDiDestroyDeviceInfoList(dev_info);
 }
 
 static sdl_controller_db_entry *sdl_find_controller(uint16_t vid, uint16_t pid);
-static int hid_connect(LPCWSTR path)
-{
+static int hid_connect(LPCWSTR path) {
     HANDLE h;
     PHIDP_PREPARSED_DATA ppd = NULL;
     HIDP_CAPS caps;
@@ -6177,59 +4073,72 @@ static int hid_connect(LPCWSTR path)
     int slot = -1;
     int i;
     win32_hid_controller *s;
- 
+
     /* XInput devices are owned by xbox_devices[] */
-    if (wcsstr(path, L"IG_") || wcsstr(path, L"ig_"))
+    if (wcsstr(path, L"IG_") || wcsstr(path, L"ig_")) {
         return -1;
- 
-    if (!p_HidD_GetPreparsedData || !p_HidP_GetCaps)
+    }
+
+    if (!p_HidD_GetPreparsedData || !p_HidP_GetCaps) {
         return -1;
- 
+    }
+
     /* Try read-write; fall back to read-only for access-restricted devices */
-    h = CreateFileW(path, GENERIC_READ | GENERIC_WRITE,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE)
-        h = CreateFileW(path, GENERIC_READ,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE)
+    h = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    }
+    if (h == INVALID_HANDLE_VALUE) {
         return -1;
- 
+    }
+
     /* Filter: must be a joystick or gamepad */
     if (!p_HidD_GetPreparsedData(h, &ppd) || !ppd) {
-        CloseHandle(h); return -1;
+        CloseHandle(h);
+        return -1;
     }
-    if (p_HidP_GetCaps(ppd, &caps) != HIDP_STATUS_SUCCESS      ||
-        caps.UsagePage != HID_USAGE_PAGE_GENERIC               ||
+    if (p_HidP_GetCaps(ppd, &caps) != HIDP_STATUS_SUCCESS ||
+        caps.UsagePage != HID_USAGE_PAGE_GENERIC ||
         (caps.Usage != HID_USAGE_GENERIC_JOYSTICK &&
          caps.Usage != HID_USAGE_GENERIC_GAMEPAD)) {
-        p_HidD_FreePreparsedData(ppd); CloseHandle(h); return -1;
+        p_HidD_FreePreparsedData(ppd);
+        CloseHandle(h);
+        return -1;
     }
- 
+
     /* Avoid duplicates: hid_init and win32_handle_hid may both see the device */
     for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.hid_connected[i] &&
             win32_gamepad_ctx.hid_state[i].input_handle == h) {
-            p_HidD_FreePreparsedData(ppd); CloseHandle(h);
+            p_HidD_FreePreparsedData(ppd);
+            CloseHandle(h);
             return i;
         }
     }
- 
+
     /* Find a free slot */
     for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
-        if (!win32_gamepad_ctx.hid_connected[i]) { slot = i; break; }
+        if (!win32_gamepad_ctx.hid_connected[i]) {
+            slot = i;
+            break;
+        }
     }
     if (slot < 0) {
-        p_HidD_FreePreparsedData(ppd); CloseHandle(h); return -1;
+        p_HidD_FreePreparsedData(ppd);
+        CloseHandle(h);
+        return -1;
     }
- 
+
     /* Extract VID / PID from the device path string */
     {
         const wchar_t *vs = wcsstr(path, L"VID_");
         const wchar_t *ps = wcsstr(path, L"PID_");
-        if (!vs) vs = wcsstr(path, L"vid_");
-        if (!ps) ps = wcsstr(path, L"pid_");
+        if (!vs) {
+            vs = wcsstr(path, L"vid_");
+        }
+        if (!ps) {
+            ps = wcsstr(path, L"pid_");
+        }
         if (vs) {
             vid = win32_parse_hex4(vs + 4);
         }
@@ -6237,61 +4146,68 @@ static int hid_connect(LPCWSTR path)
             pid = win32_parse_hex4(ps + 4);
         }
     }
- 
+
     s = &win32_gamepad_ctx.hid_state[slot];
-    s->vendor_id           = vid;
-    s->product_id          = pid;
-    s->preparsed_data      = ppd;
-    s->input_caps          = caps;
-    s->input_handle        = h;
+    s->vendor_id = vid;
+    s->product_id = pid;
+    s->preparsed_data = ppd;
+    s->input_caps = caps;
+    s->input_handle = h;
     s->input_report_length = caps.InputReportByteLength;
-    s->db_entry            = sdl_find_controller(vid, pid);
+    s->db_entry = sdl_find_controller(vid, pid);
     win32_gamepad_ctx.hid_connected[slot] = 1;
     /* hid_handles[slot] (RawInput handle) is filled by win32_handle_hid
        when the first report arrives from this device */
- 
+
     /* Collect button caps for SDL mapping */
     if (caps.NumberInputButtonCaps > 0 && p_HidP_GetButtonCaps) {
         USHORT bclen = caps.NumberInputButtonCaps;
         HIDP_BUTTON_CAPS *bc = (HIDP_BUTTON_CAPS *)malloc(bclen * sizeof(HIDP_BUTTON_CAPS));
         if (bc && p_HidP_GetButtonCaps(HidP_Input, bc, &bclen, ppd) == HIDP_STATUS_SUCCESS) {
-            s->input_button_caps     = bc;
+            s->input_button_caps = bc;
             s->input_button_caps_len = bclen;
-            s->button_usage_min      = bc[0].Range.UsageMin;
-        } else { free(bc); }
+            s->button_usage_min = bc[0].Range.UsageMin;
+        } else {
+            free(bc);
+        }
     }
- 
+
     /* Collect value caps for SDL mapping */
     if (caps.NumberInputValueCaps > 0 && p_HidP_GetValueCaps) {
         USHORT vclen = caps.NumberInputValueCaps;
         HIDP_VALUE_CAPS *vc = (HIDP_VALUE_CAPS *)malloc(vclen * sizeof(HIDP_VALUE_CAPS));
         if (vc && p_HidP_GetValueCaps(HidP_Input, vc, &vclen, ppd) == HIDP_STATUS_SUCCESS) {
-            s->input_value_caps     = vc;
+            s->input_value_caps = vc;
             s->input_value_caps_len = vclen;
-        } else { free(vc); }
+        } else {
+            free(vc);
+        }
     }
- 
+
     /* Open a separate handle for output reports (vibration) */
     win32_find_hid_output_interface(slot, vid, pid);
- 
+
     printf("[hid] connected slot=%d VID=%04X PID=%04X\n", slot, vid, pid);
     return slot;
 }
- 
+
 /*
  * hid_disconnect – free resources for the slot matching 'path' by VID/PID.
  * Returns slot index on success, -1 if not found.
  */
-static int hid_disconnect(LPCWSTR path)
-{
+static int hid_disconnect(LPCWSTR path) {
     uint16_t vid = 0, pid = 0;
     int i;
- 
+
     {
         const wchar_t *vs = wcsstr(path, L"VID_");
         const wchar_t *ps = wcsstr(path, L"PID_");
-        if (!vs) vs = wcsstr(path, L"vid_");
-        if (!ps) ps = wcsstr(path, L"pid_");
+        if (!vs) {
+            vs = wcsstr(path, L"vid_");
+        }
+        if (!ps) {
+            ps = wcsstr(path, L"pid_");
+        }
         if (vs) {
             vid = win32_parse_hex4(vs + 4);
         }
@@ -6299,68 +4215,94 @@ static int hid_disconnect(LPCWSTR path)
             pid = win32_parse_hex4(ps + 4);
         }
     }
- 
+
     for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
         win32_hid_controller *s = &win32_gamepad_ctx.hid_state[i];
-        if (!win32_gamepad_ctx.hid_connected[i])  continue;
-        if (s->vendor_id != vid || s->product_id != pid) continue;
- 
-        if (s->input_button_caps) { free(s->input_button_caps);           s->input_button_caps = NULL; }
-        if (s->input_value_caps)  { free(s->input_value_caps);            s->input_value_caps  = NULL; }
-        if (s->preparsed_data)    { p_HidD_FreePreparsedData(s->preparsed_data); s->preparsed_data = NULL; }
-        if (s->input_handle)      { CloseHandle(s->input_handle);         s->input_handle  = NULL; }
-        if (s->hid_handle)        { CloseHandle(s->hid_handle);           s->hid_handle    = NULL; }
+        if (!win32_gamepad_ctx.hid_connected[i]) {
+            continue;
+        }
+        if (s->vendor_id != vid || s->product_id != pid) {
+            continue;
+        }
+
+        if (s->input_button_caps) {
+            free(s->input_button_caps);
+            s->input_button_caps = NULL;
+        }
+        if (s->input_value_caps) {
+            free(s->input_value_caps);
+            s->input_value_caps = NULL;
+        }
+        if (s->preparsed_data) {
+            p_HidD_FreePreparsedData(s->preparsed_data);
+            s->preparsed_data = NULL;
+        }
+        if (s->input_handle) {
+            CloseHandle(s->input_handle);
+            s->input_handle = NULL;
+        }
+        if (s->hid_handle) {
+            CloseHandle(s->hid_handle);
+            s->hid_handle = NULL;
+        }
         win32_gamepad_ctx.hid_connected[i] = 0;
-        win32_gamepad_ctx.hid_handles[i]   = NULL;
+        win32_gamepad_ctx.hid_handles[i] = NULL;
         printf("[hid] disconnected slot=%d VID=%04X PID=%04X\n", i, vid, pid);
         return i;
     }
     return -1;
 }
- 
+
 /*
  * hid_init – enumerate all present HID gamepad/joystick interfaces at startup.
  * hid_connect() filters out non-gamepads, XInput devices, etc.
  */
-static void hid_init(void)
-{
+static void hid_init(void) {
     HDEVINFO dev;
     SP_DEVICE_INTERFACE_DATA idata;
     DWORD index;
- 
+
     if (!p_SetupDiGetClassDevsW || !p_SetupDiEnumDeviceInterfaces ||
-        !p_SetupDiGetDeviceInterfaceDetailW || !p_SetupDiDestroyDeviceInfoList)
+        !p_SetupDiGetDeviceInterfaceDetailW || !p_SetupDiDestroyDeviceInfoList) {
         return;
- 
-    dev = p_SetupDiGetClassDevsW((void*)&GUID_DEVINTERFACE_HID, NULL, NULL,
-                                 0x16 /* DIGCF_PRESENT | DIGCF_DEVICEINTERFACE */);
-    if (dev == INVALID_HANDLE_VALUE) return;
- 
+    }
+
+    dev = p_SetupDiGetClassDevsW((void *)&GUID_DEVINTERFACE_HID, NULL, NULL, 0x16 /* DIGCF_PRESENT | DIGCF_DEVICEINTERFACE */);
+    if (dev == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
     idata.cbSize = sizeof(idata);
- 
-    for (index = 0; ; index++) {
+
+    for (index = 0;; index++) {
         DWORD size = 0;
         PSP_DEVICE_INTERFACE_DETAIL_DATA_W detail;
         SP_DEVINFO_DATA ddata;
- 
-        if (!p_SetupDiEnumDeviceInterfaces(dev, NULL, (void*)&GUID_DEVINTERFACE_HID, index, &idata))
+
+        if (!p_SetupDiEnumDeviceInterfaces(dev, NULL, (void *)&GUID_DEVINTERFACE_HID, index, &idata)) {
             break;
- 
+        }
+
         p_SetupDiGetDeviceInterfaceDetailW(dev, &idata, NULL, 0, &size, NULL);
-        if (size == 0) continue;
- 
+        if (size == 0) {
+            continue;
+        }
+
         detail = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalAlloc(LMEM_FIXED, size);
-        if (!detail) continue;
- 
+        if (!detail) {
+            continue;
+        }
+
         detail->cbSize = sizeof(*detail);
-        ddata.cbSize   = sizeof(ddata);
- 
-        if (p_SetupDiGetDeviceInterfaceDetailW(dev, &idata, detail, size, &size, &ddata))
+        ddata.cbSize = sizeof(ddata);
+
+        if (p_SetupDiGetDeviceInterfaceDetailW(dev, &idata, detail, size, &size, &ddata)) {
             hid_connect(detail->DevicePath);
- 
+        }
+
         LocalFree(detail);
     }
- 
+
     p_SetupDiDestroyDeviceInfoList(dev);
 }
 /*
@@ -6373,34 +4315,38 @@ static void hid_init(void)
 PALAPI int pal_get_gamepad_count(void) {
     int n = xbox_count();
     int i;
-    for (i = 0; i < MAX_HID_CONTROLLERS; i++)
-        if (win32_gamepad_ctx.hid_connected[i]) n++;
+    for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
+        if (win32_gamepad_ctx.hid_connected[i]) {
+            n++;
+        }
+    }
     return n;
 }
- 
+
 static void sdl_apply_mapping(sdl_controller_db_entry *entry, PHIDP_PREPARSED_DATA ppd, USAGE button_usage_min, const BYTE *report, UINT report_len, pal_gamepad_state *out);
 static void sdl_apply_generic_mapping(const BYTE *report, UINT report_size, pal_gamepad_state *out);
 
 PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
     int xcount = xbox_count();
     pal_memset(out_state, 0, sizeof(pal_gamepad_state));
- 
+
     /* ---- XInput path ---- */
     if (index >= 0 && index < xcount) {
         xbox_state xs;
         float lx, ly, rx, ry, lm, rm, norm;
-        WORD  buttons;
-        int   phys = xbox_nth(index);
- 
-        if (phys < 0 || xusb_get((DWORD)phys, &xs) != 0)
+        WORD buttons;
+        int phys = xbox_nth(index);
+
+        if (phys < 0 || xusb_get((DWORD)phys, &xs) != 0) {
             return pal_false;
- 
+        }
+
         lx = (float)xs.left_thumb_x;
         ly = (float)xs.left_thumb_y;
         rx = (float)xs.right_thumb_x;
         ry = (float)xs.right_thumb_y;
- 
-        lm = sqrtf(lx*lx + ly*ly);
+
+        lm = sqrtf(lx * lx + ly * ly);
         if (lm < XBOX_LEFT_THUMB_DEADZONE) {
             lx = ly = 0.0f;
         } else {
@@ -6409,8 +4355,8 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
             lx = (lx / lm) * norm;
             ly = (ly / lm) * norm;
         }
- 
-        rm = sqrtf(rx*rx + ry*ry);
+
+        rm = sqrtf(rx * rx + ry * ry);
         if (rm < XBOX_RIGHT_THUMB_DEADZONE) {
             rx = ry = 0.0f;
         } else {
@@ -6419,83 +4365,80 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
             rx = (rx / rm) * norm;
             ry = (ry / rm) * norm;
         }
- 
-        out_state->axes.left_x  = fmaxf(-1.0f, fminf(1.0f, lx));
-        out_state->axes.left_y  = fmaxf(-1.0f, fminf(1.0f, ly));
+
+        out_state->axes.left_x = fmaxf(-1.0f, fminf(1.0f, lx));
+        out_state->axes.left_y = fmaxf(-1.0f, fminf(1.0f, ly));
         out_state->axes.right_x = fmaxf(-1.0f, fminf(1.0f, rx));
         out_state->axes.right_y = fmaxf(-1.0f, fminf(1.0f, ry));
- 
-        out_state->axes.left_trigger  =
-            xs.left_trigger  < XBOX_TRIGGER_THRESHOLD ? 0.0f :
-            xs.left_trigger  / 255.0f;
+
+        out_state->axes.left_trigger =
+            xs.left_trigger < XBOX_TRIGGER_THRESHOLD ? 0.0f : xs.left_trigger / 255.0f;
         out_state->axes.right_trigger =
-            xs.right_trigger < XBOX_TRIGGER_THRESHOLD ? 0.0f :
-            xs.right_trigger / 255.0f;
- 
+            xs.right_trigger < XBOX_TRIGGER_THRESHOLD ? 0.0f : xs.right_trigger / 255.0f;
+
         buttons = xs.buttons;
-        out_state->buttons.a              = (buttons & XBOX_A)              != 0;
-        out_state->buttons.b              = (buttons & XBOX_B)              != 0;
-        out_state->buttons.x              = (buttons & XBOX_X)              != 0;
-        out_state->buttons.y              = (buttons & XBOX_Y)              != 0;
-        out_state->buttons.back           = (buttons & XBOX_BACK)           != 0;
-        out_state->buttons.start          = (buttons & XBOX_START)          != 0;
-        out_state->buttons.guide          = (buttons & XBOX_GUIDE)          != 0;
-        out_state->buttons.left_stick     = (buttons & XBOX_LEFT_THUMB)     != 0;
-        out_state->buttons.right_stick    = (buttons & XBOX_RIGHT_THUMB)    != 0;
-        out_state->buttons.left_shoulder  = (buttons & XBOX_LEFT_SHOULDER)  != 0;
+        out_state->buttons.a = (buttons & XBOX_A) != 0;
+        out_state->buttons.b = (buttons & XBOX_B) != 0;
+        out_state->buttons.x = (buttons & XBOX_X) != 0;
+        out_state->buttons.y = (buttons & XBOX_Y) != 0;
+        out_state->buttons.back = (buttons & XBOX_BACK) != 0;
+        out_state->buttons.start = (buttons & XBOX_START) != 0;
+        out_state->buttons.guide = (buttons & XBOX_GUIDE) != 0;
+        out_state->buttons.left_stick = (buttons & XBOX_LEFT_THUMB) != 0;
+        out_state->buttons.right_stick = (buttons & XBOX_RIGHT_THUMB) != 0;
+        out_state->buttons.left_shoulder = (buttons & XBOX_LEFT_SHOULDER) != 0;
         out_state->buttons.right_shoulder = (buttons & XBOX_RIGHT_SHOULDER) != 0;
-        out_state->buttons.dpad_up        = (buttons & XBOX_DPAD_UP)        != 0;
-        out_state->buttons.dpad_down      = (buttons & XBOX_DPAD_DOWN)      != 0;
-        out_state->buttons.dpad_left      = (buttons & XBOX_DPAD_LEFT)      != 0;
-        out_state->buttons.dpad_right     = (buttons & XBOX_DPAD_RIGHT)     != 0;
- 
+        out_state->buttons.dpad_up = (buttons & XBOX_DPAD_UP) != 0;
+        out_state->buttons.dpad_down = (buttons & XBOX_DPAD_DOWN) != 0;
+        out_state->buttons.dpad_left = (buttons & XBOX_DPAD_LEFT) != 0;
+        out_state->buttons.dpad_right = (buttons & XBOX_DPAD_RIGHT) != 0;
+
         pal_strncpy(out_state->name, "Xbox Controller", sizeof(out_state->name) - 1);
         out_state->name[sizeof(out_state->name) - 1] = '\0';
-        out_state->vendor_id  = XUSB_CONTROLLER_VID;
+        out_state->vendor_id = XUSB_CONTROLLER_VID;
         out_state->product_id = XUSB_CONTROLLER_PID_360;
-        out_state->connected  = pal_true;
-        out_state->is_xinput  = pal_true;
+        out_state->connected = pal_true;
+        out_state->is_xinput = pal_true;
         return pal_true;
     }
- 
+
     /* ---- Generic HID path ---- */
     {
         int hi = index - xcount;
         win32_hid_controller *s;
- 
-        if (hi < 0 || hi >= MAX_HID_CONTROLLERS)           return pal_false;
-        if (!win32_gamepad_ctx.hid_connected[hi])           return pal_false;
- 
+
+        if (hi < 0 || hi >= MAX_HID_CONTROLLERS) {
+            return pal_false;
+        }
+        if (!win32_gamepad_ctx.hid_connected[hi]) {
+            return pal_false;
+        }
+
         s = &win32_gamepad_ctx.hid_state[hi];
- 
+
         if (s->db_entry) {
-            sdl_apply_mapping(s->db_entry, s->preparsed_data,
-                              s->button_usage_min,
-                              s->raw_report, s->raw_report_size, out_state);
-            pal_strncpy(out_state->name, s->db_entry->name,
-                        sizeof(out_state->name) - 1);
+            sdl_apply_mapping(s->db_entry, s->preparsed_data, s->button_usage_min, s->raw_report, s->raw_report_size, out_state);
+            pal_strncpy(out_state->name, s->db_entry->name, sizeof(out_state->name) - 1);
         } else {
             sdl_apply_generic_mapping(s->raw_report, s->raw_report_size, out_state);
-            pal_strncpy(out_state->name, "Generic HID Controller",
-                        sizeof(out_state->name) - 1);
+            pal_strncpy(out_state->name, "Generic HID Controller", sizeof(out_state->name) - 1);
         }
         out_state->name[sizeof(out_state->name) - 1] = '\0';
-        out_state->vendor_id  = s->vendor_id;
+        out_state->vendor_id = s->vendor_id;
         out_state->product_id = s->product_id;
-        out_state->connected  = pal_true;
-        out_state->is_xinput  = pal_false;
+        out_state->connected = pal_true;
+        out_state->is_xinput = pal_false;
         return pal_true;
     }
 }
- 
 
- PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor,  float right_motor, float left_trigger, float right_trigger) {
+PALAPI void pal_set_gamepad_vibration(int controller_id, float left_motor, float right_motor, float left_trigger, float right_trigger) {
     int xcount = xbox_count();
     int gcount = win32_gamepad_ctx.gip_count;
 
-    left_motor    = fmaxf(0.0f, fminf(1.0f, left_motor));
-    right_motor   = fmaxf(0.0f, fminf(1.0f, right_motor));
-    left_trigger  = fmaxf(0.0f, fminf(1.0f, left_trigger));
+    left_motor = fmaxf(0.0f, fminf(1.0f, left_motor));
+    right_motor = fmaxf(0.0f, fminf(1.0f, right_motor));
+    left_trigger = fmaxf(0.0f, fminf(1.0f, left_trigger));
     right_trigger = fmaxf(0.0f, fminf(1.0f, right_trigger));
 
     /* ---- XUSB path (no trigger motors via this IOCTL) ---- */
@@ -6504,7 +4447,7 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
         if (phys >= 0) {
             (void)left_trigger;
             (void)right_trigger;
-            xusb_set((DWORD)phys, (BYTE)(left_motor  * 255.0f), (BYTE)(right_motor * 255.0f));
+            xusb_set((DWORD)phys, (BYTE)(left_motor * 255.0f), (BYTE)(right_motor * 255.0f));
         }
         return;
     }
@@ -6524,8 +4467,12 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
         int hi = controller_id - xcount - gcount;
         win32_hid_controller *s;
 
-        if (hi < 0 || hi >= MAX_HID_CONTROLLERS)  return;
-        if (!win32_gamepad_ctx.hid_connected[hi])  return;
+        if (hi < 0 || hi >= MAX_HID_CONTROLLERS) {
+            return;
+        }
+        if (!win32_gamepad_ctx.hid_connected[hi]) {
+            return;
+        }
 
         s = &win32_gamepad_ctx.hid_state[hi];
         if (s->hid_handle && s->vib_report_length > 0) {
@@ -6533,7 +4480,7 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
             if (report) {
                 pal_memset(report, 0, s->vib_report_length);
                 report[0] = s->vib_report_id;
-                report[3] = (BYTE)(left_motor  * 255.0f);
+                report[3] = (BYTE)(left_motor * 255.0f);
                 report[4] = (BYTE)(right_motor * 255.0f);
                 p_HidD_SetOutputReport(s->hid_handle, report, s->vib_report_length);
                 free(report);
@@ -6545,7 +4492,7 @@ PALAPI pal_bool pal_get_gamepad_state(int index, pal_gamepad_state *out_state) {
 PALAPI void pal_stop_gamepad_vibration(int controller_id) {
     pal_set_gamepad_vibration(controller_id, 0.0f, 0.0f, 0.0f, 0.0f);
 }
- 
+
 static pal_bool sdl_load_controller_db(const char *path);
 
 static int win32_init_gamepads(void) {
@@ -6553,25 +4500,25 @@ static int win32_init_gamepads(void) {
 
     g_hid_dll = LoadLibraryW(L"hid.dll");
     if (g_hid_dll) {
-        p_HidD_SetOutputReport   = (void *)GetProcAddress(g_hid_dll, "HidD_SetOutputReport");
-        p_HidD_GetFeature        = (void *)GetProcAddress(g_hid_dll, "HidD_GetFeature");
-        p_HidD_SetFeature        = (void *)GetProcAddress(g_hid_dll, "HidD_SetFeature");
-        p_HidD_GetPreparsedData  = (void *)GetProcAddress(g_hid_dll, "HidD_GetPreparsedData");
+        p_HidD_SetOutputReport = (void *)GetProcAddress(g_hid_dll, "HidD_SetOutputReport");
+        p_HidD_GetFeature = (void *)GetProcAddress(g_hid_dll, "HidD_GetFeature");
+        p_HidD_SetFeature = (void *)GetProcAddress(g_hid_dll, "HidD_SetFeature");
+        p_HidD_GetPreparsedData = (void *)GetProcAddress(g_hid_dll, "HidD_GetPreparsedData");
         p_HidD_FreePreparsedData = (void *)GetProcAddress(g_hid_dll, "HidD_FreePreparsedData");
-        p_HidP_GetCaps           = (void *)GetProcAddress(g_hid_dll, "HidP_GetCaps");
-        p_HidP_GetValueCaps      = (void *)GetProcAddress(g_hid_dll, "HidP_GetValueCaps");
-        p_HidP_GetButtonCaps     = (void *)GetProcAddress(g_hid_dll, "HidP_GetButtonCaps");
-        p_HidP_GetUsages         = (void *)GetProcAddress(g_hid_dll, "HidP_GetUsages");
-        p_HidP_GetUsageValue     = (void *)GetProcAddress(g_hid_dll, "HidP_GetUsageValue");
-        p_HidD_GetInputReport    = (void *)GetProcAddress(g_hid_dll, "HidD_GetInputReport");
+        p_HidP_GetCaps = (void *)GetProcAddress(g_hid_dll, "HidP_GetCaps");
+        p_HidP_GetValueCaps = (void *)GetProcAddress(g_hid_dll, "HidP_GetValueCaps");
+        p_HidP_GetButtonCaps = (void *)GetProcAddress(g_hid_dll, "HidP_GetButtonCaps");
+        p_HidP_GetUsages = (void *)GetProcAddress(g_hid_dll, "HidP_GetUsages");
+        p_HidP_GetUsageValue = (void *)GetProcAddress(g_hid_dll, "HidP_GetUsageValue");
+        p_HidD_GetInputReport = (void *)GetProcAddress(g_hid_dll, "HidD_GetInputReport");
     }
 
     g_setupapi_dll = LoadLibraryW(L"setupapi.dll");
     if (g_setupapi_dll) {
-        p_SetupDiGetClassDevsW             = (void *)GetProcAddress(g_setupapi_dll, "SetupDiGetClassDevsW");
-        p_SetupDiEnumDeviceInterfaces      = (void *)GetProcAddress(g_setupapi_dll, "SetupDiEnumDeviceInterfaces");
+        p_SetupDiGetClassDevsW = (void *)GetProcAddress(g_setupapi_dll, "SetupDiGetClassDevsW");
+        p_SetupDiEnumDeviceInterfaces = (void *)GetProcAddress(g_setupapi_dll, "SetupDiEnumDeviceInterfaces");
         p_SetupDiGetDeviceInterfaceDetailW = (void *)GetProcAddress(g_setupapi_dll, "SetupDiGetDeviceInterfaceDetailW");
-        p_SetupDiDestroyDeviceInfoList     = (void *)GetProcAddress(g_setupapi_dll, "SetupDiDestroyDeviceInfoList");
+        p_SetupDiDestroyDeviceInfoList = (void *)GetProcAddress(g_setupapi_dll, "SetupDiDestroyDeviceInfoList");
     }
 
     sdl_load_controller_db("gamecontrollerdb.txt");
@@ -6583,24 +4530,39 @@ static int win32_init_gamepads(void) {
 
 static void win32_shutdown_gamepads(void) {
     int i;
- 
+
     for (i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
         if (win32_gamepad_ctx.xbox_devices[i].handle) {
             CloseHandle(win32_gamepad_ctx.xbox_devices[i].handle);
-            win32_gamepad_ctx.xbox_devices[i].handle  = NULL;
+            win32_gamepad_ctx.xbox_devices[i].handle = NULL;
             win32_gamepad_ctx.xbox_devices[i].path[0] = L'\0';
         }
     }
- 
+
     for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
         win32_hid_controller *s = &win32_gamepad_ctx.hid_state[i];
-        if (s->input_button_caps) { free(s->input_button_caps);           s->input_button_caps = NULL; }
-        if (s->input_value_caps)  { free(s->input_value_caps);            s->input_value_caps  = NULL; }
-        if (s->preparsed_data)    { p_HidD_FreePreparsedData(s->preparsed_data); s->preparsed_data = NULL; }
-        if (s->input_handle)      { CloseHandle(s->input_handle);         s->input_handle  = NULL; }
-        if (s->hid_handle)        { CloseHandle(s->hid_handle);           s->hid_handle    = NULL; }
+        if (s->input_button_caps) {
+            free(s->input_button_caps);
+            s->input_button_caps = NULL;
+        }
+        if (s->input_value_caps) {
+            free(s->input_value_caps);
+            s->input_value_caps = NULL;
+        }
+        if (s->preparsed_data) {
+            p_HidD_FreePreparsedData(s->preparsed_data);
+            s->preparsed_data = NULL;
+        }
+        if (s->input_handle) {
+            CloseHandle(s->input_handle);
+            s->input_handle = NULL;
+        }
+        if (s->hid_handle) {
+            CloseHandle(s->hid_handle);
+            s->hid_handle = NULL;
+        }
         win32_gamepad_ctx.hid_connected[i] = 0;
-        win32_gamepad_ctx.hid_handles[i]   = NULL;
+        win32_gamepad_ctx.hid_handles[i] = NULL;
     }
 }
 
@@ -7043,10 +5005,7 @@ void win32_handle_mouse(const RAWINPUT *raw) {
 }
 
 static void win32_make_sdl_controller_guid(uint16_t vid, uint16_t pid, char *out, size_t out_size) {
-    snprintf(out, out_size,
-        "03000000%02x%02x0000%02x%02x000000000000",
-        (vid & 0xFF), (vid >> 8),
-        (pid & 0xFF), (pid >> 8));
+    snprintf(out, out_size, "03000000%02x%02x0000%02x%02x000000000000", (vid & 0xFF), (vid >> 8), (pid & 0xFF), (pid >> 8));
 }
 
 static sdl_controller_db_entry *sdl_find_controller(uint16_t vid, uint16_t pid) {
@@ -7066,17 +5025,18 @@ static sdl_controller_db_entry *sdl_find_controller(uint16_t vid, uint16_t pid) 
 }
 
 static void sdl_parse_input_source(const char *token, sdl_input_source *out) {
-    out->type         = SDL_MAPPING_TYPE_BUTTON;
-    out->index        = 0;
-    out->hat_mask     = 0;
-    out->axis_negate  = 0;
+    out->type = SDL_MAPPING_TYPE_BUTTON;
+    out->index = 0;
+    out->hat_mask = 0;
+    out->axis_negate = 0;
     out->is_half_axis = 0;
 
-    if (!token || !*token)
+    if (!token || !*token) {
         return;
+    }
 
     if (*token == 'b') {
-        out->type  = SDL_MAPPING_TYPE_BUTTON;
+        out->type = SDL_MAPPING_TYPE_BUTTON;
         out->index = atoi(token + 1);
     } else if (*token == 'a') {
         out->type = SDL_MAPPING_TYPE_AXIS;
@@ -7091,74 +5051,98 @@ static void sdl_parse_input_source(const char *token, sdl_input_source *out) {
         }
     } else if (*token == 'h') {
         /* h12.4 = hat at byte index 12, mask 4 */
-        out->type  = SDL_MAPPING_TYPE_HAT;
+        out->type = SDL_MAPPING_TYPE_HAT;
         out->index = atoi(token + 1);
         const char *dot = token;
-        while (*dot && *dot != '.') dot++;
-        if (*dot == '.') out->hat_mask = atoi(dot + 1);
+        while (*dot && *dot != '.') {
+            dot++;
+        }
+        if (*dot == '.') {
+            out->hat_mask = atoi(dot + 1);
+        }
     }
 }
 
 #define HID_BUTTON_BYTE_OFFSET 8
 
-static const USAGE sdl_axis_usages[6] = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35 };
+static const USAGE sdl_axis_usages[6] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35};
 
 typedef struct {
     PHIDP_PREPARSED_DATA ppd;
-    const BYTE          *report;
-    ULONG                report_len;
-    USAGE                button_usage_min;
+    const BYTE *report;
+    ULONG report_len;
+    USAGE button_usage_min;
 } hid_read_ctx;
 
 static pal_bool sdl_read_hid_button(const sdl_input_source *src, const hid_read_ctx *ctx) {
-    if (!ctx->ppd) return pal_false;
+    if (!ctx->ppd) {
+        return pal_false;
+    }
 
     if (src->type == SDL_MAPPING_TYPE_BUTTON) {
         USAGE usage_list[128];
         ULONG usage_len = 128;
         USAGE target = (USAGE)(ctx->button_usage_min + src->index);
         ULONG i;
-        if (p_HidP_GetUsages(HidP_Input, 0x09 /* Button */, 0,
-                             usage_list, &usage_len,
-                             ctx->ppd,
-                             (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS)
+        if (p_HidP_GetUsages(HidP_Input, 0x09 /* Button */, 0, usage_list, &usage_len, ctx->ppd, (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS) {
             return pal_false;
-        for (i = 0; i < usage_len; i++)
-            if (usage_list[i] == target) return pal_true;
+        }
+        for (i = 0; i < usage_len; i++) {
+            if (usage_list[i] == target) {
+                return pal_true;
+            }
+        }
         return pal_false;
     }
 
     if (src->type == SDL_MAPPING_TYPE_HAT) {
         ULONG val = 0;
-        if (p_HidP_GetUsageValue(HidP_Input, 0x01 /* Generic Desktop */, 0,
-                                 0x39 /* Hat Switch */, &val,
-                                 ctx->ppd,
-                                 (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS)
+        if (p_HidP_GetUsageValue(HidP_Input, 0x01 /* Generic Desktop */, 0, 0x39 /* Hat Switch */, &val, ctx->ppd, (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS) {
             return pal_false;
+        }
         /* HID hat: 1=N, 2=NE, ..., 8=NW, 0 or 15=centered */
         int hat = (val == 0 || val == 15) ? 8 : (int)(val - 1);
         int active_mask = 0;
         switch (hat) {
-            case 0: active_mask = 1;   break; /* N  */
-            case 1: active_mask = 1|2; break; /* NE */
-            case 2: active_mask = 2;   break; /* E  */
-            case 3: active_mask = 4|2; break; /* SE */
-            case 4: active_mask = 4;   break; /* S  */
-            case 5: active_mask = 4|8; break; /* SW */
-            case 6: active_mask = 8;   break; /* W  */
-            case 7: active_mask = 1|8; break; /* NW */
-            default: active_mask = 0;  break; /* centered */
+            case 0:
+                active_mask = 1;
+                break; /* N  */
+            case 1:
+                active_mask = 1 | 2;
+                break; /* NE */
+            case 2:
+                active_mask = 2;
+                break; /* E  */
+            case 3:
+                active_mask = 4 | 2;
+                break; /* SE */
+            case 4:
+                active_mask = 4;
+                break; /* S  */
+            case 5:
+                active_mask = 4 | 8;
+                break; /* SW */
+            case 6:
+                active_mask = 8;
+                break; /* W  */
+            case 7:
+                active_mask = 1 | 8;
+                break; /* NW */
+            default:
+                active_mask = 0;
+                break; /* centered */
         }
         return (active_mask & src->hat_mask) ? pal_true : pal_false;
     }
 
     if (src->type == SDL_MAPPING_TYPE_AXIS) {
         ULONG val = 0;
-        if (src->index >= 6) return pal_false;
-        if (p_HidP_GetUsageValue(HidP_Input, 0x01, 0, sdl_axis_usages[src->index], &val,
-                                 ctx->ppd,
-                                 (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS)
+        if (src->index >= 6) {
             return pal_false;
+        }
+        if (p_HidP_GetUsageValue(HidP_Input, 0x01, 0, sdl_axis_usages[src->index], &val, ctx->ppd, (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS) {
+            return pal_false;
+        }
         int sval = (int)(LONG)(val - 0x80);
         return (src->axis_negate ? sval < -64 : sval > 64) ? pal_true : pal_false;
     }
@@ -7167,21 +5151,26 @@ static pal_bool sdl_read_hid_button(const sdl_input_source *src, const hid_read_
 }
 
 static float sdl_read_hid_axis(const sdl_input_source *src, const hid_read_ctx *ctx) {
-    if (!ctx->ppd) return 0.0f;
+    if (!ctx->ppd) {
+        return 0.0f;
+    }
 
     if (src->type == SDL_MAPPING_TYPE_AXIS) {
         ULONG val = 0;
-        if (src->index >= 6) return 0.0f;
-        if (p_HidP_GetUsageValue(HidP_Input, 0x01, 0, sdl_axis_usages[src->index], &val,
-                                 ctx->ppd,
-                                 (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS)
+        if (src->index >= 6) {
             return 0.0f;
+        }
+        if (p_HidP_GetUsageValue(HidP_Input, 0x01, 0, sdl_axis_usages[src->index], &val, ctx->ppd, (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS) {
+            return 0.0f;
+        }
         if (src->is_half_axis) {
             float f = (float)val / 255.0f;
             return fmaxf(0.0f, fminf(1.0f, f));
         }
         float f = ((float)(int)(val - 0x80)) / 128.0f;
-        if (src->axis_negate) f = -f;
+        if (src->axis_negate) {
+            f = -f;
+        }
         return fmaxf(-1.0f, fminf(1.0f, f));
     }
 
@@ -7190,13 +5179,14 @@ static float sdl_read_hid_axis(const sdl_input_source *src, const hid_read_ctx *
         ULONG usage_len = 128;
         USAGE target = (USAGE)(ctx->button_usage_min + src->index);
         ULONG i;
-        if (p_HidP_GetUsages(HidP_Input, 0x09, 0,
-                             usage_list, &usage_len,
-                             ctx->ppd,
-                             (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS)
+        if (p_HidP_GetUsages(HidP_Input, 0x09, 0, usage_list, &usage_len, ctx->ppd, (PCHAR)ctx->report, ctx->report_len) != HIDP_STATUS_SUCCESS) {
             return 0.0f;
-        for (i = 0; i < usage_len; i++)
-            if (usage_list[i] == target) return 1.0f;
+        }
+        for (i = 0; i < usage_len; i++) {
+            if (usage_list[i] == target) {
+                return 1.0f;
+            }
+        }
         return 0.0f;
     }
 
@@ -7206,47 +5196,45 @@ static float sdl_read_hid_axis(const sdl_input_source *src, const hid_read_ctx *
 static void sdl_apply_mapping(sdl_controller_db_entry *entry, PHIDP_PREPARSED_DATA ppd, USAGE button_usage_min, const BYTE *report, UINT report_len, pal_gamepad_state *out) {
     sdl_controller_mapping *m = &entry->mapping;
     hid_read_ctx ctx;
-    ctx.ppd              = ppd;
-    ctx.report           = report;
-    ctx.report_len       = (ULONG)report_len;
+    ctx.ppd = ppd;
+    ctx.report = report;
+    ctx.report_len = (ULONG)report_len;
     ctx.button_usage_min = button_usage_min;
 
-    out->buttons.a              = sdl_read_hid_button(&m->a,              &ctx);
-    out->buttons.b              = sdl_read_hid_button(&m->b,              &ctx);
-    out->buttons.x              = sdl_read_hid_button(&m->x,              &ctx);
-    out->buttons.y              = sdl_read_hid_button(&m->y,              &ctx);
-    out->buttons.back           = sdl_read_hid_button(&m->back,           &ctx);
-    out->buttons.start          = sdl_read_hid_button(&m->start,          &ctx);
-    out->buttons.guide          = sdl_read_hid_button(&m->guide,          &ctx);
-    out->buttons.left_stick     = sdl_read_hid_button(&m->left_stick,     &ctx);
-    out->buttons.right_stick    = sdl_read_hid_button(&m->right_stick,    &ctx);
-    out->buttons.left_shoulder  = sdl_read_hid_button(&m->left_shoulder,  &ctx);
+    out->buttons.a = sdl_read_hid_button(&m->a, &ctx);
+    out->buttons.b = sdl_read_hid_button(&m->b, &ctx);
+    out->buttons.x = sdl_read_hid_button(&m->x, &ctx);
+    out->buttons.y = sdl_read_hid_button(&m->y, &ctx);
+    out->buttons.back = sdl_read_hid_button(&m->back, &ctx);
+    out->buttons.start = sdl_read_hid_button(&m->start, &ctx);
+    out->buttons.guide = sdl_read_hid_button(&m->guide, &ctx);
+    out->buttons.left_stick = sdl_read_hid_button(&m->left_stick, &ctx);
+    out->buttons.right_stick = sdl_read_hid_button(&m->right_stick, &ctx);
+    out->buttons.left_shoulder = sdl_read_hid_button(&m->left_shoulder, &ctx);
     out->buttons.right_shoulder = sdl_read_hid_button(&m->right_shoulder, &ctx);
-    out->buttons.dpad_up        = sdl_read_hid_button(&m->dpad_up,        &ctx);
-    out->buttons.dpad_down      = sdl_read_hid_button(&m->dpad_down,      &ctx);
-    out->buttons.dpad_left      = sdl_read_hid_button(&m->dpad_left,      &ctx);
-    out->buttons.dpad_right     = sdl_read_hid_button(&m->dpad_right,     &ctx);
+    out->buttons.dpad_up = sdl_read_hid_button(&m->dpad_up, &ctx);
+    out->buttons.dpad_down = sdl_read_hid_button(&m->dpad_down, &ctx);
+    out->buttons.dpad_left = sdl_read_hid_button(&m->dpad_left, &ctx);
+    out->buttons.dpad_right = sdl_read_hid_button(&m->dpad_right, &ctx);
 
-    out->axes.left_x  = sdl_read_hid_axis(&m->left_x,  &ctx);
-    out->axes.left_y  = sdl_read_hid_axis(&m->left_y,  &ctx);
+    out->axes.left_x = sdl_read_hid_axis(&m->left_x, &ctx);
+    out->axes.left_y = sdl_read_hid_axis(&m->left_y, &ctx);
     out->axes.right_x = sdl_read_hid_axis(&m->right_x, &ctx);
     out->axes.right_y = sdl_read_hid_axis(&m->right_y, &ctx);
 
     /* Triggers: detect shared axis (same SDL index for both) */
-    if (m->left_trigger.type  == SDL_MAPPING_TYPE_AXIS &&
+    if (m->left_trigger.type == SDL_MAPPING_TYPE_AXIS &&
         m->right_trigger.type == SDL_MAPPING_TYPE_AXIS &&
         m->left_trigger.index == m->right_trigger.index) {
         ULONG val = 0;
         int idx = m->left_trigger.index;
-        if (idx < 6 && p_HidP_GetUsageValue(HidP_Input, 0x01, 0, sdl_axis_usages[idx], &val,
-                                             ppd, (PCHAR)report, (ULONG)report_len)
-                       == HIDP_STATUS_SUCCESS) {
+        if (idx < 6 && p_HidP_GetUsageValue(HidP_Input, 0x01, 0, sdl_axis_usages[idx], &val, ppd, (PCHAR)report, (ULONG)report_len) == HIDP_STATUS_SUCCESS) {
             float raw = (float)(int)(val - 0x80);
-            out->axes.left_trigger  = (raw > 0.0f) ? (raw / 127.0f) : 0.0f;
+            out->axes.left_trigger = (raw > 0.0f) ? (raw / 127.0f) : 0.0f;
             out->axes.right_trigger = (raw < 0.0f) ? (-raw / 128.0f) : 0.0f;
         }
     } else {
-        out->axes.left_trigger  = sdl_read_hid_axis(&m->left_trigger,  &ctx);
+        out->axes.left_trigger = sdl_read_hid_axis(&m->left_trigger, &ctx);
         out->axes.right_trigger = sdl_read_hid_axis(&m->right_trigger, &ctx);
     }
 }
@@ -7258,34 +5246,54 @@ static void sdl_parse_mapping_line(const char *line, sdl_controller_db_entry *en
 
     /* Strip trailing newline */
     int len = pal_strlen(buf);
-    while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r'))
+    while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r')) {
         buf[--len] = '\0';
+    }
 
     /* First token: GUID */
     char *token = buf;
-    char *next  = buf;
-    while (*next && *next != ',') next++;
-    if (*next) *next++ = '\0';
+    char *next = buf;
+    while (*next && *next != ',') {
+        next++;
+    }
+    if (*next) {
+        *next++ = '\0';
+    }
     pal_strncpy(entry->guid, token, sizeof(entry->guid) - 1);
 
     /* Second token: name */
     token = next;
-    while (*next && *next != ',') next++;
-    if (*next) *next++ = '\0';
+    while (*next && *next != ',') {
+        next++;
+    }
+    if (*next) {
+        *next++ = '\0';
+    }
     pal_strncpy(entry->name, token, sizeof(entry->name) - 1);
 
     /* Remaining tokens: mappings */
     token = next;
     while (*token) {
-        while (*token == ' ') token++;
+        while (*token == ' ') {
+            token++;
+        }
         next = token;
-        while (*next && *next != ',') next++;
-        if (*next) *next++ = '\0';
+        while (*next && *next != ',') {
+            next++;
+        }
+        if (*next) {
+            *next++ = '\0';
+        }
 
         /* Split on ':' */
         char *colon = token;
-        while (*colon && *colon != ':') colon++;
-        if (!*colon) { token = next; continue; }
+        while (*colon && *colon != ':') {
+            colon++;
+        }
+        if (!*colon) {
+            token = next;
+            continue;
+        }
         *colon = '\0';
         const char *key = token;
         const char *val = colon + 1;
@@ -7294,27 +5302,49 @@ static void sdl_parse_mapping_line(const char *line, sdl_controller_db_entry *en
         sdl_parse_input_source(val, &src);
 
         sdl_controller_mapping *m = &entry->mapping;
-        if      (pal_strcmp(key, "a")             == 0) m->a              = src;
-        else if (pal_strcmp(key, "b")             == 0) m->b              = src;
-        else if (pal_strcmp(key, "x")             == 0) m->x              = src;
-        else if (pal_strcmp(key, "y")             == 0) m->y              = src;
-        else if (pal_strcmp(key, "back")          == 0) m->back           = src;
-        else if (pal_strcmp(key, "start")         == 0) m->start          = src;
-        else if (pal_strcmp(key, "guide")         == 0) m->guide          = src;
-        else if (pal_strcmp(key, "leftstick")     == 0) m->left_stick     = src;
-        else if (pal_strcmp(key, "rightstick")    == 0) m->right_stick    = src;
-        else if (pal_strcmp(key, "leftshoulder")  == 0) m->left_shoulder  = src;
-        else if (pal_strcmp(key, "rightshoulder") == 0) m->right_shoulder = src;
-        else if (pal_strcmp(key, "dpup")          == 0) m->dpad_up        = src;
-        else if (pal_strcmp(key, "dpdown")        == 0) m->dpad_down      = src;
-        else if (pal_strcmp(key, "dpleft")        == 0) m->dpad_left      = src;
-        else if (pal_strcmp(key, "dpright")       == 0) m->dpad_right     = src;
-        else if (pal_strcmp(key, "leftx")         == 0) m->left_x         = src;
-        else if (pal_strcmp(key, "lefty")         == 0) m->left_y         = src;
-        else if (pal_strcmp(key, "rightx")        == 0) m->right_x        = src;
-        else if (pal_strcmp(key, "righty")        == 0) m->right_y        = src;
-        else if (pal_strcmp(key, "lefttrigger")   == 0) m->left_trigger   = src;
-        else if (pal_strcmp(key, "righttrigger")  == 0) m->right_trigger  = src;
+        if (pal_strcmp(key, "a") == 0) {
+            m->a = src;
+        } else if (pal_strcmp(key, "b") == 0) {
+            m->b = src;
+        } else if (pal_strcmp(key, "x") == 0) {
+            m->x = src;
+        } else if (pal_strcmp(key, "y") == 0) {
+            m->y = src;
+        } else if (pal_strcmp(key, "back") == 0) {
+            m->back = src;
+        } else if (pal_strcmp(key, "start") == 0) {
+            m->start = src;
+        } else if (pal_strcmp(key, "guide") == 0) {
+            m->guide = src;
+        } else if (pal_strcmp(key, "leftstick") == 0) {
+            m->left_stick = src;
+        } else if (pal_strcmp(key, "rightstick") == 0) {
+            m->right_stick = src;
+        } else if (pal_strcmp(key, "leftshoulder") == 0) {
+            m->left_shoulder = src;
+        } else if (pal_strcmp(key, "rightshoulder") == 0) {
+            m->right_shoulder = src;
+        } else if (pal_strcmp(key, "dpup") == 0) {
+            m->dpad_up = src;
+        } else if (pal_strcmp(key, "dpdown") == 0) {
+            m->dpad_down = src;
+        } else if (pal_strcmp(key, "dpleft") == 0) {
+            m->dpad_left = src;
+        } else if (pal_strcmp(key, "dpright") == 0) {
+            m->dpad_right = src;
+        } else if (pal_strcmp(key, "leftx") == 0) {
+            m->left_x = src;
+        } else if (pal_strcmp(key, "lefty") == 0) {
+            m->left_y = src;
+        } else if (pal_strcmp(key, "rightx") == 0) {
+            m->right_x = src;
+        } else if (pal_strcmp(key, "righty") == 0) {
+            m->right_y = src;
+        } else if (pal_strcmp(key, "lefttrigger") == 0) {
+            m->left_trigger = src;
+        } else if (pal_strcmp(key, "righttrigger") == 0) {
+            m->right_trigger = src;
+        }
 
         token = next;
     }
@@ -7328,13 +5358,15 @@ static pal_bool sdl_load_controller_db(const char *path) {
         return pal_false;
     }
 
-    char *line     = (char *)data;
+    char *line = (char *)data;
     char *data_end = (char *)data + bytes_read;
 
     while (line < data_end && g_controller_db_count < SDL_CONTROLLER_DB_MAX_ENTRIES) {
         /* Find end of line */
         char *end = line;
-        while (end < data_end && *end != '\n' && *end != '\r') end++;
+        while (end < data_end && *end != '\n' && *end != '\r') {
+            end++;
+        }
 
         /* Skip blank lines and comments */
         if (end > line && line[0] != '#') {
@@ -7348,21 +5380,24 @@ static pal_bool sdl_load_controller_db(const char *path) {
             if (keep) {
                 /* Skip entries explicitly for other platforms */
                 if (pal_strstr(line, "platform:Mac OS X") ||
-                    pal_strstr(line, "platform:Linux")    ||
-                    pal_strstr(line, "platform:Android")  ||
+                    pal_strstr(line, "platform:Linux") ||
+                    pal_strstr(line, "platform:Android") ||
                     pal_strstr(line, "platform:iOS")) {
                     keep = 0;
                 }
             }
-            if (keep)
+            if (keep) {
                 g_controller_db_count++;
+            }
 
             *end = saved;
         }
 
         /* Advance past line ending */
         line = end;
-        while (line < data_end && (*line == '\n' || *line == '\r')) line++;
+        while (line < data_end && (*line == '\n' || *line == '\r')) {
+            line++;
+        }
     }
 
     pal_close_file(data);
@@ -7370,51 +5405,73 @@ static pal_bool sdl_load_controller_db(const char *path) {
     return pal_true;
 }
 
-static void sdl_apply_generic_mapping(const BYTE *report, UINT report_size,
-                                       pal_gamepad_state *out) {
-    if (report_size < 12)
+static void sdl_apply_generic_mapping(const BYTE *report, UINT report_size, pal_gamepad_state *out) {
+    if (report_size < 12) {
         return;
+    }
 
     /* Generic mapping based on common HID gamepad report layout */
-    out->axes.left_x      = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[2] / 127.0f));
-    out->axes.left_y      = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[3] / 127.0f));
-    out->axes.right_x     = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[4] / 127.0f));
-    out->axes.right_y     = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[5] / 127.0f));
-    out->axes.left_trigger  = report[6] / 255.0f;
+    out->axes.left_x = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[2] / 127.0f));
+    out->axes.left_y = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[3] / 127.0f));
+    out->axes.right_x = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[4] / 127.0f));
+    out->axes.right_y = fmaxf(-1.0f, fminf(1.0f, (float)(int8_t)report[5] / 127.0f));
+    out->axes.left_trigger = report[6] / 255.0f;
     out->axes.right_trigger = report[7] / 255.0f;
 
     WORD buttons = report[11];
-    out->buttons.a              = (buttons & 0x01) != 0;
-    out->buttons.b              = (buttons & 0x02) != 0;
-    out->buttons.x              = (buttons & 0x04) != 0;
-    out->buttons.y              = (buttons & 0x08) != 0;
-    out->buttons.back           = (buttons & 0x10) != 0;
-    out->buttons.start          = (buttons & 0x20) != 0;
-    out->buttons.left_stick     = (buttons & 0x40) != 0;
-    out->buttons.right_stick    = (buttons & 0x80) != 0;
-    out->buttons.left_shoulder  = (buttons & 0x100) != 0;
+    out->buttons.a = (buttons & 0x01) != 0;
+    out->buttons.b = (buttons & 0x02) != 0;
+    out->buttons.x = (buttons & 0x04) != 0;
+    out->buttons.y = (buttons & 0x08) != 0;
+    out->buttons.back = (buttons & 0x10) != 0;
+    out->buttons.start = (buttons & 0x20) != 0;
+    out->buttons.left_stick = (buttons & 0x40) != 0;
+    out->buttons.right_stick = (buttons & 0x80) != 0;
+    out->buttons.left_shoulder = (buttons & 0x100) != 0;
     out->buttons.right_shoulder = (buttons & 0x200) != 0;
 
     switch (report[8]) {
-        case 0: out->buttons.dpad_up    = 1; break;
-        case 1: out->buttons.dpad_up    = 1; out->buttons.dpad_right = 1; break;
-        case 2: out->buttons.dpad_right = 1; break;
-        case 3: out->buttons.dpad_down  = 1; out->buttons.dpad_right = 1; break;
-        case 4: out->buttons.dpad_down  = 1; break;
-        case 5: out->buttons.dpad_down  = 1; out->buttons.dpad_left  = 1; break;
-        case 6: out->buttons.dpad_left  = 1; break;
-        case 7: out->buttons.dpad_up    = 1; out->buttons.dpad_left  = 1; break;
+        case 0:
+            out->buttons.dpad_up = 1;
+            break;
+        case 1:
+            out->buttons.dpad_up = 1;
+            out->buttons.dpad_right = 1;
+            break;
+        case 2:
+            out->buttons.dpad_right = 1;
+            break;
+        case 3:
+            out->buttons.dpad_down = 1;
+            out->buttons.dpad_right = 1;
+            break;
+        case 4:
+            out->buttons.dpad_down = 1;
+            break;
+        case 5:
+            out->buttons.dpad_down = 1;
+            out->buttons.dpad_left = 1;
+            break;
+        case 6:
+            out->buttons.dpad_left = 1;
+            break;
+        case 7:
+            out->buttons.dpad_up = 1;
+            out->buttons.dpad_left = 1;
+            break;
     }
 }
 
 static void win32_handle_hid(const RAWINPUT *raw) {
-    UINT       hid_size = raw->data.hid.dwSizeHid * raw->data.hid.dwCount;
-    const BYTE *data    = raw->data.hid.bRawData;
-    HANDLE     device   = raw->header.hDevice;
-    int        slot     = -1;
-    int        i;
+    UINT hid_size = raw->data.hid.dwSizeHid * raw->data.hid.dwCount;
+    const BYTE *data = raw->data.hid.bRawData;
+    HANDLE device = raw->header.hDevice;
+    int slot = -1;
+    int i;
 
-    if (hid_size < 4) return;
+    if (hid_size < 4) {
+        return;
+    }
 
     /* Drop XInput packets */
     {
@@ -7434,7 +5491,10 @@ static void win32_handle_hid(const RAWINPUT *raw) {
     }
 
     for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
-        if (win32_gamepad_ctx.hid_handles[i] == device) { slot = i; break; }
+        if (win32_gamepad_ctx.hid_handles[i] == device) {
+            slot = i;
+            break;
+        }
     }
 
     if (slot < 0) {
@@ -7447,8 +5507,12 @@ static void win32_handle_hid(const RAWINPUT *raw) {
                     uint16_t vid = 0, pid = 0;
                     const wchar_t *vs = wcsstr(dpath, L"VID_");
                     const wchar_t *ps = wcsstr(dpath, L"PID_");
-                    if (!vs) vs = wcsstr(dpath, L"vid_");
-                    if (!ps) ps = wcsstr(dpath, L"pid_");
+                    if (!vs) {
+                        vs = wcsstr(dpath, L"vid_");
+                    }
+                    if (!ps) {
+                        ps = wcsstr(dpath, L"pid_");
+                    }
                     if (vs) {
                         vid = win32_parse_hex4(vs + 4);
                     }
@@ -7457,9 +5521,9 @@ static void win32_handle_hid(const RAWINPUT *raw) {
                     }
 
                     for (i = 0; i < MAX_HID_CONTROLLERS; i++) {
-                        if (win32_gamepad_ctx.hid_connected[i]           &&
-                            win32_gamepad_ctx.hid_handles[i]   == NULL   &&
-                            win32_gamepad_ctx.hid_state[i].vendor_id  == vid &&
+                        if (win32_gamepad_ctx.hid_connected[i] &&
+                            win32_gamepad_ctx.hid_handles[i] == NULL &&
+                            win32_gamepad_ctx.hid_state[i].vendor_id == vid &&
                             win32_gamepad_ctx.hid_state[i].product_id == pid) {
                             win32_gamepad_ctx.hid_handles[i] = device;
                             slot = i;
@@ -7469,8 +5533,9 @@ static void win32_handle_hid(const RAWINPUT *raw) {
 
                     if (slot < 0) {
                         slot = hid_connect(dpath);
-                        if (slot >= 0)
+                        if (slot >= 0) {
                             win32_gamepad_ctx.hid_handles[slot] = device;
+                        }
                     }
                 }
                 free(dpath);
@@ -7478,12 +5543,14 @@ static void win32_handle_hid(const RAWINPUT *raw) {
         }
     }
 
-    if (slot < 0) return;
+    if (slot < 0) {
+        return;
+    }
 
     {
         UINT copy = hid_size < sizeof(win32_gamepad_ctx.hid_state[slot].raw_report)
-                  ? hid_size
-                  : sizeof(win32_gamepad_ctx.hid_state[slot].raw_report);
+                        ? hid_size
+                        : sizeof(win32_gamepad_ctx.hid_state[slot].raw_report);
         pal_memcpy(win32_gamepad_ctx.hid_state[slot].raw_report, data, copy);
         win32_gamepad_ctx.hid_state[slot].raw_report_size = copy;
     }
@@ -7491,9 +5558,12 @@ static void win32_handle_hid(const RAWINPUT *raw) {
 
 static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
-        case WM_CLOSE:   return 0;
-        case WM_DESTROY: return 0;
-        case WM_INPUT:   return DefWindowProcW(hwnd, msg, wparam, lparam);
+        case WM_CLOSE:
+            return 0;
+        case WM_DESTROY:
+            return 0;
+        case WM_INPUT:
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
 
         case WM_DEVICECHANGE: {
             PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lparam;
@@ -7502,17 +5572,25 @@ static LRESULT CALLBACK win32_input_window_proc(HWND hwnd, UINT msg, WPARAM wpar
                     (DEV_BROADCAST_DEVICEINTERFACE_W *)pHdr;
 
                 if (pal_memcmp(&dif->dbcc_classguid, &xbox_guid, sizeof(GUID)) == 0) {
-                    if      (wparam == DBT_DEVICEARRIVAL)        xusb_connect(dif->dbcc_name);
-                    else if (wparam == DBT_DEVICEREMOVECOMPLETE) xusb_disconnect(dif->dbcc_name);
+                    if (wparam == DBT_DEVICEARRIVAL) {
+                        xusb_connect(dif->dbcc_name);
+                    } else if (wparam == DBT_DEVICEREMOVECOMPLETE) {
+                        xusb_disconnect(dif->dbcc_name);
+                    }
 
                 } else if (pal_memcmp(&dif->dbcc_classguid, &gip_guid, sizeof(GUID)) == 0) {
-                    if      (wparam == DBT_DEVICEARRIVAL)        gip_open();
-                    else if (wparam == DBT_DEVICEREMOVECOMPLETE) gip_close();
+                    if (wparam == DBT_DEVICEARRIVAL) {
+                        gip_open();
+                    } else if (wparam == DBT_DEVICEREMOVECOMPLETE) {
+                        gip_close();
+                    }
 
-                } else if (pal_memcmp(&dif->dbcc_classguid, &GUID_DEVINTERFACE_HID,
-                                  sizeof(GUID)) == 0) {
-                    if      (wparam == DBT_DEVICEARRIVAL)        hid_connect(dif->dbcc_name);
-                    else if (wparam == DBT_DEVICEREMOVECOMPLETE) hid_disconnect(dif->dbcc_name);
+                } else if (pal_memcmp(&dif->dbcc_classguid, &GUID_DEVINTERFACE_HID, sizeof(GUID)) == 0) {
+                    if (wparam == DBT_DEVICEARRIVAL) {
+                        hid_connect(dif->dbcc_name);
+                    } else if (wparam == DBT_DEVICEREMOVECOMPLETE) {
+                        hid_disconnect(dif->dbcc_name);
+                    }
                     win32_enumerate_keyboards();
                     win32_enumerate_mice();
                 }
@@ -7528,38 +5606,36 @@ static pal_bool win32_create_input_window(void) {
     DEV_BROADCAST_DEVICEINTERFACE_W filter = {0};
     DEV_BROADCAST_DEVICEINTERFACE_W xbox_filter = {0};
 
-    wc.cbSize        = sizeof(WNDCLASSEXW);
-    wc.lpfnWndProc   = win32_input_window_proc;
-    wc.hInstance     = GetModuleHandleW(NULL);
+    wc.cbSize = sizeof(WNDCLASSEXW);
+    wc.lpfnWndProc = win32_input_window_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
     wc.lpszClassName = L"PAL_RawInputWindow";
 
     if (!RegisterClassExW(&wc)) {
         DWORD err = GetLastError();
-        if (err != ERROR_CLASS_ALREADY_EXISTS)
+        if (err != ERROR_CLASS_ALREADY_EXISTS) {
             return pal_false;
+        }
     }
 
     g_input_window = CreateWindowExW(
-        0, wc.lpszClassName, L"", 0,
-        0, 0, 0, 0,
-        NULL, NULL, wc.hInstance, NULL);
+        0, wc.lpszClassName, L"", 0, 0, 0, 0, 0, NULL, NULL, wc.hInstance, NULL);
 
-    if (!g_input_window)
+    if (!g_input_window) {
         return pal_false;
+    }
 
     /* Generic HID devices (gamepads, keyboards, mice) */
-    filter.dbcc_size       = sizeof(filter);
+    filter.dbcc_size = sizeof(filter);
     filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
-    filter.dbcc_classguid  = GUID_DEVINTERFACE_HID;
-    RegisterDeviceNotificationW(g_input_window, &filter,
-                                DEVICE_NOTIFY_WINDOW_HANDLE);
+    filter.dbcc_classguid = GUID_DEVINTERFACE_HID;
+    RegisterDeviceNotificationW(g_input_window, &filter, DEVICE_NOTIFY_WINDOW_HANDLE);
 
     /* XInput / XUSB devices (separate driver, separate GUID) */
-    xbox_filter.dbcc_size       = sizeof(xbox_filter);
+    xbox_filter.dbcc_size = sizeof(xbox_filter);
     xbox_filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
-    xbox_filter.dbcc_classguid  = xbox_guid;
-    RegisterDeviceNotificationW(g_input_window, &xbox_filter,
-                                DEVICE_NOTIFY_WINDOW_HANDLE);
+    xbox_filter.dbcc_classguid = xbox_guid;
+    RegisterDeviceNotificationW(g_input_window, &xbox_filter, DEVICE_NOTIFY_WINDOW_HANDLE);
 
     return pal_true;
 }
@@ -7578,24 +5654,14 @@ static void win32_destroy_input_window(void) {
     UnregisterClassW(L"PAL_RawInputWindow", GetModuleHandleW(NULL));
 }
 
-typedef struct tagWINDOWPOS {
-    HWND hwnd;
-    HWND hwndInsertAfter;
-    int x;
-    int y;
-    int cx;
-    int cy;
-    UINT flags;
-} WINDOWPOS, *LPWINDOWPOS, *PWINDOWPOS;
-
 typedef void (*RawInputHandler)(const RAWINPUT *);
 
 RawInputHandler win32_raw_input_handlers[3] = {
     win32_handle_mouse,
     win32_handle_keyboard,
-    win32_handle_hid
-};
+    win32_handle_hid};
 
+#define RAW_INPUT_BUFFER_CAPACITY 1024 * 64
 static void win32_process_raw_input(void) {
     static BYTE raw_input_buffer[RAW_INPUT_BUFFER_CAPACITY];
     UINT buffer_size;
@@ -7950,8 +6016,9 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, unsigned int sam
     if (!g_wgl_extensions_loaded) {
 
         g_opengl32 = LoadLibraryW(L"opengl32.dll");
-        if (!g_opengl32)
+        if (!g_opengl32) {
             return pal_false;
+        }
 
         /* Get base WGL functions from opengl32.dll */
         p_wglGetProcAddress = (PFN_wglGetProcAddress)GetProcAddress(g_opengl32, "wglGetProcAddress");
@@ -8045,12 +6112,15 @@ static wchar_t *win32_utf8_to_utf16(const char *utf8_str) {
     int len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, NULL, 0);
     wchar_t *utf16_str = (wchar_t *)malloc(len * sizeof(wchar_t));
 
-    if (!utf8_str)
+    if (!utf8_str) {
         return NULL;
-    if (len == 0)
+    }
+    if (len == 0) {
         return NULL;
-    if (!utf16_str)
+    }
+    if (!utf16_str) {
         return NULL;
+    }
 
     if (MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, utf16_str, len) == 0) {
         free(utf16_str);
@@ -8127,7 +6197,7 @@ PALAPI pal_window *pal_create_window(unsigned int width, unsigned int height, co
     wc.lpfnWndProc = win32_window_proc;
     wc.hInstance = GetModuleHandleW(NULL);
     wc.lpszClassName = L"Win32 Window Class";
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
 
     RegisterClassExW(&wc);
 
@@ -8535,15 +6605,13 @@ PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
 
 /* Helper function to convert UTF-8 to UTF-16 */
 
-#define INVALID_FILE_ATTRIBUTES ((DWORD) - 1)
-#define FILE_ATTRIBUTE_DIRECTORY 0x00000010
-
 PALAPI pal_bool pal_does_file_exist(const char *file_path) {
     wchar_t *wide_path = win32_utf8_to_utf16(file_path);
     DWORD attrs;
 
-    if (!wide_path)
+    if (!wide_path) {
         return 0;
+    }
 
     attrs = GetFileAttributesW(wide_path);
     free(wide_path);
@@ -8555,8 +6623,9 @@ PALAPI size_t pal_get_file_size(const char *file_path) {
     HANDLE file = NULL;
     LARGE_INTEGER file_size;
 
-    if (!wide_path)
+    if (!wide_path) {
         return 0;
+    }
 
     file = CreateFileW(
         wide_path,
@@ -8585,8 +6654,9 @@ PALAPI size_t pal_get_last_write_time(const char *file) {
     wchar_t *wide_path = win32_utf8_to_utf16(file);
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
 
-    if (!wide_path)
+    if (!wide_path) {
         return 0;
+    }
 
     if (!GetFileAttributesExW(wide_path, GetFileExInfoStandard, &fileInfo)) {
         free(wide_path);
@@ -8601,8 +6671,9 @@ PALAPI size_t pal_get_last_read_time(const char *file) {
     wchar_t *wide_path = win32_utf8_to_utf16(file);
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
 
-    if (!wide_path)
+    if (!wide_path) {
         return 0;
+    }
 
     if (!GetFileAttributesExW(wide_path, GetFileExInfoStandard, &fileInfo)) {
         free(wide_path);
@@ -8628,8 +6699,9 @@ PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     }
 
     wide_path = win32_utf8_to_utf16(file_path);
-    if (!wide_path)
+    if (!wide_path) {
         return 0;
+    }
 
     dwRes = GetNamedSecurityInfoW(
         wide_path,
@@ -8644,8 +6716,9 @@ PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     free(wide_path);
 
     if (dwRes != ERROR_SUCCESS) {
-        if (pSD)
+        if (pSD) {
             LocalFree(pSD);
+        }
         return 0;
     }
 
@@ -8662,12 +6735,15 @@ PALAPI uint32_t pal_get_file_permissions(const char *file_path) {
     dwRes = GetEffectiveRightsFromAclA(pDacl, NULL, &accessRights);
 
     if (dwRes == ERROR_SUCCESS) {
-        if (accessRights & FILE_GENERIC_READ)
+        if (accessRights & FILE_GENERIC_READ) {
             permissions |= PAL_READ;
-        if (accessRights & FILE_GENERIC_WRITE)
+        }
+        if (accessRights & FILE_GENERIC_WRITE) {
             permissions |= PAL_WRITE;
-        if (accessRights & FILE_GENERIC_EXECUTE)
+        }
+        if (accessRights & FILE_GENERIC_EXECUTE) {
             permissions |= PAL_EXECUTE;
+        }
     }
 
     CloseHandle(hToken);
@@ -8692,15 +6768,19 @@ PALAPI pal_bool pal_change_file_permissions(const char *file_path, uint32_t perm
     }
 
     wide_path = win32_utf8_to_utf16(file_path);
-    if (!wide_path)
+    if (!wide_path) {
         return 0;
+    }
 
-    if (permission_flags & PAL_READ)
+    if (permission_flags & PAL_READ) {
         dwAccessRights |= GENERIC_READ;
-    if (permission_flags & PAL_WRITE)
+    }
+    if (permission_flags & PAL_WRITE) {
         dwAccessRights |= GENERIC_WRITE;
-    if (permission_flags & PAL_EXECUTE)
+    }
+    if (permission_flags & PAL_EXECUTE) {
         dwAccessRights |= GENERIC_EXECUTE;
+    }
 
     if (dwAccessRights == 0) {
         free(wide_path);
@@ -8791,8 +6871,9 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
     char *buffer = NULL;
     size_t total_read = 0;
 
-    if (!wide_path)
+    if (!wide_path) {
         return NULL;
+    }
 
     file = CreateFileW(
         wide_path,
@@ -8835,16 +6916,18 @@ PALAPI unsigned char *pal_read_entire_file(const char *file_path, size_t *bytes_
             return NULL;
         }
 
-        if (read_now == 0)
+        if (read_now == 0) {
             break;
+        }
 
         total_read += read_now;
     }
     buffer[total_size] = '\0';
     CloseHandle(file);
 
-    if (bytes_read)
+    if (bytes_read) {
         *bytes_read = total_read;
+    }
 
     return (unsigned char *)buffer;
 }
@@ -8857,8 +6940,9 @@ PALAPI pal_bool pal_write_file(const char *file_path, size_t file_size, char *bu
     DWORD chunk = 0;
     DWORD bytes_written = 0;
 
-    if (!wide_path)
+    if (!wide_path) {
         return 1;
+    }
 
     file = CreateFileW(
         wide_path,
@@ -8900,10 +6984,12 @@ PALAPI pal_bool pal_copy_file(const char *original_path, const char *copy_path) 
     wchar_t *wide_copy = win32_utf8_to_utf16(copy_path);
     BOOL result;
     if (!wide_original || !wide_copy) {
-        if (wide_original)
+        if (wide_original) {
             free(wide_original);
-        if (wide_copy)
+        }
+        if (wide_copy) {
             free(wide_copy);
+        }
         return pal_false; // was returning 1 (true) on failure
     }
 
@@ -8919,8 +7005,9 @@ PALAPI pal_file *pal_open_file(const char *file_path) {
     wchar_t *wide_path = win32_utf8_to_utf16(file_path);
     pal_file *file = NULL;
 
-    if (!wide_path)
+    if (!wide_path) {
         return NULL;
+    }
 
     file = CreateFileW(
         wide_path,
@@ -8974,19 +7061,118 @@ PALAPI pal_bool pal_read_from_open_file(pal_file *file, size_t offset, size_t by
 }
 
 PALAPI pal_bool pal_close_file(const unsigned char *file) {
-    if (!file)
+    if (!file) {
         return 0;
+    }
     free((void *)file);
     return 1;
 }
 
 PALAPI pal_bool pal_close_open_file(pal_file *file) {
-    if (!file)
+    if (!file) {
         return 0;
+    }
     if (!CloseHandle(file)) {
         return 0;
     }
     return 1;
+}
+
+static pal_bool win32_dir_push(pal_dir *dir, const char *path) {
+    if (dir->depth >= PAL_DIR_MAX_DEPTH) return 0;
+
+    pal_dir_frame *frame = &dir->stack[dir->depth];
+    pal_strcpy(frame->path, path);
+
+    char buffer[MAX_PATH];
+    pal_strcpy(buffer, path);
+    pal_strcat(buffer, "\\*");
+
+    frame->file_search_handle = FindFirstFileA(buffer, &frame->ffd);
+    if (frame->file_search_handle == INVALID_HANDLE_VALUE) return 0;
+
+    frame->first_file = 1;
+    dir->depth++;
+    return 1;
+}
+
+PALAPI pal_dir *pal_open_directory(const char *directory_path) {
+    pal_dir *dir = malloc(sizeof(pal_dir));
+    if (!dir) return NULL;
+
+    char buffer[MAX_PATH];
+    pal_strcpy(buffer, directory_path);
+    for (int i = 0; buffer[i]; i++) {
+        if (buffer[i] == '/') buffer[i] = '\\';
+    }
+    // strip trailing backslash
+    int len = pal_strlen(buffer);
+    if (len > 1 && buffer[len - 1] == '\\') buffer[len - 1] = '\0';
+
+    dir->depth = 0;
+    if (!win32_dir_push(dir, buffer)) {
+        free(dir);
+        return NULL;
+    }
+    return dir;
+}
+
+PALAPI const char *pal_next_file_in_directory(pal_dir *directory) {
+    while (directory->depth > 0) {
+        pal_dir_frame *frame = &directory->stack[directory->depth - 1];
+
+        WIN32_FIND_DATAA *ffd = &frame->ffd;
+        pal_bool got_entry;
+
+        if (frame->first_file) {
+            frame->first_file = 0;
+            got_entry = 1;
+        } else {
+            got_entry = FindNextFileA(frame->file_search_handle, ffd);
+        }
+
+        if (!got_entry) {
+            // exhausted this directory, pop the stack
+            FindClose(frame->file_search_handle);
+            directory->depth--;
+            continue;
+        }
+
+        // skip . and ..
+        if (ffd->cFileName[0] == '.' &&
+            (ffd->cFileName[1] == '\0' ||
+            (ffd->cFileName[1] == '.' && ffd->cFileName[2] == '\0'))) {
+            frame->first_file = 0; // ensure we advance next iteration
+            continue;
+        }
+
+        // build the full path for this entry
+        pal_strcpy(directory->current_path, frame->path);
+        pal_strcat(directory->current_path, "\\");
+        pal_strcat(directory->current_path, ffd->cFileName);
+
+        // if it's a directory, push it so we descend next iteration
+        if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            win32_dir_push(directory, directory->current_path);
+            // don't return the directory itself — remove this continue
+            // if you want directories yielded too
+            continue;
+        }
+
+        return directory->current_path;
+    }
+
+    return NULL;
+}
+
+PALAPI void pal_close_directory(pal_dir *directory) {
+    if (!directory) return;
+    for (int i = 0; i < directory->depth; i++) {
+        if (directory->stack[i].file_search_handle != INVALID_HANDLE_VALUE) {
+            FindClose(directory->stack[i].file_search_handle);
+        }
+    }
+    free(directory);
 }
 
 PALAPI void pal_sleep_for_milliseconds(uint32_t milliseconds) {
@@ -9084,8 +7270,9 @@ PALAPI pal_time pal_get_date_and_time_utc(void) {
             days_in_year = 366;
         }
 
-        if (days_since_1601 < days_in_year)
+        if (days_since_1601 < days_in_year) {
             break;
+        }
         days_since_1601 -= days_in_year;
         year++;
     }
@@ -9159,8 +7346,9 @@ PALAPI pal_time pal_get_date_and_time_local(void) {
             days_in_year = 366;
         }
 
-        if (days_since_1601 < days_in_year)
+        if (days_since_1601 < days_in_year) {
             break;
+        }
         days_since_1601 -= days_in_year;
         year++;
     }
@@ -9780,6 +7968,25 @@ PALAPI void pal_shutdown(void) {
 #include <sys/stat.h>
 #include <pthread.h>
 
+#ifdef PAL_USE_CALLBACKS
+int main(int argc, char *argv[]) {
+    pal_app_result app_result;
+    void *appstate = NULL;
+
+    app_result = pal_app_init(&appstate, argc, argv);
+
+    pal_event event;
+    while (app_result == PAL_APP_CONTINUE) {
+        while (pal_poll_events(&event)) {
+            app_result = pal_app_event(appstate, &event);
+        }
+        app_result = pal_app_iterate(appstate);
+    }
+
+    pal_app_quit(appstate, app_result);
+    return 0;
+}
+#endif
 /*---------------------------------------------------------------------------------- */
 /* File I/O */
 /*---------------------------------------------------------------------------------- */
@@ -10735,12 +8942,15 @@ void linux_x11_init_raw_input() {
 
 void linux_x11_cleanup_raw_input() {
     /* Clean up X11 resources */
-    if (g_xic)
+    if (g_xic) {
         XDestroyIC(g_xic);
-    if (g_xim)
+    }
+    if (g_xim) {
         XCloseIM(g_xim);
-    if (g_xkb)
+    }
+    if (g_xkb) {
         XkbFreeKeyboard(g_xkb, XkbAllComponentsMask, True);
+    }
 
     /* Clean up keyboards */
     for (int i = 0; i < g_keyboards.count; i++) {
@@ -10753,10 +8963,12 @@ void linux_x11_cleanup_raw_input() {
     }
 
     /* Clean up udev */
-    if (g_monitor)
+    if (g_monitor) {
         udev_monitor_unref(g_monitor);
-    if (g_udev)
+    }
+    if (g_udev) {
         udev_unref(g_udev);
+    }
 }
 
 PALAPI pal_vec2 pal_get_mouse_position(pal_window *window) {
@@ -11072,30 +9284,42 @@ int linux_keycode_to_utf8(int keycode, unsigned char *key_state, char *out, size
 static int compute_modifiers_from_key_state(unsigned char *keys) {
     int modifiers = PAL_MOD_NONE;
 
-    if (keys[PAL_SCAN_LSHIFT])
+    if (keys[PAL_SCAN_LSHIFT]) {
         modifiers |= PAL_MOD_LSHIFT;
-    if (keys[PAL_SCAN_RSHIFT])
+    }
+    if (keys[PAL_SCAN_RSHIFT]) {
         modifiers |= PAL_MOD_RSHIFT;
-    if (keys[PAL_SCAN_LCTRL])
+    }
+    if (keys[PAL_SCAN_LCTRL]) {
         modifiers |= PAL_MOD_LCTRL;
-    if (keys[PAL_SCAN_RCTRL])
+    }
+    if (keys[PAL_SCAN_RCTRL]) {
         modifiers |= PAL_MOD_RCTRL;
-    if (keys[PAL_SCAN_LALT])
+    }
+    if (keys[PAL_SCAN_LALT]) {
         modifiers |= PAL_MOD_LALT;
-    if (keys[PAL_SCAN_RALT])
+    }
+    if (keys[PAL_SCAN_RALT]) {
         modifiers |= PAL_MOD_RALT;
-    if (keys[PAL_SCAN_LGUI])
+    }
+    if (keys[PAL_SCAN_LGUI]) {
         modifiers |= PAL_MOD_LSUPER;
-    if (keys[PAL_SCAN_RGUI])
+    }
+    if (keys[PAL_SCAN_RGUI]) {
         modifiers |= PAL_MOD_RSUPER;
-    if (keys[PAL_SCAN_CAPSLOCK])
+    }
+    if (keys[PAL_SCAN_CAPSLOCK]) {
         modifiers |= PAL_MOD_CAPS;
-    if (keys[PAL_SCAN_NUMCLEAR])
+    }
+    if (keys[PAL_SCAN_NUMCLEAR]) {
         modifiers |= PAL_MOD_NUM;
-    if (keys[PAL_SCAN_SCROLLLOCK])
+    }
+    if (keys[PAL_SCAN_SCROLLLOCK]) {
         modifiers |= PAL_MOD_SCROLL;
-    if (keys[PAL_SCAN_ALTGR])
+    }
+    if (keys[PAL_SCAN_ALTGR]) {
         modifiers |= PAL_MOD_ALTGR;
+    }
 
     return modifiers;
 }
@@ -11105,8 +9329,9 @@ void linux_x11_poll_raw_input() {
     int nfds = 0;
 
     /* Clear toggle flags */
-    for (int i = 0; i < g_keyboards.count; i++)
+    for (int i = 0; i < g_keyboards.count; i++) {
         pal_memset(g_keyboards.keys_toggled[i], 0, sizeof(g_keyboards.keys_toggled[i]));
+    }
     for (int i = 0; i < g_mice.count; i++) {
         pal_memset(g_mice.buttons_toggled[i], 0, sizeof(g_mice.buttons_toggled[i]));
         g_mice.dx[i] = 0;
@@ -11135,8 +9360,9 @@ void linux_x11_poll_raw_input() {
     nfds++;
 
     int ret = poll(fds, nfds, 0);
-    if (ret <= 0)
+    if (ret <= 0) {
         return;
+    }
 
     struct input_event ev;
     pal_event event = {0};
@@ -11150,8 +9376,9 @@ void linux_x11_poll_raw_input() {
                 tmp_scancode = linux_scancode_to_pal_scancode[ev.value];
             } else if (ev.type == EV_KEY) {
                 int pal_vk = linux_keycode_to_pal_virtual_key(ev.code);
-                if (pal_vk == PAL_KEY_NONE)
+                if (pal_vk == PAL_KEY_NONE) {
                     continue;
+                }
 
                 uint32_t sc = tmp_scancode;
                 unsigned char old_state = g_keyboards.keys[i][sc];
@@ -11200,8 +9427,9 @@ void linux_x11_poll_raw_input() {
         while (read(fds[g_keyboards.count + i].fd, &ev, sizeof(ev)) > 0) {
             if (ev.type == EV_KEY) {
                 int pal_button = linux_button_to_pal_button(ev.code);
-                if (pal_button < 0 || pal_button >= MAX_MOUSE_BUTTONS)
+                if (pal_button < 0 || pal_button >= MAX_MOUSE_BUTTONS) {
                     continue;
+                }
 
                 int old_state = g_mice.buttons[i][pal_button];
                 int new_state = ev.value;
@@ -11273,8 +9501,9 @@ void linux_x11_poll_raw_input() {
     /* ---- Check udev hotplug ---- */
     if (fds[nfds - 1].revents & POLLIN) {
         struct udev_device *dev = udev_monitor_receive_device(g_monitor);
-        if (!dev)
+        if (!dev) {
             return;
+        }
 
         const char *action = udev_device_get_action(dev);
         const char *devnode = udev_device_get_devnode(dev);
@@ -11302,8 +9531,9 @@ void linux_x11_poll_raw_input() {
                     g_mice.wheel[g_mice.count] = 0;
                     g_mice.count++;
                     printf("[Mouse Added] %s\n", name);
-                } else
+                } else {
                     close(dev_fd);
+                }
             }
         }
         udev_device_unref(dev);
@@ -11312,12 +9542,14 @@ void linux_x11_poll_raw_input() {
 
 /* Fallback function for when XKB is not available (US layout only) */
 int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *out, size_t out_size) {
-    if (out_size < 8)
+    if (out_size < 8) {
         return 0;
+    }
 
     int pal_vk = linux_keycode_to_pal_virtual_key(keycode);
-    if (pal_vk == PAL_KEY_NONE)
+    if (pal_vk == PAL_KEY_NONE) {
         return 0;
+    }
 
     int shift = key_state[PAL_SCAN_LSHIFT] || key_state[PAL_SCAN_RSHIFT];
     int caps = key_state[PAL_SCAN_CAPSLOCK];
@@ -11325,8 +9557,9 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
 
     if (pal_vk >= 'a' && pal_vk <= 'z') {
         char c = pal_vk;
-        if (shift ^ caps)
+        if (shift ^ caps) {
             c -= 0x20;
+        }
         out[0] = c;
         out[1] = '\0';
         return 1;
@@ -11414,68 +9647,79 @@ int linux_keycode_to_utf8_fallback(int keycode, unsigned char *key_state, char *
             return 1;
 
         case PAL_KEY_NUMPAD_0:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '0';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_1:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '1';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_2:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '2';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_3:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '3';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_4:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '4';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_5:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '5';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_6:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '6';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_7:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '7';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_8:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '8';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_9:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '9';
             out[1] = '\0';
             return 1;
         case PAL_KEY_NUMPAD_PERIOD:
-            if (!numlock)
+            if (!numlock) {
                 return 0;
+            }
             out[0] = '.';
             out[1] = '\0';
             return 1;
@@ -11489,27 +9733,33 @@ int linux_keycode_to_utf8(int linux_keycode, unsigned char *key_state, char *out
         return linux_keycode_to_utf8_fallback(linux_keycode, key_state, out, out_size);
     }
 
-    if (out_size < 8)
+    if (out_size < 8) {
         return 0;
+    }
 
     KeyCode x_keycode = linux_keycode + 8;
 
     unsigned int modifiers = 0;
-    if (key_state[PAL_SCAN_LSHIFT] || key_state[PAL_SCAN_RSHIFT])
+    if (key_state[PAL_SCAN_LSHIFT] || key_state[PAL_SCAN_RSHIFT]) {
         modifiers |= ShiftMask;
-    if (key_state[PAL_SCAN_LCTRL] || key_state[PAL_SCAN_RCTRL])
+    }
+    if (key_state[PAL_SCAN_LCTRL] || key_state[PAL_SCAN_RCTRL]) {
         modifiers |= ControlMask;
-    if (key_state[PAL_SCAN_LALT] || key_state[PAL_SCAN_RALT])
+    }
+    if (key_state[PAL_SCAN_LALT] || key_state[PAL_SCAN_RALT]) {
         modifiers |= Mod1Mask;
-    if (key_state[PAL_SCAN_CAPSLOCK])
+    }
+    if (key_state[PAL_SCAN_CAPSLOCK]) {
         modifiers |= LockMask;
+    }
 
     KeySym keysym;
     int shift_level = (modifiers & ShiftMask) ? 1 : 0;
     keysym = XkbKeycodeToKeysym(g_display, x_keycode, 0, shift_level);
 
-    if (keysym == NoSymbol)
+    if (keysym == NoSymbol) {
         return 0;
+    }
 
     if (g_xic) {
         XKeyEvent event = {
@@ -11561,8 +9811,9 @@ PALAPI pal_gl_context pal_gl_create_context(pal_window *window, unsigned int sam
     GLXFBConfig *fb_configs = p_glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
     if (!fb_configs || fb_count == 0) {
         fprintf(stderr, "GLX ERROR: No framebuffer configs found!\n");
-        if (fb_configs)
+        if (fb_configs) {
             XFree(fb_configs);
+        }
         return NULL;
     }
 
@@ -11638,8 +9889,9 @@ static pal_bool pal_is_linux_dark_mode(void) {
         if (fgets(buffer, sizeof(buffer), fp)) {
             pclose(fp);
             /* Case-insensitive search for "dark" */
-            for (char *p = buffer; *p; p++)
+            for (char *p = buffer; *p; p++) {
                 *p = tolower(*p);
+            }
             if (strstr(buffer, "dark")) {
                 return pal_true;
             }
@@ -11654,8 +9906,9 @@ static pal_bool pal_is_linux_dark_mode(void) {
         char theme_lower[256];
         strncpy(theme_lower, gtk_theme, sizeof(theme_lower) - 1);
         theme_lower[sizeof(theme_lower) - 1] = '\0';
-        for (char *p = theme_lower; *p; p++)
+        for (char *p = theme_lower; *p; p++) {
             *p = tolower(*p);
+        }
         if (strstr(theme_lower, "dark")) {
             return pal_true;
         }
@@ -11677,8 +9930,9 @@ static void pal_apply_dark_mode_hint(Display *display, Window window) {
 
 PALAPI pal_window *pal_create_window(unsigned int width, unsigned int height, const char *window_title, uint64_t window_flags) {
     pal_window *window = (pal_window *)malloc(sizeof(pal_window));
-    if (!window)
+    if (!window) {
         return NULL;
+    }
 
     pal_memset(window, 0, sizeof(pal_window));
 
@@ -11701,8 +9955,9 @@ PALAPI pal_window *pal_create_window(unsigned int width, unsigned int height, co
         GLXFBConfig *fb_configs = p_glXChooseFBConfig(g_display, screen, fb_attribs, &fb_count);
         if (!fb_configs || fb_count == 0) {
             fprintf(stderr, "GLX ERROR: No framebuffer configs found!\n");
-            if (fb_configs)
+            if (fb_configs) {
                 XFree(fb_configs);
+            }
             free(window);
             return NULL;
         }
@@ -11784,8 +10039,9 @@ PALAPI void *pal_get_window_handle(pal_window *window) {
 }
 
 PALAPI void pal_close_window(pal_window *window) {
-    if (!window)
+    if (!window) {
         return;
+    }
 
     if (window->graphics_context) {
         XFreeGC(g_display, window->graphics_context);
@@ -11836,8 +10092,9 @@ static void linux_x11_send_wm_state_message(Window win, long action, Atom proper
 }
 
 PALAPI pal_bool pal_set_window_title(pal_window *window, const char *title) {
-    if (!window || !title)
+    if (!window || !title) {
         return pal_false;
+    }
 
     XStoreName(g_display, window->window, title);
     XSetIconName(g_display, window->window, title);
@@ -11847,8 +10104,9 @@ PALAPI pal_bool pal_set_window_title(pal_window *window, const char *title) {
 }
 
 PALAPI pal_bool pal_make_window_fullscreen(pal_window *window) {
-    if (!window)
+    if (!window) {
         return pal_false;
+    }
 
     Atom fullscreen = XInternAtom(g_display, "_NET_WM_STATE_FULLSCREEN", False);
     linux_x11_send_wm_state_message(window->window, 1, fullscreen);
@@ -11858,18 +10116,21 @@ PALAPI pal_bool pal_make_window_fullscreen(pal_window *window) {
 }
 
 PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int height, int refresh_rate) {
-    if (!window)
+    if (!window) {
         return pal_false;
+    }
 
     Window root = DefaultRootWindow(g_display);
 
     XRRScreenResources *res = XRRGetScreenResources(g_display, root);
-    if (!res)
+    if (!res) {
         return pal_false;
+    }
 
     RROutput primary = XRRGetOutputPrimary(g_display, root);
-    if (!primary)
+    if (!primary) {
         primary = res->outputs[0];
+    }
 
     XRROutputInfo *out = XRRGetOutputInfo(g_display, res, primary);
     if (!out) {
@@ -11928,8 +10189,9 @@ PALAPI pal_bool pal_make_window_fullscreen_ex(pal_window *window, int width, int
 }
 
 PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window) {
-    if (!window)
+    if (!window) {
         return pal_false;
+    }
 
     Atom wmHints = XInternAtom(g_display, "_MOTIF_WM_HINTS", False);
 
@@ -11964,8 +10226,9 @@ PALAPI pal_bool pal_make_window_fullscreen_windowed(pal_window *window) {
 }
 
 PALAPI pal_bool pal_make_window_windowed(pal_window *window) {
-    if (!window)
+    if (!window) {
         return pal_false;
+    }
 
     Atom wmHints = XInternAtom(g_display, "_MOTIF_WM_HINTS", False);
 
@@ -11998,8 +10261,9 @@ PALAPI pal_bool pal_make_window_windowed(pal_window *window) {
 }
 
 PALAPI pal_bool pal_maximize_window(pal_window *window) {
-    if (!window || !g_display)
+    if (!window || !g_display) {
         return pal_false;
+    }
 
     Atom max_vert = XInternAtom(g_display, "_NET_WM_STATE_MAXIMIZED_VERT", False);
     Atom max_horz = XInternAtom(g_display, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
@@ -12012,8 +10276,9 @@ PALAPI pal_bool pal_maximize_window(pal_window *window) {
 }
 
 PALAPI pal_bool pal_minimize_window(pal_window *window) {
-    if (!window || !g_display)
+    if (!window || !g_display) {
         return pal_false;
+    }
 
     XIconifyWindow(
         g_display,
@@ -12025,8 +10290,9 @@ PALAPI pal_bool pal_minimize_window(pal_window *window) {
 }
 
 PALAPI void pal_draw_rect(pal_window *window, int x, int y, int width, int height, pal_color color) {
-    if (!window)
+    if (!window) {
         return;
+    }
 
     unsigned long pixel = ((unsigned long)(color.r * 255) << 16) |
                           ((unsigned long)(color.g * 255) << 8) |
@@ -12064,8 +10330,9 @@ PALAPI void pal_swap_buffers(pal_window *window) {
 }
 
 PALAPI void pal_swap_interval(int interval) {
-    if (!g_glx_loaded)
+    if (!g_glx_loaded) {
         return;
+    }
 
     /* Try EXT version first (most common and reliable) */
     if (p_glXSwapIntervalEXT) {
@@ -12127,8 +10394,9 @@ PALAPI pal_monitor *pal_get_primary_monitor(void) {
 }
 
 PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
-    if (!mode)
+    if (!mode) {
         return pal_false;
+    }
 
     if (!g_display) {
         fprintf(stderr, "Cannot open X display\n");
@@ -12161,8 +10429,9 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
 
     XRROutputInfo *outInfo = XRRGetOutputInfo(g_display, res, output);
     if (!outInfo || outInfo->crtc == 0) {
-        if (outInfo)
+        if (outInfo) {
             XRRFreeOutputInfo(outInfo);
+        }
         XRRFreeScreenResources(res);
         XCloseDisplay(g_display);
         return pal_false;
@@ -12207,18 +10476,21 @@ PALAPI pal_bool pal_set_video_mode(pal_video_mode *mode) {
 }
 
 PALAPI pal_video_mode *pal_get_video_mode(pal_monitor *monitor) {
-    if (!monitor || !monitor->display)
+    if (!monitor || !monitor->display) {
         return NULL;
+    }
 
     Window root = DefaultRootWindow(g_display);
     XRRScreenResources *screenRes = XRRGetScreenResourcesCurrent(g_display, root);
-    if (!screenRes)
+    if (!screenRes) {
         return NULL;
+    }
 
     XRROutputInfo *outputInfo = XRRGetOutputInfo(g_display, screenRes, monitor->output);
     if (!outputInfo || outputInfo->connection != RR_Connected || outputInfo->crtc == 0) {
-        if (outputInfo)
+        if (outputInfo) {
             XRRFreeOutputInfo(outputInfo);
+        }
         XRRFreeScreenResources(screenRes);
         return NULL;
     }
@@ -12262,8 +10534,9 @@ PALAPI void *pal_gl_get_proc_address(const char *procname) {
     /* Try glXGetProcAddress first */
     if (p_glXGetProcAddress) {
         void *proc = (void *)p_glXGetProcAddress((const GLubyte *)procname);
-        if (proc)
+        if (proc) {
             return proc;
+        }
     }
 
     /* Fallback to dlsym */
